@@ -540,16 +540,16 @@ async def proxy(request: Request, path: str):
                     url=url,
                     json=body,
                     headers=forward_headers,
-                    timeout=600.0
+                    timeout=httpx.Timeout(300.0, read=None)
                 ) as resp:
                     if resp.status_code != 200:
                         log_error(f"status={resp.status_code} provider={url}")
                     try:
-                        async for line in resp.aiter_lines():
-                            if line:
-                                yield line.encode()
+                        async for chunk in resp.aiter_bytes():
+                            if chunk:
+                                yield chunk
                     except Exception as e:
-                        print(f"[STREAM ERROR] connection cut: {e}")
+                        print(f"[ERROR] stream read failed: {e}")
 
         session_mapping = dict(store.get_store().get(session_id, {}))
         if privacy_enabled:
