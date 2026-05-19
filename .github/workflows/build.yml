@@ -23,6 +23,7 @@ on:
 
 jobs:
 
+  # ── GET VERSION + TAG ─────────────────────────────────
   get-meta:
     runs-on: ubuntu-latest
     outputs:
@@ -73,7 +74,17 @@ jobs:
             && echo "webui=true" >> $GITHUB_OUTPUT \
             || echo "webui=false" >> $GITHUB_OUTPUT
 
+  # ── SECRET SCAN (PR) ──────────────────────────────────
+  secret-scan-pr:
+    needs: get-meta
+    if: github.event_name == 'pull_request'
+    uses: enclaive/security-workflows/.github/workflows/trufflehog-pr.yml@v1
 
+  # ── SECRET SCAN (FULL) ────────────────────────────────
+  secret-scan-full:
+    needs: get-meta
+    if: github.event_name == 'push'
+    uses: enclaive/security-workflows/.github/workflows/trufflehog-full.yml@v1
 
   # ── PROXY ─────────────────────────────────────────────
   build-proxy:
@@ -87,6 +98,13 @@ jobs:
         run: |
           git clone --branch ${{ github.ref_name }} \
             https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
+
+      - name: Scan Python dependencies
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/privacy_proxy/requirements.txt \
+            --severity high \
+            --exit-code 1
 
       - name: Free disk space
         run: |
@@ -146,6 +164,7 @@ jobs:
             ${{ steps.build-proxy.outputs.digest }}
           rm /tmp/cosign.key
 
+  # ── DEPLOY PROXY ──────────────────────────────────────
   deploy-proxy:
     needs: [get-meta, build-proxy]
     if: needs.get-meta.outputs.proxy_changed == 'true'
@@ -232,6 +251,7 @@ jobs:
             ${{ steps.build-webui.outputs.digest }}
           rm /tmp/cosign.key
 
+  # ── DEPLOY WEBUI ──────────────────────────────────────
   deploy-webui:
     needs: [get-meta, build-webui]
     if: needs.get-meta.outputs.webui_changed == 'true'
