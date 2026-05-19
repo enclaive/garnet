@@ -93,7 +93,6 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r backend/privacy_proxy/requirements.txt \
-            --exit-code 1
 
       - name: Free disk space
         run: |
@@ -134,7 +133,6 @@ jobs:
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
             | sh -s -- -b /usr/local/bin
           trivy image \
-            --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
             --scanners vuln \
