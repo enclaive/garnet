@@ -6,7 +6,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=${REDIS_URL}
     depends_on:
       redis:
         condition: service_healthy
@@ -50,10 +50,10 @@ services:
   privacy-proxy:
     image: harbor.enclaive.cloud/garnetdemo/privacy-proxy:${IMAGE_TAG:-latest}
     environment:
-      - OLLAMA_URL=http://ollama:11434
-      - OPENAI_API_URL=https://api.openai.com/v1
-      - PYTHONUNBUFFERED=1
-      - REDIS_URL=redis://redis:6379
+      - OLLAMA_URL=${OLLAMA_URL}
+      - OPENAI_API_URL=${OPENAI_API_URL}
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
+      - REDIS_URL=${REDIS_URL}
     depends_on:
       ollama:
         condition: service_healthy
@@ -73,22 +73,22 @@ services:
           cpus: '2'
 
   open-webui:
-    image: harbor.enclaive.cloud/garnetdemo/garnet-webui:latest
+    image: harbor.enclaive.cloud/garnetdemo/garnet-webui:${IMAGE_TAG:-latest}
     volumes:
       - open-webui-data:/app/backend/data
     environment:
-      - OLLAMA_BASE_URL=http://privacy-proxy:8080
-      - OPENAI_API_BASE_URL=http://privacy-proxy:8080/openai
-      - FORCE_OPENAI_BASE_URL=http://privacy-proxy:8080/openai
-      - FORCE_OLLAMA_BASE_URL=http://privacy-proxy:8080
-      - ENABLE_IMAGE_GENERATION=True
-      - IMAGE_GENERATION_ENGINE=openai
-      - IMAGE_GENERATION_MODEL=dall-e-3
-      - IMAGES_OPENAI_API_BASE_URL=https://api.openai.com/v1
-      - WEBUI_NAME=Garnet
-      - BYPASS_MODEL_ACCESS_CONTROL=true
-      - RAG_SYSTEM_CONTEXT=True
-      - CONTENT_EXTRACTION_ENGINE=default
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL}
+      - FORCE_OPENAI_BASE_URL=${FORCE_OPENAI_BASE_URL}
+      - FORCE_OLLAMA_BASE_URL=${FORCE_OLLAMA_BASE_URL}
+      - ENABLE_IMAGE_GENERATION=${ENABLE_IMAGE_GENERATION}
+      - IMAGE_GENERATION_ENGINE=${IMAGE_GENERATION_ENGINE}
+      - IMAGE_GENERATION_MODEL=${IMAGE_GENERATION_MODEL}
+      - IMAGES_OPENAI_API_BASE_URL=${IMAGES_OPENAI_API_BASE_URL}
+      - WEBUI_NAME=${WEBUI_NAME}
+      - BYPASS_MODEL_ACCESS_CONTROL=${BYPASS_MODEL_ACCESS_CONTROL}
+      - RAG_SYSTEM_CONTEXT=${RAG_SYSTEM_CONTEXT}
+      - CONTENT_EXTRACTION_ENGINE=${CONTENT_EXTRACTION_ENGINE}
     depends_on:
       privacy-proxy:
         condition: service_healthy
