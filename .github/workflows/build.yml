@@ -74,7 +74,17 @@ jobs:
             && echo "webui=true" >> $GITHUB_OUTPUT \
             || echo "webui=false" >> $GITHUB_OUTPUT
 
+  # ── SECRET SCAN (PR) ──────────────────────────────────
+  secret-scan-pr:
+    needs: get-meta
+    if: github.event_name == 'pull_request'
+    uses: enclaive/security-workflows/.github/workflows/trufflehog-pr.yml@v1
 
+  # ── SECRET SCAN (FULL) ────────────────────────────────
+  secret-scan-full:
+    needs: get-meta
+    if: github.event_name == 'push'
+    uses: enclaive/security-workflows/.github/workflows/trufflehog-full.yml@v1
 
   # ── PROXY ─────────────────────────────────────────────
   build-proxy:
@@ -88,11 +98,6 @@ jobs:
         run: |
           git clone --branch ${{ github.ref_name }} \
             https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
-
-      - name: Scan Python dependencies
-        run: |
-          pip install pip-audit
-          pip-audit -r backend/privacy_proxy/requirements.txt \
 
       - name: Free disk space
         run: |
@@ -128,16 +133,6 @@ jobs:
           cat /tmp/proxy-meta.json | python3 -c "import sys,json; print(json.load(sys.stdin)['containerimage.digest'])")
           echo "digest=harbor.enclaive.cloud/garnetdemo/privacy-proxy@${DIGEST}" >> $GITHUB_OUTPUT
 
-      - name: Scan proxy image
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin
-          trivy image \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --scanners vuln \
-            harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.revision }}
-
       - name: Install cosign
         run: |
           curl -sfL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
@@ -151,9 +146,20 @@ jobs:
             ${{ steps.build-proxy.outputs.digest }}
           rm /tmp/cosign.key
 
+  # ── PYTHON CHECKS (pip-audit, ruff, mypy, trivy, bandit) ──
+  python-checks:
+    needs: [get-meta, build-proxy]
+    if: needs.get-meta.outputs.proxy_changed == 'true'
+    uses: ./.github/workflows/pythoncheck.yml
+    with:
+      image_tag: ${{ needs.get-meta.outputs.revision }}
+    secrets:
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+
   # ── DEPLOY PROXY ──────────────────────────────────────
   deploy-proxy:
-    needs: [get-meta, build-proxy]
+    needs: [get-meta, build-proxy, python-checks]
     if: needs.get-meta.outputs.proxy_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -178,10 +184,14 @@ jobs:
             docker exec garnet-privacy-proxy-1 python3 -c \
             'import urllib.request; print(urllib.request.urlopen(\"http://localhost:8080/health\").read())'"
 
-      - name: Run test suite
-        run: |
-          ssh root@${{ secrets.CVM_HOST }} "\
-            docker exec -w /service garnet-privacy-proxy-1 python3 app/test_proxy.py"
+  # ── RUN TESTS ─────────────────────────────────────────
+  run-tests:
+    needs: deploy-proxy
+    if: needs.get-meta.outputs.proxy_changed == 'true'
+    uses: ./.github/workflows/proxy-tests.yml
+    secrets:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      CVM_HOST: ${{ secrets.CVM_HOST }}
 
   # ── WEBUI ─────────────────────────────────────────────
   build-webui:
