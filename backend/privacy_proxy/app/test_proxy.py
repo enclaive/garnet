@@ -276,7 +276,6 @@ res = post("/analyze", {"text": ""})
 entities = res.get("entities", [])
 check("empty text returns empty entities", len(entities) == 0, entities)
 
-# ── SUMMARY ──────────────────────────────────────────────
 print(f"\n{SEP}")
 passed = sum(1 for _, ok in results if ok)
 failed = sum(1 for _, ok in results if not ok)
