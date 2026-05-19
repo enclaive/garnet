@@ -74,17 +74,7 @@ jobs:
             && echo "webui=true" >> $GITHUB_OUTPUT \
             || echo "webui=false" >> $GITHUB_OUTPUT
 
-  # ── SECRET SCAN (PR) ──────────────────────────────────
-  secret-scan-pr:
-    needs: get-meta
-    if: github.event_name == 'pull_request'
-    uses: enclaive/security-workflows/.github/workflows/trufflehog-pr.yml@v1
-
-  # ── SECRET SCAN (FULL) ────────────────────────────────
-  secret-scan-full:
-    needs: get-meta
-    if: github.event_name == 'push'
-    uses: enclaive/security-workflows/.github/workflows/trufflehog-full.yml@v1
+  #
 
   # ── PROXY ─────────────────────────────────────────────
   build-proxy:
