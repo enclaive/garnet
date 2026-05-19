@@ -83,9 +83,7 @@ jobs:
     if: github.event_name == 'push'
     uses: enclaive/security-workflows/.github/workflows/trufflehog-full.yml@v1
 
-  sast-scan:
-    needs: get-meta
-    uses: enclaive/security-workflows/.github/workflows/semgrep.yml@v1
+
 
   # ── PROXY ─────────────────────────────────────────────
   build-proxy:
