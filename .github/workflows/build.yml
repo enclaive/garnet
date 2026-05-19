@@ -93,7 +93,6 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r backend/privacy_proxy/requirements.txt \
-            --severity high \
             --exit-code 1
 
       - name: Free disk space

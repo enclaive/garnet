@@ -27354,6 +27354,15 @@
         "documentation": {}
     },
     {
+        "label": "urllib.error",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "urllib.error",
+        "description": "urllib.error",
+        "detail": "urllib.error",
+        "documentation": {}
+    },
+    {
         "label": "document",
         "importPath": "pyscript",
         "description": "pyscript",
@@ -50180,7 +50189,7 @@
         "kind": 5,
         "importPath": "backend.privacy_proxy.app.test_proxy",
         "description": "backend.privacy_proxy.app.test_proxy",
-        "peekOfCode": "res = get(\"/health\")\ncheck(\"health returns ok\", res.get(\"status\") == \"ok\", res)\n# ── T02 logs.py import ──────────────────────────────────\nprint(\"\\n[T02] logs.py import\")\ntry:\n    from app.logs import (\n        log_health, log_garnet, log_in_user, log_out_user,\n        log_file_pii, log_internal, log_privacy_off,\n        log_to_llm, log_to_user, log_error, log_sep\n    )",
+        "peekOfCode": "res = get(\"/health\")\ncheck(\"health returns ok\", res.get(\"status\") == \"ok\", res)\n# ── T02 logs.py import ──────────────────────────────────\nprint(\"\\n[T02] logs.py import\")\ntry:\n    from app.logs import (\n        log_health, log_garnet, log_in_user, log_out_user,\n        log_file_pii, log_internal, log_privacy_off,\n        log_to_llm, log_to_user, log_error, log_sep,\n        log_vault_start, log_vault_done, log_analyze,",
         "detail": "backend.privacy_proxy.app.test_proxy",
         "documentation": {}
     },
@@ -50315,7 +50324,16 @@
         "kind": 5,
         "importPath": "backend.privacy_proxy.app.test_proxy",
         "description": "backend.privacy_proxy.app.test_proxy",
-        "peekOfCode": "res = post(\"/vault/scan\", {\n    \"text\": \"Anna Schmidt, email: anna@enclaive.com, IBAN: DE89370400440532013000\",\n    \"file_id\": \"test-file-001\",\n    \"privacy_proxy\": True\n})\ncheck(\"entity_count > 0\", res.get(\"entity_count\", 0) > 0, res.get(\"entity_count\"))\ncheck(\"pseudonymized_text contains token\", \"PERSON_\" in res.get(\"pseudonymized_text\", \"\"), res.get(\"pseudonymized_text\", \"\")[:100])\n# ── T11 vault/scan — privacy OFF ─────────────────────────\nprint(\"\\n[T11] /vault/scan — privacy OFF returns raw text\")\noriginal = \"Anna Schmidt works at Enclaive\"",
+        "peekOfCode": "res = post(\"/vault/scan\", {\n    \"text\": \"Anna Schmidt, email: anna@enclaive.com, IBAN: DE89370400440532013000\",\n    \"file_id\": \"test-file-001\",\n    \"privacy_proxy\": True\n})\ncheck(\"entity_count > 0\", res.get(\"entity_count\", 0) > 0, res.get(\"entity_count\"))\npseudo_text = res.get(\"pseudonymized_text\", \"\")\ncheck(\"pseudonymized_text contains PERSON token\", \"PERSON_\" in pseudo_text, pseudo_text[:100])\ncheck(\"pseudonymized_text contains EMAIL token\", \"EMAIL_ADDRESS_\" in pseudo_text, pseudo_text[:100])\ncheck(\"pseudonymized_text contains IBAN token\", \"IBAN_CODE_\" in pseudo_text, pseudo_text[:100])",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "pseudo_text",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "pseudo_text = res.get(\"pseudonymized_text\", \"\")\ncheck(\"pseudonymized_text contains PERSON token\", \"PERSON_\" in pseudo_text, pseudo_text[:100])\ncheck(\"pseudonymized_text contains EMAIL token\", \"EMAIL_ADDRESS_\" in pseudo_text, pseudo_text[:100])\ncheck(\"pseudonymized_text contains IBAN token\", \"IBAN_CODE_\" in pseudo_text, pseudo_text[:100])\ncheck(\"original name not in pseudonymized\", \"Anna Schmidt\" not in pseudo_text, pseudo_text[:100])\ncheck(\"original email not in pseudonymized\", \"anna@enclaive.com\" not in pseudo_text, pseudo_text[:100])\n# ── T11 vault/scan — privacy OFF ─────────────────────────\nprint(\"\\n[T11] /vault/scan — privacy OFF returns raw text\")\noriginal = \"Anna Schmidt works at Enclaive\"\nres = post(\"/vault/scan\", {",
         "detail": "backend.privacy_proxy.app.test_proxy",
         "documentation": {}
     },
@@ -50324,7 +50342,7 @@
         "kind": 5,
         "importPath": "backend.privacy_proxy.app.test_proxy",
         "description": "backend.privacy_proxy.app.test_proxy",
-        "peekOfCode": "original = \"Anna Schmidt works at Enclaive\"\nres = post(\"/vault/scan\", {\n    \"text\": original,\n    \"file_id\": \"test-file-002\",\n    \"privacy_proxy\": False\n})\ncheck(\"entity_count=0 when privacy OFF\", res.get(\"entity_count\") == 0, res.get(\"entity_count\"))\ncheck(\"text unchanged when privacy OFF\", res.get(\"pseudonymized_text\") == original, res.get(\"pseudonymized_text\", \"\")[:80])\n# ── SUMMARY ──────────────────────────────────────────────\nprint(f\"\\n{SEP}\")",
+        "peekOfCode": "original = \"Anna Schmidt works at Enclaive\"\nres = post(\"/vault/scan\", {\n    \"text\": original,\n    \"file_id\": \"test-file-002\",\n    \"privacy_proxy\": False\n})\ncheck(\"entity_count=0 when privacy OFF\", res.get(\"entity_count\") == 0, res.get(\"entity_count\"))\ncheck(\"text unchanged when privacy OFF\", res.get(\"pseudonymized_text\") == original, res.get(\"pseudonymized_text\", \"\")[:80])\n# ── T12 German false positive — verb not PERSON ──────────\nprint(\"\\n[T12] /analyze — German verb 'Schreibe' not PERSON\")",
         "detail": "backend.privacy_proxy.app.test_proxy",
         "documentation": {}
     },
@@ -50333,7 +50351,187 @@
         "kind": 5,
         "importPath": "backend.privacy_proxy.app.test_proxy",
         "description": "backend.privacy_proxy.app.test_proxy",
-        "peekOfCode": "res = post(\"/vault/scan\", {\n    \"text\": original,\n    \"file_id\": \"test-file-002\",\n    \"privacy_proxy\": False\n})\ncheck(\"entity_count=0 when privacy OFF\", res.get(\"entity_count\") == 0, res.get(\"entity_count\"))\ncheck(\"text unchanged when privacy OFF\", res.get(\"pseudonymized_text\") == original, res.get(\"pseudonymized_text\", \"\")[:80])\n# ── SUMMARY ──────────────────────────────────────────────\nprint(f\"\\n{SEP}\")\npassed = sum(1 for _, ok in results if ok)",
+        "peekOfCode": "res = post(\"/vault/scan\", {\n    \"text\": original,\n    \"file_id\": \"test-file-002\",\n    \"privacy_proxy\": False\n})\ncheck(\"entity_count=0 when privacy OFF\", res.get(\"entity_count\") == 0, res.get(\"entity_count\"))\ncheck(\"text unchanged when privacy OFF\", res.get(\"pseudonymized_text\") == original, res.get(\"pseudonymized_text\", \"\")[:80])\n# ── T12 German false positive — verb not PERSON ──────────\nprint(\"\\n[T12] /analyze — German verb 'Schreibe' not PERSON\")\nres = post(\"/analyze\", {\"text\": \"Schreibe mir eine E-Mail\"})",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res = post(\"/analyze\", {\"text\": \"Schreibe mir eine E-Mail\"})\ntypes = [e.get(\"type\") for e in res.get(\"entities\", [])]\ncheck(\"'Schreibe' not detected as PERSON\", \"PERSON\" not in types, types)\n# ── T13 duplicate upload — deterministic tokens ───────────\nprint(\"\\n[T13] /vault/scan — duplicate upload same file_id\")\ntext = \"John Doe, john.doe@example.com\"\nres1 = post(\"/vault/scan\", {\n    \"text\": text,\n    \"file_id\": \"test-dedup-001\",\n    \"privacy_proxy\": True",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "types",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "types = [e.get(\"type\") for e in res.get(\"entities\", [])]\ncheck(\"'Schreibe' not detected as PERSON\", \"PERSON\" not in types, types)\n# ── T13 duplicate upload — deterministic tokens ───────────\nprint(\"\\n[T13] /vault/scan — duplicate upload same file_id\")\ntext = \"John Doe, john.doe@example.com\"\nres1 = post(\"/vault/scan\", {\n    \"text\": text,\n    \"file_id\": \"test-dedup-001\",\n    \"privacy_proxy\": True\n})",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "text",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "text = \"John Doe, john.doe@example.com\"\nres1 = post(\"/vault/scan\", {\n    \"text\": text,\n    \"file_id\": \"test-dedup-001\",\n    \"privacy_proxy\": True\n})\npseudo1 = res1.get(\"pseudonymized_text\", \"\")\ncount1 = res1.get(\"entity_count\", 0)\nres2 = post(\"/vault/scan\", {\n    \"text\": text,",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res1",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res1 = post(\"/vault/scan\", {\n    \"text\": text,\n    \"file_id\": \"test-dedup-001\",\n    \"privacy_proxy\": True\n})\npseudo1 = res1.get(\"pseudonymized_text\", \"\")\ncount1 = res1.get(\"entity_count\", 0)\nres2 = post(\"/vault/scan\", {\n    \"text\": text,\n    \"file_id\": \"test-dedup-001\",",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "pseudo1",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "pseudo1 = res1.get(\"pseudonymized_text\", \"\")\ncount1 = res1.get(\"entity_count\", 0)\nres2 = post(\"/vault/scan\", {\n    \"text\": text,\n    \"file_id\": \"test-dedup-001\",\n    \"privacy_proxy\": True\n})\npseudo2 = res2.get(\"pseudonymized_text\", \"\")\ncount2 = res2.get(\"entity_count\", 0)\ncheck(\"first upload finds entities\", count1 > 0, count1)",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "count1",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "count1 = res1.get(\"entity_count\", 0)\nres2 = post(\"/vault/scan\", {\n    \"text\": text,\n    \"file_id\": \"test-dedup-001\",\n    \"privacy_proxy\": True\n})\npseudo2 = res2.get(\"pseudonymized_text\", \"\")\ncount2 = res2.get(\"entity_count\", 0)\ncheck(\"first upload finds entities\", count1 > 0, count1)\ncheck(\"duplicate upload — 0 new entities\", count2 == 0, count2)",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res2",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res2 = post(\"/vault/scan\", {\n    \"text\": text,\n    \"file_id\": \"test-dedup-001\",\n    \"privacy_proxy\": True\n})\npseudo2 = res2.get(\"pseudonymized_text\", \"\")\ncount2 = res2.get(\"entity_count\", 0)\ncheck(\"first upload finds entities\", count1 > 0, count1)\ncheck(\"duplicate upload — 0 new entities\", count2 == 0, count2)\ncheck(\"same tokens both uploads\", pseudo1 == pseudo2, f\"\\n  first:  {pseudo1}\\n  second: {pseudo2}\")",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "pseudo2",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "pseudo2 = res2.get(\"pseudonymized_text\", \"\")\ncount2 = res2.get(\"entity_count\", 0)\ncheck(\"first upload finds entities\", count1 > 0, count1)\ncheck(\"duplicate upload — 0 new entities\", count2 == 0, count2)\ncheck(\"same tokens both uploads\", pseudo1 == pseudo2, f\"\\n  first:  {pseudo1}\\n  second: {pseudo2}\")\n# ── T14 vault/scan — LOCATION detected ───────────────────\nprint(\"\\n[T14] /analyze — LOCATION detected\")\nres = post(\"/analyze\", {\"text\": \"I live in Berlin, Germany\"})\ntypes = [e.get(\"type\") for e in res.get(\"entities\", [])]\ncheck(\"LOCATION detected\", \"LOCATION\" in types, types)",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "count2",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "count2 = res2.get(\"entity_count\", 0)\ncheck(\"first upload finds entities\", count1 > 0, count1)\ncheck(\"duplicate upload — 0 new entities\", count2 == 0, count2)\ncheck(\"same tokens both uploads\", pseudo1 == pseudo2, f\"\\n  first:  {pseudo1}\\n  second: {pseudo2}\")\n# ── T14 vault/scan — LOCATION detected ───────────────────\nprint(\"\\n[T14] /analyze — LOCATION detected\")\nres = post(\"/analyze\", {\"text\": \"I live in Berlin, Germany\"})\ntypes = [e.get(\"type\") for e in res.get(\"entities\", [])]\ncheck(\"LOCATION detected\", \"LOCATION\" in types, types)\n# ── T15 vault/scan — breakdown correct ───────────────────",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res = post(\"/analyze\", {\"text\": \"I live in Berlin, Germany\"})\ntypes = [e.get(\"type\") for e in res.get(\"entities\", [])]\ncheck(\"LOCATION detected\", \"LOCATION\" in types, types)\n# ── T15 vault/scan — breakdown correct ───────────────────\nprint(\"\\n[T15] /vault/scan — entity_breakdown correct\")\nres = post(\"/vault/scan\", {\n    \"text\": \"Hans Müller, hans@test.de, +49 30 12345678\",\n    \"file_id\": \"test-breakdown-001\",\n    \"privacy_proxy\": True\n})",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "types",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "types = [e.get(\"type\") for e in res.get(\"entities\", [])]\ncheck(\"LOCATION detected\", \"LOCATION\" in types, types)\n# ── T15 vault/scan — breakdown correct ───────────────────\nprint(\"\\n[T15] /vault/scan — entity_breakdown correct\")\nres = post(\"/vault/scan\", {\n    \"text\": \"Hans Müller, hans@test.de, +49 30 12345678\",\n    \"file_id\": \"test-breakdown-001\",\n    \"privacy_proxy\": True\n})\nbreakdown = res.get(\"entity_breakdown\", {})",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res = post(\"/vault/scan\", {\n    \"text\": \"Hans Müller, hans@test.de, +49 30 12345678\",\n    \"file_id\": \"test-breakdown-001\",\n    \"privacy_proxy\": True\n})\nbreakdown = res.get(\"entity_breakdown\", {})\ncheck(\"PERSON in breakdown\", \"PERSON\" in breakdown, breakdown)\ncheck(\"EMAIL_ADDRESS in breakdown\", \"EMAIL_ADDRESS\" in breakdown, breakdown)\n# ── T16 chunk boundary — token not split ─────────────────\nprint(\"\\n[T16] split_at_safe_boundary — token prefix held back\")",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "breakdown",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "breakdown = res.get(\"entity_breakdown\", {})\ncheck(\"PERSON in breakdown\", \"PERSON\" in breakdown, breakdown)\ncheck(\"EMAIL_ADDRESS in breakdown\", \"EMAIL_ADDRESS\" in breakdown, breakdown)\n# ── T16 chunk boundary — token not split ─────────────────\nprint(\"\\n[T16] split_at_safe_boundary — token prefix held back\")\nimport sys\nsys.path.insert(0, \"/service\")\ntry:\n    from app.main import split_at_safe_boundary\n    safe, remainder = split_at_safe_boundary(\"Hello PERSON\")",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res = post(\"/analyze\", {\n    \"text\": \"Max Mustermann, max@test.de, +49 89 12345, DE89370400440532013000, Siemens AG\"\n})\ntypes = [e.get(\"type\") for e in res.get(\"entities\", [])]\ncheck(\"PERSON found\", \"PERSON\" in types, types)\ncheck(\"EMAIL_ADDRESS found\", \"EMAIL_ADDRESS\" in types, types)\ncheck(\"PHONE_NUMBER found\", \"PHONE_NUMBER\" in types, types)\ncheck(\"IBAN_CODE found\", \"IBAN_CODE\" in types, types)\ncheck(\"ORGANIZATION found\", \"ORGANIZATION\" in types, types)\n# ── T18 vault/scan — preview field present ───────────────",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "types",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "types = [e.get(\"type\") for e in res.get(\"entities\", [])]\ncheck(\"PERSON found\", \"PERSON\" in types, types)\ncheck(\"EMAIL_ADDRESS found\", \"EMAIL_ADDRESS\" in types, types)\ncheck(\"PHONE_NUMBER found\", \"PHONE_NUMBER\" in types, types)\ncheck(\"IBAN_CODE found\", \"IBAN_CODE\" in types, types)\ncheck(\"ORGANIZATION found\", \"ORGANIZATION\" in types, types)\n# ── T18 vault/scan — preview field present ───────────────\nprint(\"\\n[T18] /vault/scan — response has preview field\")\nres = post(\"/vault/scan\", {\n    \"text\": \"Test User test@example.com\",",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res = post(\"/vault/scan\", {\n    \"text\": \"Test User test@example.com\",\n    \"file_id\": \"test-preview-001\",\n    \"privacy_proxy\": True\n})\npreview = res.get(\"preview\", {})\ncheck(\"preview.before present\", \"before\" in preview, preview)\ncheck(\"preview.after present\", \"after\" in preview, preview)\ncheck(\"preview.before contains original\", \"Test User\" in preview.get(\"before\", \"\"), preview.get(\"before\", \"\"))\n# ── T19 vault/scan — missing file_id returns error ────────",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "preview",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "preview = res.get(\"preview\", {})\ncheck(\"preview.before present\", \"before\" in preview, preview)\ncheck(\"preview.after present\", \"after\" in preview, preview)\ncheck(\"preview.before contains original\", \"Test User\" in preview.get(\"before\", \"\"), preview.get(\"before\", \"\"))\n# ── T19 vault/scan — missing file_id returns error ────────\nprint(\"\\n[T19] /vault/scan — missing file_id\")\nres = post(\"/vault/scan\", {\n    \"text\": \"Some text without file_id\",\n    \"privacy_proxy\": True\n})",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res = post(\"/vault/scan\", {\n    \"text\": \"Some text without file_id\",\n    \"privacy_proxy\": True\n})\ncheck(\"error returned when file_id missing\", \"error\" in res, res)\n# ── T20 analyze — empty text ─────────────────────────────\nprint(\"\\n[T20] /analyze — empty text\")\nres = post(\"/analyze\", {\"text\": \"\"})\nentities = res.get(\"entities\", [])\ncheck(\"empty text returns empty entities\", len(entities) == 0, entities)",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "res",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "res = post(\"/analyze\", {\"text\": \"\"})\nentities = res.get(\"entities\", [])\ncheck(\"empty text returns empty entities\", len(entities) == 0, entities)\n# ── SUMMARY ──────────────────────────────────────────────\nprint(f\"\\n{SEP}\")\npassed = sum(1 for _, ok in results if ok)\nfailed = sum(1 for _, ok in results if not ok)\nprint(f\"[RESULT] {passed}/{len(results)} passed — {failed} failed\")\nif failed:\n    print(\"[FAILED TESTS]\")",
+        "detail": "backend.privacy_proxy.app.test_proxy",
+        "documentation": {}
+    },
+    {
+        "label": "entities",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.test_proxy",
+        "description": "backend.privacy_proxy.app.test_proxy",
+        "peekOfCode": "entities = res.get(\"entities\", [])\ncheck(\"empty text returns empty entities\", len(entities) == 0, entities)\n# ── SUMMARY ──────────────────────────────────────────────\nprint(f\"\\n{SEP}\")\npassed = sum(1 for _, ok in results if ok)\nfailed = sum(1 for _, ok in results if not ok)\nprint(f\"[RESULT] {passed}/{len(results)} passed — {failed} failed\")\nif failed:\n    print(\"[FAILED TESTS]\")\n    for name, ok in results:",
         "detail": "backend.privacy_proxy.app.test_proxy",
         "documentation": {}
     },
