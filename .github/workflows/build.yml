@@ -183,40 +183,6 @@ jobs:
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
       HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
 
-  deploy-proxy:
-    needs: [get-meta, build-proxy, python-checks]
-    if: needs.get-meta.outputs.proxy_changed == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Deploy proxy to cVM
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
-          ssh root@${{ secrets.CVM_HOST }} "cd /opt/garnet && \
-            echo '${{ secrets.HARBOR_PASSWORD }}' | docker login harbor.enclaive.cloud \
-              -u '${{ secrets.HARBOR_USERNAME }}' --password-stdin && \
-            docker compose pull privacy-proxy && \
-            docker compose up -d --force-recreate privacy-proxy"
-
-      - name: Health check proxy
-        run: |
-          sleep 10
-          ssh root@${{ secrets.CVM_HOST }} "\
-            docker exec garnet-privacy-proxy-1 python3 -c \
-            'import urllib.request; print(urllib.request.urlopen(\"http://localhost:8080/health\").read())'"
-
-  run-tests:
-    needs: deploy-proxy
-    if: needs.get-meta.outputs.proxy_changed == 'true'
-    uses: ./.github/workflows/proxy-tests.yml
-    secrets:
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      CVM_HOST: ${{ secrets.CVM_HOST }}
-
   build-webui:
     needs: get-meta
     if: needs.get-meta.outputs.webui_changed == 'true'
@@ -323,29 +289,3 @@ jobs:
           ssh root@${{ secrets.CVM_HOST }} "mkdir -p /opt/garnet/sbom"
           scp /tmp/sbom-webui.spdx.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/sbom-webui-${{ needs.get-meta.outputs.revision }}.spdx.json
           scp /tmp/provenance-webui.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/provenance-webui-${{ needs.get-meta.outputs.revision }}.json
-
-  deploy-webui:
-    needs: [get-meta, build-webui]
-    if: needs.get-meta.outputs.webui_changed == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Deploy webui to cVM
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
-          ssh root@${{ secrets.CVM_HOST }} "cd /opt/garnet && \
-            echo '${{ secrets.HARBOR_PASSWORD }}' | docker login harbor.enclaive.cloud \
-              -u '${{ secrets.HARBOR_USERNAME }}' --password-stdin && \
-            docker compose pull open-webui && \
-            docker compose up -d --force-recreate open-webui"
-
-      - name: Health check webui
-        run: |
-          sleep 15
-          ssh root@${{ secrets.CVM_HOST }} "\
-            docker exec garnet-open-webui-1 python3 -c \
-            'import urllib.request; print(urllib.request.urlopen(\"http://localhost:8080/\").read()[:50])'"
