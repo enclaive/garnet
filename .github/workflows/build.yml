@@ -3,23 +3,13 @@ name: Build and Deploy Garnet
 on:
   workflow_dispatch:
   push:
-    tags:
-      - v*
     branches:
-      - deploy/staging
-      - deploy/prod
-      - garnet-privacy-proxy
-    paths:
-      - 'backend/privacy_proxy/**'
-      - 'src/**'
-      - 'backend/open_webui/**'
-      - 'Dockerfile'
-      - 'docker-compose.yml'
-      - 'version/VERSION'
-      - '.github/workflows/**'
+      - main
+      - staging
   pull_request:
     branches:
-      - garnet-privacy-proxy
+      - main
+      - staging
 
 jobs:
 
@@ -54,10 +44,9 @@ jobs:
         id: get_tag
         run: |
           case "${GITHUB_REF}" in
-            refs/heads/deploy/staging) NAME=staging ;;
-            refs/heads/deploy/prod)    NAME=prod    ;;
-            refs/tags/v*)              NAME=latest  ;;
-            *)                         NAME="${FALLBACK}" ;;
+            refs/heads/staging) NAME=staging ;;
+            refs/heads/main)    NAME=latest  ;;
+            *)                  NAME="${FALLBACK}" ;;
           esac
           echo "name=${NAME}" >> $GITHUB_OUTPUT
         env:
@@ -76,8 +65,8 @@ jobs:
   build-proxy:
     needs: get-meta
     if: needs.get-meta.outputs.proxy_changed == 'true'
-    environment: production
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
     steps:
@@ -142,22 +131,18 @@ jobs:
         run: |
           echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
           chmod 600 /tmp/cosign.key
-
           syft ${{ steps.build-proxy.outputs.digest }} -o spdx-json > /tmp/sbom-proxy.spdx.json
-
           COSIGN_PASSWORD="" cosign attest --yes \
             --key /tmp/cosign.key \
             --type spdxjson \
             --predicate /tmp/sbom-proxy.spdx.json \
             ${{ steps.build-proxy.outputs.digest }}
-
           rm /tmp/cosign.key
 
       - name: Attest provenance proxy
         run: |
           echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
           chmod 600 /tmp/cosign.key
-
           cat > /tmp/provenance-proxy.json << EOF
           {
             "buildType": "https://github.com/enclaive/garnet",
@@ -170,13 +155,11 @@ jobs:
             }
           }
           EOF
-
           COSIGN_PASSWORD="" cosign attest --yes \
             --key /tmp/cosign.key \
             --type slsaprovenance \
             --predicate /tmp/provenance-proxy.json \
             ${{ steps.build-proxy.outputs.digest }}
-
           rm /tmp/cosign.key
 
       - name: Save SBOM + provenance to cVM
@@ -301,22 +284,18 @@ jobs:
         run: |
           echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
           chmod 600 /tmp/cosign.key
-
           syft ${{ steps.build-webui.outputs.digest }} -o spdx-json > /tmp/sbom-webui.spdx.json
-
           COSIGN_PASSWORD="" cosign attest --yes \
             --key /tmp/cosign.key \
             --type spdxjson \
             --predicate /tmp/sbom-webui.spdx.json \
             ${{ steps.build-webui.outputs.digest }}
-
           rm /tmp/cosign.key
 
       - name: Attest provenance webui
         run: |
           echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
           chmod 600 /tmp/cosign.key
-
           cat > /tmp/provenance-webui.json << EOF
           {
             "buildType": "https://github.com/enclaive/garnet",
@@ -329,13 +308,11 @@ jobs:
             }
           }
           EOF
-
           COSIGN_PASSWORD="" cosign attest --yes \
             --key /tmp/cosign.key \
             --type slsaprovenance \
             --predicate /tmp/provenance-webui.json \
             ${{ steps.build-webui.outputs.digest }}
-
           rm /tmp/cosign.key
 
       - name: Save SBOM + provenance to cVM
