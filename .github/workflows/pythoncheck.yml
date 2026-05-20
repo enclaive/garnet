@@ -84,6 +84,7 @@ jobs:
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
             --scanners vuln \
+            --timeout 20m \
             harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ inputs.image_tag }}
 
   # ── BANDIT — Python SAST ──────────────────────────────
