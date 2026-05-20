@@ -136,7 +136,7 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
         text=stripped_text,
         language=language,
         entities=["IBAN_CODE", "ORGANIZATION", "PERSON", "LOCATION", "ID"],
-        score_threshold=0.3,
+        score_threshold=0.5,
     )
     if enabled_types:
         results = [r for r in results if r.entity_type in enabled_types]
