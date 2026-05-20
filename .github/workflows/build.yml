@@ -136,6 +136,54 @@ jobs:
             ${{ steps.build-proxy.outputs.digest }}
           rm /tmp/cosign.key
 
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+  
+      - name: Generate SBOM + attest proxy
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+
+          syft ${{ steps.build-proxy.outputs.digest }} -o spdx-json > /tmp/sbom.spdx.json
+
+          COSIGN_PASSWORD="" cosign attest --yes \
+            --key /tmp/cosign.key \
+            --type spdxjson \
+            --predicate /tmp/sbom.spdx.json \
+            ${{ steps.build-proxy.outputs.digest }}
+
+          rm /tmp/cosign.key /tmp/sbom.spdx.json
+
+
+      - name: Attest provenance proxy
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+
+          cat > /tmp/provenance.json << EOF
+          {
+            "buildType": "https://github.com/enclaive/garnet",
+            "builder": {"id": "github-actions"},
+            "invocation": {
+              "configSource": {
+                "uri": "git+https://github.com/enclaive/garnet",
+                "digest": {"sha1": "${{ github.sha }}"}
+              }
+            }
+          }
+          EOF
+
+          COSIGN_PASSWORD="" cosign attest --yes \
+            --key /tmp/cosign.key \
+            --type slsaprovenance \
+            --predicate /tmp/provenance.json \
+            ${{ steps.build-proxy.outputs.digest }}
+
+          rm /tmp/cosign.key /tmp/provenance.json
+
   # ── PYTHON CHECKS (pip-audit, ruff, mypy, trivy, bandit) ──
   python-checks:
     needs: [get-meta, build-proxy]
@@ -242,6 +290,53 @@ jobs:
           COSIGN_PASSWORD="" cosign sign --yes --key /tmp/cosign.key \
             ${{ steps.build-webui.outputs.digest }}
           rm /tmp/cosign.key
+
+   
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM + attest webui
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+
+          syft ${{ steps.build-webui.outputs.digest }} -o spdx-json > /tmp/sbom.spdx.json
+
+          COSIGN_PASSWORD="" cosign attest --yes \
+            --key /tmp/cosign.key \
+            --type spdxjson \
+            --predicate /tmp/sbom.spdx.json \
+            ${{ steps.build-webui.outputs.digest }}
+
+          rm /tmp/cosign.key /tmp/sbom.spdx.json
+
+      - name: Attest provenance webui
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+
+          cat > /tmp/provenance.json << EOF
+          {
+            "buildType": "https://github.com/enclaive/garnet",
+            "builder": {"id": "github-actions"},
+            "invocation": {
+              "configSource": {
+                "uri": "git+https://github.com/enclaive/garnet",
+                "digest": {"sha1": "${{ github.sha }}"}
+              }
+            }
+          }
+          EOF
+
+          COSIGN_PASSWORD="" cosign attest --yes \
+            --key /tmp/cosign.key \
+            --type slsaprovenance \
+            --predicate /tmp/provenance.json \
+            ${{ steps.build-webui.outputs.digest }}
+
+          rm /tmp/cosign.key /tmp/provenance.json
 
   # ── DEPLOY WEBUI ──────────────────────────────────────
   deploy-webui:
