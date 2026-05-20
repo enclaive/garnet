@@ -25,9 +25,9 @@ jobs:
       webui_changed: ${{ steps.changes.outputs.webui }}
     steps:
       - name: Checkout
-        run: |
-          git clone --branch ${{ github.ref_name }} \
-            https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get version
         id: get_version
@@ -74,9 +74,9 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        run: |
-          git clone --branch ${{ github.ref_name }} \
-            https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Free disk space
         run: |
@@ -227,9 +227,9 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        run: |
-          git clone --branch ${{ github.ref_name }} \
-            https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Free disk space
         run: |
