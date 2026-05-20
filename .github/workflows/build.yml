@@ -76,6 +76,7 @@ jobs:
   build-proxy:
     needs: get-meta
     if: needs.get-meta.outputs.proxy_changed == 'true'
+    environment: production
     runs-on: ubuntu-latest
     permissions:
       contents: read
