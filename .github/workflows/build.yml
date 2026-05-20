@@ -3,13 +3,15 @@ name: Build and Deploy Garnet
 on:
   workflow_dispatch:
   push:
+    tags:
+      - v*
     branches:
-      - main
-      - staging
+      - deploy/staging
+      - deploy/prod
+      - garnet-privacy-proxy
   pull_request:
     branches:
-      - main
-      - staging
+      - garnet-privacy-proxy
 
 jobs:
 
@@ -44,9 +46,10 @@ jobs:
         id: get_tag
         run: |
           case "${GITHUB_REF}" in
-            refs/heads/staging) NAME=staging ;;
-            refs/heads/main)    NAME=latest  ;;
-            *)                  NAME="${FALLBACK}" ;;
+            refs/heads/deploy/staging) NAME=staging ;;
+            refs/heads/deploy/prod)    NAME=prod    ;;
+            refs/tags/v*)              NAME=latest  ;;
+            *)                         NAME="${FALLBACK}" ;;
           esac
           echo "name=${NAME}" >> $GITHUB_OUTPUT
         env:
