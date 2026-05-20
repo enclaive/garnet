@@ -178,14 +178,15 @@ jobs:
 
           rm /tmp/cosign.key
 
-      - name: Upload SBOM + provenance artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: proxy-sbom-provenance-${{ needs.get-meta.outputs.revision }}
-          path: |
-            /tmp/sbom-proxy.spdx.json
-            /tmp/provenance-proxy.json
-          retention-days: 90
+      - name: Save SBOM + provenance to cVM
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
+          ssh root@${{ secrets.CVM_HOST }} "mkdir -p /opt/garnet/sbom"
+          scp /tmp/sbom-proxy.spdx.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/sbom-proxy-${{ needs.get-meta.outputs.revision }}.spdx.json
+          scp /tmp/provenance-proxy.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/provenance-proxy-${{ needs.get-meta.outputs.revision }}.json
 
   python-checks:
     needs: [get-meta, build-proxy]
@@ -336,14 +337,15 @@ jobs:
 
           rm /tmp/cosign.key
 
-      - name: Upload SBOM + provenance artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: webui-sbom-provenance-${{ needs.get-meta.outputs.revision }}
-          path: |
-            /tmp/sbom-webui.spdx.json
-            /tmp/provenance-webui.json
-          retention-days: 90
+      - name: Save SBOM + provenance to cVM
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
+          ssh root@${{ secrets.CVM_HOST }} "mkdir -p /opt/garnet/sbom"
+          scp /tmp/sbom-webui.spdx.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/sbom-webui-${{ needs.get-meta.outputs.revision }}.spdx.json
+          scp /tmp/provenance-webui.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/provenance-webui-${{ needs.get-meta.outputs.revision }}.json
 
   deploy-webui:
     needs: [get-meta, build-webui]
