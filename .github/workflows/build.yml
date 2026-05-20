@@ -58,10 +58,10 @@ jobs:
       - name: Check changed files
         id: changes
         run: |
-          git diff --name-only HEAD~1 HEAD | grep '^backend/privacy_proxy/' \
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^backend/privacy_proxy/' \
             && echo "proxy=true" >> $GITHUB_OUTPUT \
             || echo "proxy=false" >> $GITHUB_OUTPUT
-          git diff --name-only HEAD~1 HEAD | grep -E '^src/|^backend/open_webui/' \
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '^src/|^backend/open_webui/' \
             && echo "webui=true" >> $GITHUB_OUTPUT \
             || echo "webui=false" >> $GITHUB_OUTPUT
 
