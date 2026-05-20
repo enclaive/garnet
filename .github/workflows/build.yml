@@ -113,9 +113,7 @@ jobs:
           echo "digest=harbor.enclaive.cloud/garnetdemo/privacy-proxy@${DIGEST}" >> $GITHUB_OUTPUT
 
       - name: Install cosign
-        run: |
-          curl -sfL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
-            -o /usr/local/bin/cosign && chmod +x /usr/local/bin/cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
 
       - name: Sign proxy image
         run: |
@@ -265,9 +263,7 @@ jobs:
           echo "digest=harbor.enclaive.cloud/garnetdemo/garnet-webui@${DIGEST}" >> $GITHUB_OUTPUT
 
       - name: Install cosign
-        run: |
-          curl -sfL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
-            -o /usr/local/bin/cosign && chmod +x /usr/local/bin/cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
 
       - name: Sign webui image
         run: |
