@@ -342,6 +342,8 @@ async def proxy(request: Request, path: str):
             elif is_system_prompt:
                 internal_type = detect_internal_type(original_content_text)
                 log_internal(internal_type)
+                use_responses_api = False
+                url = f"{openai_url.rstrip('/')}/{actual_path}"
                 pseudonymized_user_message = original_content_text
 
             elif last_message.get("role") in ("user", "system", "developer"):
