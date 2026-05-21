@@ -530,7 +530,22 @@ async def proxy(request: Request, path: str):
 
     if is_chat and body:
         if use_responses_api:
-            body["input"] = [{"role": m["role"], "content": m["content"]} for m in messages]
+            system_messages = [m for m in messages if m.get("role") == "system"]
+            non_system = [m for m in messages if m.get("role") != "system"]
+
+            if system_messages:
+                body["instructions"] = "\n".join(
+                    extract_text_content(m["content"]) for m in system_messages
+                )
+
+            body["input"] = [
+                {"role": m["role"], "content": extract_text_content(m["content"])}
+                for m in non_system
+            ]
+
+            if "max_tokens" in body:
+                body["max_output_tokens"] = body.pop("max_tokens")
+
             body.pop("messages", None)
 
         async def response_stream():
