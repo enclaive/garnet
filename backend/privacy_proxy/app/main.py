@@ -110,46 +110,47 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
 
     buffer = ""
     first_chunk = True
-    async for chunk in response_stream:
-        if not chunk:
-            continue
-        if chunk.startswith(b"data: "):
-            raw = chunk[6:].strip()
-        else:
-            raw = chunk.strip()
-
-        if raw == b"[DONE]":
-            break
-
-        try:
-            parsed = orjson.loads(raw)
-            if is_responses_api:
-                if parsed.get("type") == "response.output_text.delta":
-                    chunk_text = parsed.get("delta", "")
-                else:
-                    continue
-            else:
-                chunk_text = parsed["choices"][0]["delta"].get("content", "")
-            if not chunk_text:
+    async for raw_chunk in response_stream:
+        for chunk in raw_chunk.split(b"\n"):
+            if not chunk:
                 continue
-        except Exception:
-            continue
+            if chunk.startswith(b"data: "):
+                raw = chunk[6:].strip()
+            else:
+                raw = chunk.strip()
 
-        if first_chunk:
-            log_from_llm(chunk_text)
-            first_chunk = False
+            if raw == b"[DONE]":
+                break
 
-        buffer += chunk_text
-        safe, remainder = split_at_safe_boundary(buffer)
+            try:
+                parsed = orjson.loads(raw)
+                if is_responses_api:
+                    if parsed.get("type") == "response.output_text.delta":
+                        chunk_text = parsed.get("delta", "")
+                    else:
+                        continue
+                else:
+                    chunk_text = parsed["choices"][0]["delta"].get("content", "")
+                if not chunk_text:
+                    continue
+            except Exception:
+                continue
 
-        if safe:
-            for token in sorted(mapping.keys(), key=len, reverse=True):
-                safe = safe.replace(token, mapping[token])
-            yield b"data: " + orjson.dumps({
-                "choices": [{"delta": {"content": safe}}]
-            }) + b"\n\n"
+            if first_chunk:
+                log_from_llm(chunk_text)
+                first_chunk = False
 
-        buffer = remainder
+            buffer += chunk_text
+            safe, remainder = split_at_safe_boundary(buffer)
+
+            if safe:
+                for token in sorted(mapping.keys(), key=len, reverse=True):
+                    safe = safe.replace(token, mapping[token])
+                yield b"data: " + orjson.dumps({
+                    "choices": [{"delta": {"content": safe}}]
+                }) + b"\n\n"
+
+            buffer = remainder
 
     if buffer:
         for token in sorted(mapping.keys(), key=len, reverse=True):
