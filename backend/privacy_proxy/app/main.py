@@ -584,6 +584,11 @@ async def proxy(request: Request, path: str):
             media_type="text/event-stream"
         )
 
+    # strip response_format for image generation (gpt-image-1 rejects it)
+    if body and "images/generations" in str(url):
+        body.pop("response_format", None)
+        print(f"[IMAGE GEN] stripped response_format → forwarding to {url}")
+
     async with httpx.AsyncClient() as client:
         if body:
             response = await client.request(
