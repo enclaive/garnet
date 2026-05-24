@@ -14,6 +14,7 @@ from app.custom_recognizers import (
 EMAIL_REGEX = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
 ORG_REGEX = re.compile(r'(?:[A-Z][\w-]*\s){1,3}(?:GmbH|Inc|Ltd|AG|Corp|LLC|SE|Co|SA|SAS|SARL|BV|NV|Bank|Group|Partners|Solutions|Technologies)\b')
 PHONE_REGEX = re.compile(r'\+\d{1,3}[\s.-]?\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{0,5}')
+ORG_CONTEXT_WORDS = {"GmbH", "Inc", "Ltd", "AG", "Corp", "LLC", "SE", "Co", "SA", "company", "corporation", "founded"}
 
 def build_analyzer(language: str) -> AnalyzerEngine:
     if language == "de":
@@ -69,6 +70,10 @@ def trim_org_results(results, text):
         else:
             kept.append(r)
     return kept
+
+def has_org_context(text, start, end):
+    surrounding = text[max(0, start-60):end+60]
+    return any(word in surrounding for word in ORG_CONTEXT_WORDS)
 
 def filter_overlaps(results):
     regex_types = {"EMAIL_ADDRESS", "IBAN_CODE", "PHONE_NUMBER", "ID", "ORGANIZATION", "LOCATION"}
@@ -141,7 +146,15 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
     if enabled_types:
         results = [r for r in results if r.entity_type in enabled_types]
     results = trim_org_results(results, stripped_text)
-    results = [r for r in results if not (r.entity_type == "ORGANIZATION" and r.score < 0.85)]
+    results = [
+        r for r in results
+        if not (
+            r.entity_type == "ORGANIZATION" and (
+                stripped_text[r.start].islower() or
+                r.score <= 0.85
+            )
+        )
+    ]
     results = filter_overlaps(results)
 
     for r in results:
