@@ -141,6 +141,7 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
     if enabled_types:
         results = [r for r in results if r.entity_type in enabled_types]
     results = trim_org_results(results, stripped_text)
+    results = [r for r in results if not (r.entity_type == "ORGANIZATION" and r.score < 0.85)]
     results = filter_overlaps(results)
 
     for r in results:
