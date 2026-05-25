@@ -580,14 +580,15 @@ async def proxy(request: Request, path: str):
         log_mapping(session_id, len(session_mapping))
 
         if not body.get("stream", True):
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    url,
-                    headers=forward_headers,
+            async with httpx.AsyncClient(timeout=60.0) as _client:
+                _resp = await _client.request(
+                    method=request.method,
+                    url=url,
                     json=body,
-                    timeout=60,
+                    headers=forward_headers,
+                    timeout=60.0,
                 )
-            return ORJSONResponse(content=resp.json())
+                return ORJSONResponse(content=_resp.json())
 
         return StreamingResponse(
             stream_with_depseudo(
