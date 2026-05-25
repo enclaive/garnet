@@ -101,7 +101,7 @@ jobs:
             --build-arg PRODUCT_VERSION=${{ needs.get-meta.outputs.version }} \
             --build-arg PRODUCT_REVISION=${{ needs.get-meta.outputs.revision }} \
             --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/privacy-proxy:cache \
-            --cache-to   type=registry,ref=harbor.enclaive.cloud/garnetdemo/privacy-proxy:cache,mode=max \
+            --cache-to   type=inline \
             --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.tag }} \
             --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.version }} \
             --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.revision }} \
