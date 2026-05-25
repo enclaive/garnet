@@ -282,7 +282,11 @@ async def proxy(request: Request, path: str):
         url = f"{OLLAMA_URL}/{actual_path}"
 
     if is_chat and body:
-        body["stream"] = False if not is_openai else True
+        if is_openai:
+            caller_wants_stream = body.get("stream", True)
+            body["stream"] = caller_wants_stream if caller_wants_stream is False else True
+        else:
+            body["stream"] = False
 
         messages = body.get("messages", [])
         model = body.get("model", "unknown")
@@ -574,6 +578,16 @@ async def proxy(request: Request, path: str):
 
         model = body.get("model", "unknown")
         log_mapping(session_id, len(session_mapping))
+
+        if not body.get("stream", True):
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    url,
+                    headers=forward_headers,
+                    json=body,
+                    timeout=60,
+                )
+            return ORJSONResponse(content=resp.json())
 
         return StreamingResponse(
             stream_with_depseudo(
