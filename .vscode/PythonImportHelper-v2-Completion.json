@@ -50059,6 +50059,15 @@
         "documentation": {}
     },
     {
+        "label": "has_org_context",
+        "kind": 2,
+        "importPath": "backend.privacy_proxy.app.pseudonymizer",
+        "description": "backend.privacy_proxy.app.pseudonymizer",
+        "peekOfCode": "def has_org_context(text, start, end):\n    surrounding = text[max(0, start-60):end+60]\n    return any(word in surrounding for word in ORG_CONTEXT_WORDS)\ndef filter_overlaps(results):\n    regex_types = {\"EMAIL_ADDRESS\", \"IBAN_CODE\", \"PHONE_NUMBER\", \"ID\", \"ORGANIZATION\", \"LOCATION\"}\n    results = sorted(results, key=lambda x: (\n        0 if x.entity_type in regex_types else 1,\n        -(x.end - x.start)\n    ))\n    filtered = []",
+        "detail": "backend.privacy_proxy.app.pseudonymizer",
+        "documentation": {}
+    },
+    {
         "label": "filter_overlaps",
         "kind": 2,
         "importPath": "backend.privacy_proxy.app.pseudonymizer",
@@ -50090,7 +50099,7 @@
         "kind": 5,
         "importPath": "backend.privacy_proxy.app.pseudonymizer",
         "description": "backend.privacy_proxy.app.pseudonymizer",
-        "peekOfCode": "EMAIL_REGEX = re.compile(r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b')\nORG_REGEX = re.compile(r'(?:[A-Z][\\w-]*\\s){1,3}(?:GmbH|Inc|Ltd|AG|Corp|LLC|SE|Co|SA|SAS|SARL|BV|NV|Bank|Group|Partners|Solutions|Technologies)\\b')\nPHONE_REGEX = re.compile(r'\\+\\d{1,3}[\\s.-]?\\d{2,4}[\\s.-]?\\d{3,4}[\\s.-]?\\d{0,5}')\ndef build_analyzer(language: str) -> AnalyzerEngine:\n    if language == \"de\":\n        provider = NlpEngineProvider(nlp_configuration={\n            \"nlp_engine_name\": \"spacy\",\n            \"models\": [{\"lang_code\": \"de\", \"model_name\": \"de_core_news_md\"}],\n        })\n        recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de, id_recognizer_de]",
+        "peekOfCode": "EMAIL_REGEX = re.compile(r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b')\nORG_REGEX = re.compile(r'(?:[A-Z][\\w-]*\\s){1,3}(?:GmbH|Inc|Ltd|AG|Corp|LLC|SE|Co|SA|SAS|SARL|BV|NV|Bank|Group|Partners|Solutions|Technologies)\\b')\nPHONE_REGEX = re.compile(r'\\+\\d{1,3}[\\s.-]?\\d{2,4}[\\s.-]?\\d{3,4}[\\s.-]?\\d{0,5}')\nORG_CONTEXT_WORDS = {\"GmbH\", \"Inc\", \"Ltd\", \"AG\", \"Corp\", \"LLC\", \"SE\", \"Co\", \"SA\", \"company\", \"corporation\", \"founded\"}\ndef build_analyzer(language: str) -> AnalyzerEngine:\n    if language == \"de\":\n        provider = NlpEngineProvider(nlp_configuration={\n            \"nlp_engine_name\": \"spacy\",\n            \"models\": [{\"lang_code\": \"de\", \"model_name\": \"de_core_news_md\"}],\n        })",
         "detail": "backend.privacy_proxy.app.pseudonymizer",
         "documentation": {}
     },
@@ -50099,7 +50108,7 @@
         "kind": 5,
         "importPath": "backend.privacy_proxy.app.pseudonymizer",
         "description": "backend.privacy_proxy.app.pseudonymizer",
-        "peekOfCode": "ORG_REGEX = re.compile(r'(?:[A-Z][\\w-]*\\s){1,3}(?:GmbH|Inc|Ltd|AG|Corp|LLC|SE|Co|SA|SAS|SARL|BV|NV|Bank|Group|Partners|Solutions|Technologies)\\b')\nPHONE_REGEX = re.compile(r'\\+\\d{1,3}[\\s.-]?\\d{2,4}[\\s.-]?\\d{3,4}[\\s.-]?\\d{0,5}')\ndef build_analyzer(language: str) -> AnalyzerEngine:\n    if language == \"de\":\n        provider = NlpEngineProvider(nlp_configuration={\n            \"nlp_engine_name\": \"spacy\",\n            \"models\": [{\"lang_code\": \"de\", \"model_name\": \"de_core_news_md\"}],\n        })\n        recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de, id_recognizer_de]\n    else:",
+        "peekOfCode": "ORG_REGEX = re.compile(r'(?:[A-Z][\\w-]*\\s){1,3}(?:GmbH|Inc|Ltd|AG|Corp|LLC|SE|Co|SA|SAS|SARL|BV|NV|Bank|Group|Partners|Solutions|Technologies)\\b')\nPHONE_REGEX = re.compile(r'\\+\\d{1,3}[\\s.-]?\\d{2,4}[\\s.-]?\\d{3,4}[\\s.-]?\\d{0,5}')\nORG_CONTEXT_WORDS = {\"GmbH\", \"Inc\", \"Ltd\", \"AG\", \"Corp\", \"LLC\", \"SE\", \"Co\", \"SA\", \"company\", \"corporation\", \"founded\"}\ndef build_analyzer(language: str) -> AnalyzerEngine:\n    if language == \"de\":\n        provider = NlpEngineProvider(nlp_configuration={\n            \"nlp_engine_name\": \"spacy\",\n            \"models\": [{\"lang_code\": \"de\", \"model_name\": \"de_core_news_md\"}],\n        })\n        recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de, id_recognizer_de]",
         "detail": "backend.privacy_proxy.app.pseudonymizer",
         "documentation": {}
     },
@@ -50108,7 +50117,16 @@
         "kind": 5,
         "importPath": "backend.privacy_proxy.app.pseudonymizer",
         "description": "backend.privacy_proxy.app.pseudonymizer",
-        "peekOfCode": "PHONE_REGEX = re.compile(r'\\+\\d{1,3}[\\s.-]?\\d{2,4}[\\s.-]?\\d{3,4}[\\s.-]?\\d{0,5}')\ndef build_analyzer(language: str) -> AnalyzerEngine:\n    if language == \"de\":\n        provider = NlpEngineProvider(nlp_configuration={\n            \"nlp_engine_name\": \"spacy\",\n            \"models\": [{\"lang_code\": \"de\", \"model_name\": \"de_core_news_md\"}],\n        })\n        recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de, id_recognizer_de]\n    else:\n        provider = NlpEngineProvider(nlp_configuration={",
+        "peekOfCode": "PHONE_REGEX = re.compile(r'\\+\\d{1,3}[\\s.-]?\\d{2,4}[\\s.-]?\\d{3,4}[\\s.-]?\\d{0,5}')\nORG_CONTEXT_WORDS = {\"GmbH\", \"Inc\", \"Ltd\", \"AG\", \"Corp\", \"LLC\", \"SE\", \"Co\", \"SA\", \"company\", \"corporation\", \"founded\"}\ndef build_analyzer(language: str) -> AnalyzerEngine:\n    if language == \"de\":\n        provider = NlpEngineProvider(nlp_configuration={\n            \"nlp_engine_name\": \"spacy\",\n            \"models\": [{\"lang_code\": \"de\", \"model_name\": \"de_core_news_md\"}],\n        })\n        recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de, id_recognizer_de]\n    else:",
+        "detail": "backend.privacy_proxy.app.pseudonymizer",
+        "documentation": {}
+    },
+    {
+        "label": "ORG_CONTEXT_WORDS",
+        "kind": 5,
+        "importPath": "backend.privacy_proxy.app.pseudonymizer",
+        "description": "backend.privacy_proxy.app.pseudonymizer",
+        "peekOfCode": "ORG_CONTEXT_WORDS = {\"GmbH\", \"Inc\", \"Ltd\", \"AG\", \"Corp\", \"LLC\", \"SE\", \"Co\", \"SA\", \"company\", \"corporation\", \"founded\"}\ndef build_analyzer(language: str) -> AnalyzerEngine:\n    if language == \"de\":\n        provider = NlpEngineProvider(nlp_configuration={\n            \"nlp_engine_name\": \"spacy\",\n            \"models\": [{\"lang_code\": \"de\", \"model_name\": \"de_core_news_md\"}],\n        })\n        recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de, id_recognizer_de]\n    else:\n        provider = NlpEngineProvider(nlp_configuration={",
         "detail": "backend.privacy_proxy.app.pseudonymizer",
         "documentation": {}
     },
