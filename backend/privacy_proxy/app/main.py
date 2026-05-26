@@ -241,6 +241,17 @@ async def analyze(request: Request):
     return JSONResponse({"entities": entities})
 
 
+@app.get("/openai/api/tags")
+async def ollama_tags():
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{OLLAMA_URL}/api/tags", timeout=30.0)
+    return Response(
+        content=response.content,
+        status_code=response.status_code,
+        media_type="application/json",
+    )
+
+
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy(request: Request, path: str):
     body = None
