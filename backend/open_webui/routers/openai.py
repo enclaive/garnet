@@ -293,11 +293,14 @@ async def analyze_privacy(request: Request, user=Depends(get_verified_user)):
     """
     try:
         body = await request.json()
-        
+
+        proxy_base = os.environ.get("OPENAI_API_BASE_URL", "http://privacy-proxy:8080/openai").removesuffix("/openai").rstrip("/")
+        analyze_url = f"{proxy_base}/analyze"
+
         # Forward request to privacy proxy
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                'http://privacy-proxy:8080/analyze',
+                analyze_url,
                 json=body,
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:
