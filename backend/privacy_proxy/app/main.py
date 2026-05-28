@@ -108,13 +108,18 @@ async def generate_hyde_hypothesis(question: str, ollama_url: str) -> str:
                 f"{ollama_url}/api/generate",
                 json={
                     "model": "llama3.2",
-                    "prompt": f"Write a short factual answer (2-3 sentences) to this question. Be concise: {question}",
+                    "prompt": f"Write a 2-sentence hypothetical document that would answer this question. Focus on technical concepts only: {question}",
                     "stream": False
                 },
                 timeout=15.0
             )
             result = orjson.loads(response.content)
             hypothesis = result.get("response", "").strip()
+            REFUSAL_MARKERS = ["cannot assist", "can't assist", "I don't know",
+                               "no information", "not able to", "I cannot"]
+            if any(m.lower() in hypothesis.lower() for m in REFUSAL_MARKERS):
+                print(f"[HYDE] refusal detected → skipping")
+                return ""
             print(f"[HYDE] generated hypothesis: {hypothesis[:150]}")
             return hypothesis
     except Exception as e:
