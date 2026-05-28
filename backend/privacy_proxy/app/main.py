@@ -100,6 +100,28 @@ def detect_internal_type(content: str) -> str:
     return "internal"
 
 
+async def generate_hyde_hypothesis(question: str, ollama_url: str) -> str:
+    """Generate a hypothetical answer to improve RAG retrieval context."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{ollama_url}/api/generate",
+                json={
+                    "model": "llama3.2",
+                    "prompt": f"Write a short factual answer (2-3 sentences) to this question. Be concise: {question}",
+                    "stream": False
+                },
+                timeout=15.0
+            )
+            result = orjson.loads(response.content)
+            hypothesis = result.get("response", "").strip()
+            print(f"[HYDE] generated hypothesis: {hypothesis[:150]}")
+            return hypothesis
+    except Exception as e:
+        print(f"[HYDE] failed, skipping: {e}")
+        return ""
+
+
 async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, is_responses_api=False):
     yield orjson.dumps({
         "type": "pseudonymized_prompt",
@@ -472,6 +494,22 @@ async def proxy(request: Request, path: str):
                     log_error(f"user pseudonymization failed: {e} — forwarding raw")
                     pseudonymized_user_message = original_content_text
                     last_message["content"] = original_content
+
+                if has_rag_context:
+                    hypothesis = await generate_hyde_hypothesis(
+                        original_content_text,
+                        os.getenv("OLLAMA_URL", "http://localhost:11434")
+                    )
+                    if hypothesis:
+                        pseudo_hypothesis = pseudonymize(
+                            hypothesis, session_id, store.get_store(),
+                            enabled_types=enabled_types
+                        )
+                        messages.insert(-1, {
+                            "role": "system",
+                            "content": f"<hypothesis>\n{pseudo_hypothesis}\n</hypothesis>"
+                        })
+                        print(f"[HYDE] injected pseudonymized hypothesis into context")
 
         log_to_llm(url, model)
 
