@@ -371,7 +371,16 @@ async def proxy(request: Request, path: str):
             original_content = last_message["content"]
             original_content_text = extract_text_content(original_content)
 
-            has_rag_context = "<context>" in original_content_text or "<source" in original_content_text or "{{CONTEXT}}" in original_content_text
+            has_rag_context = (
+                "<context>" in original_content_text or
+                "<source" in original_content_text or
+                "{{CONTEXT}}" in original_content_text or
+                any(
+                    "<source" in str(m.get("content", "")) or
+                    "<context>" in str(m.get("content", ""))
+                    for m in messages
+                )
+            )
             is_system_prompt = not has_rag_context and any(marker in original_content_text for marker in SYSTEM_PROMPT_MARKERS)
 
             if not privacy_enabled:
