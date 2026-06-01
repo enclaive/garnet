@@ -42,6 +42,9 @@
 	export let topPadding = false;
 
 	let showDeleteConfirm = false;
+	let showQeTooltip = false;
+	let qeTooltipX = 0;
+	let qeTooltipY = 0;
 
 	let messageIndexEdit = false;
 
@@ -562,6 +565,35 @@
 						</svg>
 					</button>
 				</Tooltip>
+
+				{#if message.query_variants?.length > 0}
+					<button
+						aria-label="Show query expansion variants"
+						class="{($settings?.highContrastMode ?? false)
+							? 'visible'
+							: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition text-blue-400"
+						on:mouseenter={(e) => {
+							const rect = e.currentTarget.getBoundingClientRect();
+							qeTooltipX = rect.left;
+							qeTooltipY = rect.bottom + 8;
+							showQeTooltip = true;
+						}}
+						on:mouseleave={() => { showQeTooltip = false; }}
+					>
+						🔍
+					</button>
+					{#if showQeTooltip}
+						<div
+							class="fixed z-50 bg-gray-800 text-gray-200 text-xs rounded-lg p-2 shadow-lg w-56 pointer-events-none"
+							style="top:{qeTooltipY}px;left:{qeTooltipX}px;"
+						>
+							<div class="font-semibold mb-1 text-blue-300">[Query Expansion]</div>
+							{#each message.query_variants as v}
+								<div class="text-gray-300">- {v}</div>
+							{/each}
+						</div>
+					{/if}
+				{/if}
 
 				{#if message.file_entity_count > 0 && message.files?.length > 0}
 					<div class="text-xs text-gray-500 mt-1">

@@ -1612,7 +1612,8 @@
 
 	const chatCompletionEventHandler = async (data, message, chatId) => {
 		console.warn('[GARNET ENTRY]', data);
-		const { id, done, choices, content, output, sources, selected_model_id, error, usage, pseudonymized_prompt, file_entity_count, garnet_breakdown } = data;
+		const { id, done, choices, content, output, sources, selected_model_id, error, usage, pseudonymized_prompt, file_entity_count, garnet_breakdown, query_variants } = data;
+		const queryVariants = query_variants || [];
 
 		// Store raw OR-aligned output items from backend
 		if (output) {
@@ -1714,16 +1715,17 @@
 			message.usage = usage;
 		}
 
-		if (pseudonymized_prompt || file_entity_count > 0) {
+		if (pseudonymized_prompt || file_entity_count > 0 || queryVariants.length > 0) {
 			const userMsgId = message.parentId;
 			if (userMsgId && history.messages[userMsgId]) {
 				history.messages[userMsgId] = {
 					...history.messages[userMsgId],
 					...(pseudonymized_prompt ? { pseudonymized_prompt } : {}),
 					file_entity_count: file_entity_count ?? 0,
-					garnet_breakdown: garnet_breakdown ?? {}
+					garnet_breakdown: garnet_breakdown ?? {},
+					query_variants: queryVariants
 				};
-				console.warn('[GARNET MESSAGE SET]', userMsgId, pseudonymized_prompt, 'file_entity_count:', file_entity_count);
+				console.warn('[GARNET MESSAGE SET]', userMsgId, pseudonymized_prompt, 'file_entity_count:', file_entity_count, 'query_variants:', queryVariants);
 			}
 		}
 
