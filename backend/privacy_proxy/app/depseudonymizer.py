@@ -26,4 +26,4 @@ def depseudonymize(text: str, session_id: str, store: dict) -> str:
     for token in sorted(mapping.keys(), key=len, reverse=True):
         text = text.replace(token, mapping[token])
 
-    return text
+    return textg
