@@ -906,12 +906,18 @@
 					draggable="false"
 					on:click={newChatHandler}
 				>
-					<img
-						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/favicon.png"
-						class="sidebar-new-chat-icon size-6 rounded-full"
-						alt=""
-					/>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 100 100"
+						class="sidebar-new-chat-icon size-6"
+						fill="currentColor"
+						aria-hidden="true"
+					>
+						<polygon points="50,3 94,27.5 94,72.5 50,97 6,72.5 6,27.5" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>
+						<polygon points="50,20 74,33 50,46 26,33"/>
+						<polygon points="26,33 50,46 50,72 26,59" opacity="0.6"/>
+						<polygon points="74,33 50,46 50,72 74,59" opacity="0.35"/>
+					</svg>
 				</a>
 
 				<a href="/" class="flex flex-1 px-1.5" on:click={newChatHandler}>

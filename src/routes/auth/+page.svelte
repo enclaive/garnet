@@ -238,13 +238,19 @@
 						<div class=" sm:max-w-md my-auto pb-10 w-full dark:text-gray-100">
 							{#if $config?.metadata?.auth_logo_position === 'center'}
 								<div class="flex justify-center mb-6">
-									<img
+									<svg
 										id="logo"
-										crossorigin="anonymous"
-										src="{WEBUI_BASE_URL}/static/favicon.png"
-										class="size-24 rounded-full"
-										alt="{$WEBUI_NAME} logo"
-									/>
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 100 100"
+										class="size-24"
+										fill="currentColor"
+										aria-label="{$WEBUI_NAME} logo"
+									>
+										<polygon points="50,3 94,27.5 94,72.5 50,97 6,72.5 6,27.5" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>
+										<polygon points="50,20 74,33 50,46 26,33"/>
+										<polygon points="26,33 50,46 50,72 26,59" opacity="0.6"/>
+										<polygon points="74,33 50,46 50,72 74,59" opacity="0.35"/>
+									</svg>
 								</div>
 							{/if}
 							<form
@@ -590,13 +596,19 @@
 			<div class="fixed m-10 z-50">
 				<div class="flex space-x-2">
 					<div class=" self-center">
-						<img
+						<svg
 							id="logo"
-							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" w-6 rounded-full"
-							alt=""
-						/>
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 100 100"
+							class="w-6"
+							fill="currentColor"
+							aria-hidden="true"
+						>
+							<polygon points="50,3 94,27.5 94,72.5 50,97 6,72.5 6,27.5" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>
+							<polygon points="50,20 74,33 50,46 26,33"/>
+							<polygon points="26,33 50,46 50,72 26,59" opacity="0.6"/>
+							<polygon points="74,33 50,46 50,72 74,59" opacity="0.35"/>
+						</svg>
 					</div>
 				</div>
 			</div>
