@@ -127,12 +127,40 @@ async def generate_hyde_hypothesis(question: str, ollama_url: str) -> str:
         return ""
 
 
-async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, is_responses_api=False):
+async def expand_query(question: str, openai_url: str, headers: dict) -> list:
+    prompt = (
+        "Generate 3 short search queries to find information related to this question.\n"
+        "Return only the 3 queries, one per line, no numbering, no explanation.\n"
+        f"Question: {question}"
+    )
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{openai_url.rstrip('/')}/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=30.0,
+            )
+        data = orjson.loads(resp.content)
+        text = data["choices"][0]["message"]["content"].strip()
+        return [line.strip() for line in text.splitlines() if line.strip()][:3]
+    except Exception as e:
+        print(f"[QUERY EXPAND] error: {e}")
+        return []
+
+
+async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, is_responses_api=False, variants=None):
     yield orjson.dumps({
         "type": "pseudonymized_prompt",
         "content": pseudonymized_prompt or "",
         "file_entity_count": file_entity_count,
-        "garnet_breakdown": garnet_breakdown or {}
+        "garnet_breakdown": garnet_breakdown or {},
+        "query_variants": variants or []
     }) + b"\n\n"
 
     buffer = ""
@@ -295,6 +323,8 @@ async def proxy(request: Request, path: str):
     file_entity_count = 0
     garnet_breakdown = {}
     use_responses_api = False
+    query_expand = request.headers.get("x-garnet-queryexpand", "").lower() == "true"
+    variants = []
 
     if body:
         privacy_enabled = body.pop("privacy_proxy", True)
@@ -525,6 +555,17 @@ async def proxy(request: Request, path: str):
                         })
                         print(f"[HYDE] injected pseudonymized hypothesis into context")
 
+        if query_expand and messages and not is_system_prompt:
+            _expand_url = (openai_url if is_openai else OPENAI_API_URL).rstrip("/")
+            _expand_headers = {}
+            _auth = request.headers.get("authorization", "")
+            if _auth:
+                _expand_headers["authorization"] = _auth
+            variants = await expand_query(original_content_text, _expand_url, _expand_headers)
+            print(f"[QUERY EXPAND] generated {len(variants)} variants")
+            for v in variants:
+                print(f"  → {v}")
+
         log_to_llm(url, model)
 
     if is_openai:
@@ -589,6 +630,7 @@ async def proxy(request: Request, path: str):
             result["message"]["content"] = content
             result["pseudonymized_prompt"] = pseudonymized_user_message or ""
             result["file_entity_count"] = file_entity_count
+            result["query_variants"] = variants or []
 
             log_to_user(len(session_mapping))
             log_sep()
@@ -657,7 +699,7 @@ async def proxy(request: Request, path: str):
             stream_with_depseudo(
                 response_stream(), session_mapping, pseudonymized_user_message,
                 session_id, url, model, file_entity_count, garnet_breakdown,
-                is_responses_api=use_responses_api
+                is_responses_api=use_responses_api, variants=variants
             ),
             media_type="text/event-stream"
         )
