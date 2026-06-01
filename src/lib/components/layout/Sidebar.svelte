@@ -712,11 +712,21 @@
 						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					>
 						<div class=" self-center flex items-center justify-center size-9">
-							<img
-								src="{WEBUI_BASE_URL}/static/favicon.png"
-								class="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden"
-								alt=""
-							/>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 100 100"
+								class="sidebar-new-chat-icon size-6 group-hover:hidden"
+								fill="currentColor"
+								aria-hidden="true"
+							>
+								<polygon points="30,15 70,15 90,45 70,85 30,85 10,45" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+								<line x1="30" y1="15" x2="50" y2="45" stroke="currentColor" stroke-width="2.5"/>
+								<line x1="70" y1="15" x2="50" y2="45" stroke="currentColor" stroke-width="2.5"/>
+								<line x1="10" y1="45" x2="50" y2="45" stroke="currentColor" stroke-width="2.5"/>
+								<line x1="90" y1="45" x2="50" y2="45" stroke="currentColor" stroke-width="2.5"/>
+								<line x1="50" y1="45" x2="30" y2="85" stroke="currentColor" stroke-width="2.5"/>
+								<line x1="50" y1="45" x2="70" y2="85" stroke="currentColor" stroke-width="2.5"/>
+							</svg>
 
 							<Sidebar className="size-5 hidden group-hover:flex" />
 						</div>
@@ -913,10 +923,13 @@
 						fill="currentColor"
 						aria-hidden="true"
 					>
-						<polygon points="50,3 94,27.5 94,72.5 50,97 6,72.5 6,27.5" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>
-						<polygon points="50,20 74,33 50,46 26,33"/>
-						<polygon points="26,33 50,46 50,72 26,59" opacity="0.6"/>
-						<polygon points="74,33 50,46 50,72 74,59" opacity="0.35"/>
+						<polygon points="30,15 70,15 90,45 70,85 30,85 10,45" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+						<line x1="30" y1="15" x2="50" y2="45" stroke="currentColor" stroke-width="2.5"/>
+						<line x1="70" y1="15" x2="50" y2="45" stroke="currentColor" stroke-width="2.5"/>
+						<line x1="10" y1="45" x2="50" y2="45" stroke="currentColor" stroke-width="2.5"/>
+						<line x1="90" y1="45" x2="50" y2="45" stroke="currentColor" stroke-width="2.5"/>
+						<line x1="50" y1="45" x2="30" y2="85" stroke="currentColor" stroke-width="2.5"/>
+						<line x1="50" y1="45" x2="70" y2="85" stroke="currentColor" stroke-width="2.5"/>
 					</svg>
 				</a>
 
