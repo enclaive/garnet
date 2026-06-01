@@ -574,6 +574,7 @@
 									{@html DOMPurify.sanitize(marked($config?.metadata?.login_footer))}
 								</div>
 							</div>
+						{/if}
 					</div>
 				{/if}
 			</div>
