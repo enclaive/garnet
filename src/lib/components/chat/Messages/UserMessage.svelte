@@ -42,9 +42,9 @@
 	export let topPadding = false;
 
 	let showDeleteConfirm = false;
-	let showQeTooltip = false;
-	let qeTooltipX = 0;
-	let qeTooltipY = 0;
+	let showInfoTooltip = false;
+	let infoTooltipX = 0;
+	let infoTooltipY = 0;
 
 	let messageIndexEdit = false;
 
@@ -546,17 +546,20 @@
 						</Tooltip>
 					{/if}
 
-				<!-- (i) button always visible - shows original or pseudonymized prompt based on privacy setting -->
-				<Tooltip
-					content={`<pre>${(message.pseudonymized_prompt ?? message.content).trim()}</pre>`}
-					placement="bottom"
-					allowHTML={true}
-				>
+				<!-- (i) button: shows pseudonymized prompt and/or query expansion variants -->
+				{#if message.pseudonymized_prompt || (message.query_variants && message.query_variants.length > 0)}
 					<button
-						aria-label={message.pseudonymized_prompt ? 'Show pseudonymized prompt' : 'Show original prompt'}
+						aria-label={message.pseudonymized_prompt ? 'Show pseudonymized prompt' : 'Show query expansion'}
 						class="{($settings?.highContrastMode ?? false)
 							? 'visible'
 							: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
+						on:mouseenter={(e) => {
+							const rect = e.currentTarget.getBoundingClientRect();
+							infoTooltipX = rect.left;
+							infoTooltipY = rect.bottom + 8;
+							showInfoTooltip = true;
+						}}
+						on:mouseleave={() => { showInfoTooltip = false; }}
 					>
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4">
 							<circle cx="12" cy="12" r="10"/>
@@ -564,33 +567,32 @@
 							<line x1="12" y1="8" x2="12.01" y2="8"/>
 						</svg>
 					</button>
-				</Tooltip>
-
-				{#if message.query_variants?.length > 0}
-					<button
-						aria-label="Show query expansion variants"
-						class="{($settings?.highContrastMode ?? false)
-							? 'visible'
-							: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition text-blue-400"
-						on:mouseenter={(e) => {
-							const rect = e.currentTarget.getBoundingClientRect();
-							qeTooltipX = rect.left;
-							qeTooltipY = rect.bottom + 8;
-							showQeTooltip = true;
-						}}
-						on:mouseleave={() => { showQeTooltip = false; }}
-					>
-						🔍
-					</button>
-					{#if showQeTooltip}
+					{#if showInfoTooltip}
 						<div
-							class="fixed z-50 bg-gray-800 text-gray-200 text-xs rounded-lg p-2 shadow-lg w-56 pointer-events-none"
-							style="top:{qeTooltipY}px;left:{qeTooltipX}px;"
+							class="fixed z-50 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none"
+							style="top:{infoTooltipY}px; left:{infoTooltipX}px; max-width: 400px; max-height: 70vh; overflow-y: auto;"
 						>
-							<div class="font-semibold mb-1 text-blue-300">[Query Expansion]</div>
-							{#each message.query_variants as v}
-								<div class="text-gray-300">- {v}</div>
-							{/each}
+							{#if message.pseudonymized_prompt}
+								<div style="font-family: ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap; word-break: break-word;">
+									{message.pseudonymized_prompt}
+								</div>
+							{/if}
+							{#if message.query_variants && message.query_variants.length > 0}
+								<div style="
+									margin-top: {message.pseudonymized_prompt ? '8px' : '0'};
+									padding-top: {message.pseudonymized_prompt ? '8px' : '0'};
+									border-top: {message.pseudonymized_prompt ? '1px solid rgba(255,255,255,0.2)' : 'none'};
+								">
+									<div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">
+										Query Expansion
+									</div>
+									{#each message.query_variants as variant}
+										<div style="font-size: 12px; color: #6ee7b7; font-family: ui-monospace, SFMono-Regular, monospace; margin-bottom: 2px; white-space: pre-wrap; word-break: break-word;">
+											→ {variant}
+										</div>
+									{/each}
+								</div>
+							{/if}
 						</div>
 					{/if}
 				{/if}

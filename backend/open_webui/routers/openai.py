@@ -204,6 +204,7 @@ async def get_headers_and_cookies(
     garnet_entities = request.headers.get('x-garnet-entities', '')
     if garnet_entities:
         headers['x-garnet-entities'] = garnet_entities
+    headers['x-garnet-queryexpand'] = request.headers.get('x-garnet-queryexpand', 'false')
     openai_base_url = request.headers.get('x-openai-base-url', '')
     if openai_base_url:
         headers['x-openai-base-url'] = openai_base_url

@@ -100,57 +100,63 @@ def detect_internal_type(content: str) -> str:
     return "internal"
 
 
-async def generate_hyde_hypothesis(question: str, ollama_url: str) -> str:
-    """Generate a hypothetical answer to improve RAG retrieval context."""
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{ollama_url}/api/generate",
-                json={
-                    "model": "llama3.2",
-                    "prompt": f"Write a 2-sentence hypothetical document that would answer this question. Focus on technical concepts only: {question}",
-                    "stream": False
-                },
-                timeout=15.0
-            )
-            result = orjson.loads(response.content)
-            hypothesis = result.get("response", "").strip()
-            REFUSAL_MARKERS = ["cannot assist", "can't assist", "I don't know",
-                               "no information", "not able to", "I cannot"]
-            if any(m.lower() in hypothesis.lower() for m in REFUSAL_MARKERS):
-                print(f"[HYDE] refusal detected → skipping")
-                return ""
-            print(f"[HYDE] generated hypothesis: {hypothesis[:150]}")
-            return hypothesis
-    except Exception as e:
-        print(f"[HYDE] failed, skipping: {e}")
-        return ""
+async def expand_query(question: str, openai_url: str, auth_header: str) -> list[str]:
+    """
+    Calls gpt-4o-mini to generate 3 short search query variants.
+    Used to enrich embedding vector for better Chroma retrieval.
+    Returns [] on any failure — expansion never breaks the main request.
+    """
+    if not question or not auth_header:
+        print(f"[QUERY EXPAND] skipped: missing question or auth")
+        return []
 
-
-async def expand_query(question: str, openai_url: str, headers: dict) -> list:
     prompt = (
-        "Generate 3 short search queries to find information related to this question.\n"
-        "Return only the 3 queries, one per line, no numbering, no explanation.\n"
+        "You are a search query generator for a private company knowledge base.\n"
+        "The user asked the question below. Generate 3 short alternative search queries "
+        "that would help retrieve relevant documents from the knowledge base.\n"
+        "Do NOT answer the question. Do NOT add explanations.\n"
+        "Return ONLY 3 queries, one per line, no numbering, no bullets, no quotes.\n\n"
         f"Question: {question}"
     )
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-    }
+
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{openai_url.rstrip('/')}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=30.0,
+                headers={
+                    "Authorization": auth_header,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "stream": False,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": 150
+                },
+                timeout=15.0
             )
-        data = orjson.loads(resp.content)
-        text = data["choices"][0]["message"]["content"].strip()
-        return [line.strip() for line in text.splitlines() if line.strip()][:3]
+
+        if resp.status_code != 200:
+            print(f"[QUERY EXPAND] LLM call failed status={resp.status_code} body={resp.text[:200]}")
+            return []
+
+        result = orjson.loads(resp.content)
+        text = result["choices"][0]["message"]["content"].strip()
+        variants = [v.strip("-•* \t\"'") for v in text.split("\n") if v.strip()]
+        variants = [v for v in variants if v and len(v) > 3][:3]
+
+        if not variants:
+            print(f"[QUERY EXPAND] LLM returned empty variants, raw={text[:200]}")
+            return []
+
+        return variants
+
+    except httpx.TimeoutException:
+        print(f"[QUERY EXPAND] timeout after 15s")
+        return []
     except Exception as e:
-        print(f"[QUERY EXPAND] error: {e}")
+        print(f"[QUERY EXPAND] exception: {type(e).__name__}: {e}")
         return []
 
 
@@ -385,6 +391,8 @@ async def proxy(request: Request, path: str):
 
         log_sep()
         log_garnet(session_id, provider_label, privacy_enabled, model, actual_path)
+        if query_expand:
+            print(f"[QUERY EXPAND] header detected → expansion ON")
 
         enabled_header = request.headers.get("x-garnet-entities", "")
         enabled_types = [e.strip() for e in enabled_header.split(",") if e.strip()] if enabled_header else None
@@ -539,32 +547,28 @@ async def proxy(request: Request, path: str):
                     pseudonymized_user_message = original_content_text
                     last_message["content"] = original_content
 
-                if has_rag_context:
-                    hypothesis = await generate_hyde_hypothesis(
-                        original_content_text,
-                        os.getenv("OLLAMA_URL", "http://localhost:11434")
-                    )
-                    if hypothesis:
-                        pseudo_hypothesis = pseudonymize(
-                            hypothesis, session_id, store.get_store(),
-                            enabled_types=enabled_types
-                        )
-                        messages.insert(-1, {
-                            "role": "system",
-                            "content": f"<hypothesis>\n{pseudo_hypothesis}\n</hypothesis>"
-                        })
-                        print(f"[HYDE] injected pseudonymized hypothesis into context")
+                # Query expansion — enrich the question for better RAG retrieval
+                # NOTE: variants from gpt-4o-mini are NOT pseudonymized; they reach
+                # the embedding model in OWU only, not the main LLM (known minor leak vector).
+                if query_expand and has_rag_context:
+                    print(f"[QUERY EXPAND] starting → question='{original_content_text[:100]}'")
+                    auth_header = request.headers.get("authorization", "")
+                    _expand_url = (openai_url if is_openai else OPENAI_API_URL)
+                    variants = await expand_query(original_content_text, _expand_url, auth_header)
 
-        if query_expand and messages and not is_system_prompt:
-            _expand_url = (openai_url if is_openai else OPENAI_API_URL).rstrip("/")
-            _expand_headers = {}
-            _auth = request.headers.get("authorization", "")
-            if _auth:
-                _expand_headers["authorization"] = _auth
-            variants = await expand_query(original_content_text, _expand_url, _expand_headers)
-            print(f"[QUERY EXPAND] generated {len(variants)} variants")
-            for v in variants:
-                print(f"  → {v}")
+                    if variants:
+                        print(f"[QUERY EXPAND] {len(variants)} variants generated:")
+                        for i, v in enumerate(variants, 1):
+                            print(f"  [{i}] {v}")
+
+                        # Concatenate: pseudonymized original + variants → richer embed vector
+                        enriched = pseudonymized_user_message + "\n" + "\n".join(variants)
+                        last_message["content"] = rebuild_content(original_content, enriched)
+                        print(f"[QUERY EXPAND] enriched query injected → {len(pseudonymized_user_message)} → {len(enriched)} chars")
+                    else:
+                        print(f"[QUERY EXPAND] no variants generated → using original query only")
+                elif query_expand and not has_rag_context:
+                    print(f"[QUERY EXPAND] skipped — no RAG context in this message")
 
         log_to_llm(url, model)
 
@@ -738,19 +742,4 @@ async def proxy(request: Request, path: str):
         content=response.content,
         status_code=response.status_code,
         headers=filtered_headers
-    )# test
-# trigger
-# trigger
-# test
-# test
-# test
-# test
-# test
-# test
-# test
-# retry
-# retry
-# retry
-# retry
-# retryt
-# retry
+    )
