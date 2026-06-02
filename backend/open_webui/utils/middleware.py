@@ -3131,6 +3131,11 @@ async def non_streaming_chat_response_handler(response, ctx):
                                     if 'pseudonymized_prompt' in response_data
                                     else {}
                                 ),
+                                **(
+                                    {'query_variants': response_data['query_variants']}
+                                    if 'query_variants' in response_data
+                                    else {}
+                                ),
                             },
                         }
                     )
@@ -3480,6 +3485,7 @@ async def streaming_chat_response_handler(response, ctx):
             pseudonymized_prompt = None
             file_entity_count = 0
             garnet_breakdown = {}
+            query_variants = []
 
             def full_output():
                 return prior_output + output if prior_output else output
@@ -3522,6 +3528,7 @@ async def streaming_chat_response_handler(response, ctx):
                     nonlocal pseudonymized_prompt
                     nonlocal file_entity_count
                     nonlocal garnet_breakdown
+                    nonlocal query_variants
 
                     response_tool_calls = []
 
@@ -3570,6 +3577,8 @@ async def streaming_chat_response_handler(response, ctx):
                                 file_entity_count = data['file_entity_count']
                             if 'garnet_breakdown' in data:
                                 garnet_breakdown = data['garnet_breakdown']
+                            if 'query_variants' in data:
+                                query_variants = data['query_variants']
 
                             data, _ = await process_filter_functions(
                                 request=request,
@@ -4638,6 +4647,11 @@ async def streaming_chat_response_handler(response, ctx):
                     **(
                         {'garnet_breakdown': garnet_breakdown}
                         if garnet_breakdown
+                        else {}
+                    ),
+                    **(
+                        {'query_variants': query_variants}
+                        if query_variants
                         else {}
                     ),
                 }
