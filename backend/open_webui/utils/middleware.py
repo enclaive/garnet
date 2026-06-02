@@ -3568,6 +3568,13 @@ async def streaming_chat_response_handler(response, ctx):
                         # Remove the prefix
                         data = data[len('data:') :].strip()
 
+                        # Skip SSE terminator — not JSON, must not reach json.loads
+                        if data == '[DONE]' or data == 'DONE':
+                            continue
+                        # Skip anything that doesn't look like a JSON object/array
+                        if not data or data[0] not in '{[':
+                            continue
+
                         try:
                             data = json.loads(data)
 
@@ -3993,6 +4000,9 @@ async def streaming_chat_response_handler(response, ctx):
                                             'data': data,
                                         }
                                     )
+                        except json.JSONDecodeError as e:
+                            log.warning(f"[GARNET] SSE parse skipped: {e} | raw={data[:120]!r}")
+                            continue
                         except Exception as e:
                             done = 'data: [DONE]' in line
                             if done:
