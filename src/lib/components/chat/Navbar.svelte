@@ -42,6 +42,7 @@
 	import ChatCheck from '../icons/ChatCheck.svelte';
 	import Knobs from '../icons/Knobs.svelte';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import EntityRelationshipMap from '../chat/EntityRelationshipMap.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -58,6 +59,8 @@
 	export let moveChatHandler: (id: string, folderId: string) => void;
 
 	let closedBannerIds = [];
+	let showEntityMap = false;
+	$: hasPseudonymized = Object.values(history?.messages ?? {}).some((m: any) => m.pseudonymized_prompt);
 
 	let showShareChatModal = false;
 	let showDownloadChatModal = false;
@@ -147,6 +150,15 @@
                 <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {$queryExpand ? 'translate-x-3.5' : 'translate-x-0.5'}" />
             </span>
         </button>
+        {#if hasPseudonymized}
+        <button
+            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition shrink-0 bg-gray-500/20 text-gray-400 hover:bg-gray-500/30"
+            on:click={() => showEntityMap = true}
+            title="Entity Map"
+        >
+            <span class="text-[11px]">⬡</span>
+        </button>
+        {/if}
         {/if}
     </div>
 {/if}
@@ -355,4 +367,8 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if showEntityMap}
+		<EntityRelationshipMap {history} on:close={() => showEntityMap = false} />
+	{/if}
 </nav>
