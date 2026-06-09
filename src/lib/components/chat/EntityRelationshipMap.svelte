@@ -81,12 +81,13 @@
 			byType.get(data.type)!.push(token);
 		}
 
-		for (const [type, tokens] of byType) {
-			const idx = ENTITY_TYPES.indexOf(type);
-			const typeAngle =
-				((idx >= 0 ? idx : 0) / ENTITY_TYPES.length) * 2 * Math.PI - Math.PI / 2;
+		const detectedTypes = [...byType.keys()];
+
+		detectedTypes.forEach((type, typeIdx) => {
+			const typeAngle = (typeIdx / detectedTypes.length) * 2 * Math.PI - Math.PI / 2;
 			const cx = RING_CX + RING_R * Math.cos(typeAngle);
 			const cy = RING_CY + RING_R * Math.sin(typeAngle);
+			const tokens = byType.get(type)!;
 
 			if (tokens.length === 1) {
 				positions.set(tokens[0], { x: cx, y: cy });
@@ -100,7 +101,8 @@
 					});
 				});
 			}
-		}
+		});
+
 		return positions;
 	}
 
@@ -148,7 +150,7 @@
 	role="dialog"
 	aria-modal="true"
 	aria-label="Entity Relationship Map"
-	class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+	class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
 >
 	<div class="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-4 w-full max-w-[660px] mx-4">
 		<div class="flex items-center justify-between mb-3">
@@ -187,7 +189,7 @@
 					{@const pos = nodePositions.get(token)}
 					{#if pos}
 						<g>
-							<circle cx={pos.x} cy={pos.y} r="14" fill={getColor(data.type)} fill-opacity="0.85">
+							<circle cx={pos.x} cy={pos.y} r="14" fill={getColor(data.type)}>
 								<title>{token} · seen in {data.count} message{data.count !== 1 ? 's' : ''}</title>
 							</circle>
 							<text
