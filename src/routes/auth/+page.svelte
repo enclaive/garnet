@@ -580,16 +580,5 @@
 			</div>
 		</div>
 
-		{#if !$config?.metadata?.auth_logo_position}
-			<div class="fixed m-10 z-50">
-				<div class="flex space-x-2">
-					<div class=" self-center">
-						<div class="size-6 rounded-full overflow-hidden flex-shrink-0">
-							<img src="{WEBUI_BASE_URL}/static/garnet-logo.png" alt="Garnet" class="size-6 object-contain rounded-full" />
-						</div>
-					</div>
-				</div>
-			</div>
-		{/if}
 	{/if}
 </div>
