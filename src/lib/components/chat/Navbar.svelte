@@ -150,6 +150,7 @@
                 <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {$queryExpand ? 'translate-x-3.5' : 'translate-x-0.5'}" />
             </span>
         </button>
+        <!-- entity map button hidden temporarily
         {#if hasPseudonymized}
         <button
             class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition shrink-0 bg-gray-500/20 text-gray-400 hover:bg-gray-500/30"
@@ -159,6 +160,7 @@
             <span class="text-[11px]">⬡</span>
         </button>
         {/if}
+        -->
         {/if}
     </div>
 {/if}
