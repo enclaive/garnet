@@ -713,7 +713,7 @@
 					>
 						<div class=" self-center flex items-center justify-center size-9">
 							<div class="sidebar-new-chat-icon size-6 group-hover:hidden rounded-full overflow-hidden flex-shrink-0">
-								<img src="{WEBUI_API_BASE_URL}/static/garnet-logo.png" alt="Garnet" class="size-6 object-contain rounded-full" />
+								<img src="{WEBUI_BASE_URL}/static/garnet-logo.png" alt="Garnet" class="size-6 object-contain rounded-full" />
 							</div>
 
 							<Sidebar className="size-5 hidden group-hover:flex" />
@@ -905,7 +905,7 @@
 					on:click={newChatHandler}
 				>
 					<div class="sidebar-new-chat-icon size-6 rounded-full overflow-hidden flex-shrink-0">
-						<img src="{WEBUI_API_BASE_URL}/static/garnet-logo.png" alt="Garnet" class="size-6 object-contain rounded-full" />
+						<img src="{WEBUI_BASE_URL}/static/garnet-logo.png" alt="Garnet" class="size-6 object-contain rounded-full" />
 					</div>
 				</a>
 
