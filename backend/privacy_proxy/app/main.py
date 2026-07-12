@@ -6,7 +6,6 @@ import orjson
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from app.pseudonymizer import pseudonymize, detect_entities
-from app.depseudonymizer import depseudonymize
 from app.mapping_store import MappingStore
 from app.logs import (
     log_sep, log_garnet, log_entity_filter,
@@ -41,6 +40,9 @@ class ORJSONResponse(Response):
 
 app = FastAPI(default_response_class=ORJSONResponse)
 store = MappingStore(ttl=3600)
+# ponytail: per-session pseudonymize cache. TTL is implicit — same 1h window as store;
+# evicted on process restart, not on session expiry. Add active eviction if memory becomes measurable.
+pseudo_cache: dict[str, dict[str, str]] = {}
 
 
 def extract_text_content(content) -> str:
@@ -67,6 +69,19 @@ def rebuild_content(original_content, pseudonymized_text: str):
                 result.append(block)
         return result
     return pseudonymized_text
+
+
+def _pseudo_with_cache(text: str, session_id: str, enabled_types) -> str:
+    if not text:
+        return text
+    h = hashlib.md5(text.encode("utf-8")).hexdigest()
+    session_cache = pseudo_cache.setdefault(session_id, {})
+    hit = session_cache.get(h)
+    if hit is not None:
+        return hit
+    out = pseudonymize(text, session_id, store.get_store(), enabled_types=enabled_types)
+    session_cache[h] = out
+    return out
 
 
 def split_at_safe_boundary(buffer: str):
@@ -399,17 +414,24 @@ async def proxy(request: Request, path: str):
         if enabled_types:
             log_entity_filter(enabled_types)
 
-        if messages:
-            restored_count = 0
+        # NOTE: excludes messages[-1]; last message handled by block below.
+        if messages and privacy_enabled:
+            hist_pseudo_count = 0
             for msg in messages[:-1]:
-                if msg.get("role") == "assistant":
-                    before = msg["content"]
-                    msg["content"] = depseudonymize(msg["content"], session_id, store.get_store())
-                    if msg["content"] != before:
-                        restored_count += 1
-            if restored_count > 0:
-                log_history_depseudo(restored_count)
+                content = msg.get("content")
+                text = extract_text_content(content)
+                if not text:
+                    continue
+                if any(marker in text for marker in SYSTEM_PROMPT_MARKERS):
+                    continue
+                out = _pseudo_with_cache(text, session_id, enabled_types)
+                if out != text:
+                    msg["content"] = rebuild_content(content, out)
+                    hist_pseudo_count += 1
+            if hist_pseudo_count > 0:
+                log_history_depseudo(hist_pseudo_count)
 
+        if messages:
             last_message = messages[-1]
             original_content = last_message["content"]
             original_content_text = extract_text_content(original_content)
@@ -577,6 +599,11 @@ async def proxy(request: Request, path: str):
             k: v for k, v in request.headers.items()
             if k.lower() in ("authorization", "content-type", "openai-organization", "x-openai-base-url")
         }
+        if "anthropic.com" in url:
+            auth = forward_headers.pop("authorization", "")
+            api_key = auth.removeprefix("Bearer ").strip()
+            forward_headers["x-api-key"] = api_key
+            forward_headers.setdefault("anthropic-version", "2023-06-01")
     else:
         forward_headers = {}
 
