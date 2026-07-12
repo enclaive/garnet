@@ -46,7 +46,7 @@ def log_privacy_off():
     print(f"[PRIVACY OFF] forwarding raw → no pseudonymization")
 
 def log_history_depseudo(count):
-    print(f"[HISTORY DEPSEUDO] restored tokens in {count} assistant message(s)")
+    print(f"[HISTORY PSEUDO] pseudonymized {count} message(s) in history")
 
 def log_to_llm(url, model):
     print(f"[→ LLM   ] {url} | model={model}")
