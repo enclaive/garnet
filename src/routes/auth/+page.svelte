@@ -236,17 +236,11 @@
 				{:else}
 					<div class="my-auto flex flex-col justify-center items-center">
 						<div class=" sm:max-w-md my-auto pb-10 w-full dark:text-gray-100">
-							{#if $config?.metadata?.auth_logo_position === 'center'}
-								<div class="flex justify-center mb-6">
-									<img
-										id="logo"
-										crossorigin="anonymous"
-										src="{WEBUI_BASE_URL}/static/favicon.png"
-										class="size-24 rounded-full"
-										alt="{$WEBUI_NAME} logo"
-									/>
+									<div class="flex justify-center mb-6">
+									<div class="size-24 rounded-full overflow-hidden flex items-center justify-center bg-white dark:bg-gray-800">
+									<img src="{WEBUI_BASE_URL}/static/garnet-logo.png" alt="Garnet" class="size-24 object-contain rounded-full" />
 								</div>
-							{/if}
+								</div>
 							<form
 								class=" flex flex-col justify-center"
 								on:submit={(e) => {
@@ -586,20 +580,5 @@
 			</div>
 		</div>
 
-		{#if !$config?.metadata?.auth_logo_position}
-			<div class="fixed m-10 z-50">
-				<div class="flex space-x-2">
-					<div class=" self-center">
-						<img
-							id="logo"
-							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" w-6 rounded-full"
-							alt=""
-						/>
-					</div>
-				</div>
-			</div>
-		{/if}
 	{/if}
 </div>

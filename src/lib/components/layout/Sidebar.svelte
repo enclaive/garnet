@@ -712,11 +712,9 @@
 						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					>
 						<div class=" self-center flex items-center justify-center size-9">
-							<img
-								src="{WEBUI_BASE_URL}/static/favicon.png"
-								class="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden"
-								alt=""
-							/>
+							<div class="sidebar-new-chat-icon size-6 group-hover:hidden rounded-full overflow-hidden flex-shrink-0">
+								<img src="{WEBUI_BASE_URL}/static/garnet-logo.png" alt="Garnet" class="size-6 object-contain rounded-full" />
+							</div>
 
 							<Sidebar className="size-5 hidden group-hover:flex" />
 						</div>
@@ -906,12 +904,9 @@
 					draggable="false"
 					on:click={newChatHandler}
 				>
-					<img
-						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/favicon.png"
-						class="sidebar-new-chat-icon size-6 rounded-full"
-						alt=""
-					/>
+					<div class="sidebar-new-chat-icon size-6 rounded-full overflow-hidden flex-shrink-0">
+						<img src="{WEBUI_BASE_URL}/static/garnet-logo.png" alt="Garnet" class="size-6 object-contain rounded-full" />
+					</div>
 				</a>
 
 				<a href="/" class="flex flex-1 px-1.5" on:click={newChatHandler}>

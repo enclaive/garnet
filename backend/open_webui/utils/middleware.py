@@ -3131,6 +3131,11 @@ async def non_streaming_chat_response_handler(response, ctx):
                                     if 'pseudonymized_prompt' in response_data
                                     else {}
                                 ),
+                                **(
+                                    {'query_variants': response_data['query_variants']}
+                                    if 'query_variants' in response_data
+                                    else {}
+                                ),
                             },
                         }
                     )
@@ -3480,6 +3485,7 @@ async def streaming_chat_response_handler(response, ctx):
             pseudonymized_prompt = None
             file_entity_count = 0
             garnet_breakdown = {}
+            query_variants = []
 
             def full_output():
                 return prior_output + output if prior_output else output
@@ -3522,6 +3528,7 @@ async def streaming_chat_response_handler(response, ctx):
                     nonlocal pseudonymized_prompt
                     nonlocal file_entity_count
                     nonlocal garnet_breakdown
+                    nonlocal query_variants
 
                     response_tool_calls = []
 
@@ -3561,6 +3568,13 @@ async def streaming_chat_response_handler(response, ctx):
                         # Remove the prefix
                         data = data[len('data:') :].strip()
 
+                        # Skip SSE terminator — not JSON, must not reach json.loads
+                        if data == '[DONE]' or data == 'DONE':
+                            continue
+                        # Skip anything that doesn't look like a JSON object/array
+                        if not data or data[0] not in '{[':
+                            continue
+
                         try:
                             data = json.loads(data)
 
@@ -3570,6 +3584,8 @@ async def streaming_chat_response_handler(response, ctx):
                                 file_entity_count = data['file_entity_count']
                             if 'garnet_breakdown' in data:
                                 garnet_breakdown = data['garnet_breakdown']
+                            if 'query_variants' in data:
+                                query_variants = data['query_variants']
 
                             data, _ = await process_filter_functions(
                                 request=request,
@@ -3984,6 +4000,9 @@ async def streaming_chat_response_handler(response, ctx):
                                             'data': data,
                                         }
                                     )
+                        except json.JSONDecodeError as e:
+                            log.warning(f"[GARNET] SSE parse skipped: {e} | raw={data[:120]!r}")
+                            continue
                         except Exception as e:
                             done = 'data: [DONE]' in line
                             if done:
@@ -4638,6 +4657,11 @@ async def streaming_chat_response_handler(response, ctx):
                     **(
                         {'garnet_breakdown': garnet_breakdown}
                         if garnet_breakdown
+                        else {}
+                    ),
+                    **(
+                        {'query_variants': query_variants}
+                        if query_variants
                         else {}
                     ),
                 }

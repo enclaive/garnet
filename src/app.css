@@ -30,7 +30,7 @@
 	font-display: swap;
 }
 
-/* --app-text-scale is updated via the UI Scale slider (Interface.svelte) */
+/* --app-text-scale is updated via the UI Scale slider (Interface.svelte)f */
 :root {
 	--app-text-scale: 1;
 }

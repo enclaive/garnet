@@ -204,6 +204,7 @@ async def get_headers_and_cookies(
     garnet_entities = request.headers.get('x-garnet-entities', '')
     if garnet_entities:
         headers['x-garnet-entities'] = garnet_entities
+    headers['x-garnet-queryexpand'] = request.headers.get('x-garnet-queryexpand', 'false')
     openai_base_url = request.headers.get('x-openai-base-url', '')
     if openai_base_url:
         headers['x-openai-base-url'] = openai_base_url
@@ -293,11 +294,14 @@ async def analyze_privacy(request: Request, user=Depends(get_verified_user)):
     """
     try:
         body = await request.json()
-        
+
+        proxy_base = os.environ.get("OPENAI_API_BASE_URL", "http://privacy-proxy:8080/openai").removesuffix("/openai").rstrip("/")
+        analyze_url = f"{proxy_base}/analyze"
+
         # Forward request to privacy proxy
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                'http://privacy-proxy:8080/analyze',
+                analyze_url,
                 json=body,
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:
@@ -1226,6 +1230,7 @@ async def generate_chat_completion(
                 pseudo_prompt = ""
                 file_entity_count = 0
                 garnet_breakdown = {}
+                query_variants = []
                 async for chunk in stream_wrapper(r, session, stream_chunks_handler):
                     try:
                         chunk_str = chunk.decode('utf-8', errors='replace') if isinstance(chunk, bytes) else chunk
@@ -1237,12 +1242,13 @@ async def generate_chat_completion(
                             pseudo_prompt = parsed.get("content", "")
                             file_entity_count = parsed.get("file_entity_count", 0)
                             garnet_breakdown = parsed.get("garnet_breakdown", {})
+                            query_variants = parsed.get("query_variants", [])
                             continue
                     except Exception:
                         pass
                     yield chunk
-                if pseudo_prompt or file_entity_count:
-                    synthetic = f'data: {json.dumps({"pseudonymized_prompt": pseudo_prompt, "file_entity_count": file_entity_count, "garnet_breakdown": garnet_breakdown})}\n\n'
+                if pseudo_prompt or file_entity_count or query_variants:
+                    synthetic = f'data: {json.dumps({"pseudonymized_prompt": pseudo_prompt, "file_entity_count": file_entity_count, "garnet_breakdown": garnet_breakdown, "query_variants": query_variants})}\n\n'
                     yield synthetic.encode('utf-8')
 
             return StreamingResponse(

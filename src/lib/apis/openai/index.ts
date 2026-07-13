@@ -1,4 +1,5 @@
 import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+import { get } from 'svelte/store';
 
 export const getOpenAIConfig = async (token: string = '') => {
 	let error = null;
@@ -377,7 +378,7 @@ export const generateOpenAIChatCompletion = async (
 		headers: {
 			Authorization: `Bearer ${token}`,
 			'Content-Type': 'application/json',
-			'x-garnet-entities': enabledEntities
+			'x-garnet-entities': enabledEntities,
 		},
 		credentials: 'include',
 		body: JSON.stringify(body)

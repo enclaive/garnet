@@ -1,0 +1,291 @@
+name: Build and Deploy Garnet
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - v*
+    branches:
+      - deploy/staging
+      - deploy/prod
+      - garnet-privacy-proxy
+  pull_request:
+    branches:
+      - garnet-privacy-proxy
+
+jobs:
+
+  get-meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      tag: ${{ steps.get_tag.outputs.name }}
+      revision: ${{ steps.get_revision.outputs.revision }}
+      proxy_changed: ${{ steps.changes.outputs.proxy }}
+      webui_changed: ${{ steps.changes.outputs.webui }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(cat version/VERSION).nightly" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get revision
+        id: get_revision
+        run: echo "revision=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Get tag
+        id: get_tag
+        run: |
+          case "${GITHUB_REF}" in
+            refs/heads/deploy/staging) NAME=staging ;;
+            refs/heads/deploy/prod)    NAME=prod    ;;
+            refs/tags/v*)              NAME=latest  ;;
+            *)                         NAME="${FALLBACK}" ;;
+          esac
+          echo "name=${NAME}" >> $GITHUB_OUTPUT
+        env:
+          FALLBACK: ${{ steps.get_revision.outputs.revision }}
+
+      - name: Check changed files
+        id: changes
+        run: |
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^backend/privacy_proxy/' \
+            && echo "proxy=true" >> $GITHUB_OUTPUT \
+            || echo "proxy=false" >> $GITHUB_OUTPUT
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '^src/|^backend/open_webui/' \
+            && echo "webui=true" >> $GITHUB_OUTPUT \
+            || echo "webui=false" >> $GITHUB_OUTPUT
+
+  build-proxy:
+    needs: get-meta
+    if: needs.get-meta.outputs.proxy_changed == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          df -h
+
+      - name: Set up Docker Buildx
+        run: |
+          docker buildx create --use --name garnet-builder
+          docker buildx inspect --bootstrap
+
+      - name: Login to Harbor
+        run: |
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login harbor.enclaive.cloud \
+            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+
+      - name: Build and push proxy image
+        id: build-proxy
+        run: |
+          DIGEST=$(docker buildx build \
+            -f backend/privacy_proxy/Dockerfile \
+            --build-arg PRODUCT_VERSION=${{ needs.get-meta.outputs.version }} \
+            --build-arg PRODUCT_REVISION=${{ needs.get-meta.outputs.revision }} \
+            --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/privacy-proxy:cache \
+            --cache-to   type=inline \
+            --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.tag }} \
+            --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.version }} \
+            --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.revision }} \
+            --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:gh-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.run_number }} \
+            --push \
+            --metadata-file /tmp/proxy-meta.json \
+            backend/privacy_proxy/ && \
+          cat /tmp/proxy-meta.json | python3 -c "import sys,json; print(json.load(sys.stdin)['containerimage.digest'])")
+          echo "digest=harbor.enclaive.cloud/garnetdemo/privacy-proxy@${DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
+
+      - name: Sign proxy image
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+          COSIGN_PASSWORD="" cosign sign --yes --key /tmp/cosign.key \
+            ${{ steps.build-proxy.outputs.digest }}
+          rm /tmp/cosign.key
+
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM + attest proxy
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+          syft ${{ steps.build-proxy.outputs.digest }} -o spdx-json > /tmp/sbom-proxy.spdx.json
+          COSIGN_PASSWORD="" cosign attest --yes \
+            --key /tmp/cosign.key \
+            --type spdxjson \
+            --predicate /tmp/sbom-proxy.spdx.json \
+            ${{ steps.build-proxy.outputs.digest }}
+          rm /tmp/cosign.key
+
+      - name: Attest provenance proxy
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+          cat > /tmp/provenance-proxy.json << EOF
+          {
+            "buildType": "https://github.com/enclaive/garnet",
+            "builder": {"id": "github-actions"},
+            "invocation": {
+              "configSource": {
+                "uri": "git+https://github.com/enclaive/garnet",
+                "digest": {"sha1": "${{ github.sha }}"}
+              }
+            }
+          }
+          EOF
+          COSIGN_PASSWORD="" cosign attest --yes \
+            --key /tmp/cosign.key \
+            --type slsaprovenance \
+            --predicate /tmp/provenance-proxy.json \
+            ${{ steps.build-proxy.outputs.digest }}
+          rm /tmp/cosign.key
+
+      - name: Save SBOM + provenance to cVM
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
+          ssh root@${{ secrets.CVM_HOST }} "mkdir -p /opt/garnet/sbom"
+          scp /tmp/sbom-proxy.spdx.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/sbom-proxy-${{ needs.get-meta.outputs.revision }}.spdx.json
+          scp /tmp/provenance-proxy.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/provenance-proxy-${{ needs.get-meta.outputs.revision }}.json
+
+  python-checks:
+    needs: [get-meta, build-proxy]
+    if: needs.get-meta.outputs.proxy_changed == 'true'
+    uses: ./.github/workflows/pythoncheck.yml
+    with:
+      image_tag: ${{ needs.get-meta.outputs.revision }}
+    secrets:
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+
+  build-webui:
+    needs: get-meta
+    if: needs.get-meta.outputs.webui_changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          df -h
+
+      - name: Set up Docker Buildx
+        run: |
+          docker buildx create --use --name garnet-builder
+          docker buildx inspect --bootstrap
+
+      - name: Login to Harbor
+        run: |
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login harbor.enclaive.cloud \
+            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+
+      - name: Build and push webui image
+        id: build-webui
+        run: |
+          DIGEST=$(docker buildx build \
+            --build-arg PRODUCT_VERSION=${{ needs.get-meta.outputs.version }} \
+            --build-arg PRODUCT_REVISION=${{ needs.get-meta.outputs.revision }} \
+            --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/garnet-webui:cache \
+            --cache-to   type=registry,ref=harbor.enclaive.cloud/garnetdemo/garnet-webui:cache,mode=max \
+            --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.tag }} \
+            --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.version }} \
+            --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.revision }} \
+            --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:gh-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.run_number }} \
+            --push \
+            --metadata-file /tmp/webui-meta.json \
+            . && \
+          cat /tmp/webui-meta.json | python3 -c "import sys,json; print(json.load(sys.stdin)['containerimage.digest'])")
+          echo "digest=harbor.enclaive.cloud/garnetdemo/garnet-webui@${DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
+
+      - name: Sign webui image
+        run: |
+          sleep 10
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+          COSIGN_PASSWORD="" cosign sign --yes --key /tmp/cosign.key \
+            ${{ steps.build-webui.outputs.digest }}
+          rm /tmp/cosign.key
+
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM + attest webui
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+          syft ${{ steps.build-webui.outputs.digest }} -o spdx-json > /tmp/sbom-webui.spdx.json
+          COSIGN_PASSWORD="" cosign attest --yes \
+            --key /tmp/cosign.key \
+            --type spdxjson \
+            --predicate /tmp/sbom-webui.spdx.json \
+            ${{ steps.build-webui.outputs.digest }}
+          rm /tmp/cosign.key
+
+      - name: Attest provenance webui
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+          cat > /tmp/provenance-webui.json << EOF
+          {
+            "buildType": "https://github.com/enclaive/garnet",
+            "builder": {"id": "github-actions"},
+            "invocation": {
+              "configSource": {
+                "uri": "git+https://github.com/enclaive/garnet",
+                "digest": {"sha1": "${{ github.sha }}"}
+              }
+            }
+          }
+          EOF
+          COSIGN_PASSWORD="" cosign attest --yes \
+            --key /tmp/cosign.key \
+            --type slsaprovenance \
+            --predicate /tmp/provenance-webui.json \
+            ${{ steps.build-webui.outputs.digest }}
+          rm /tmp/cosign.key
+
+      - name: Save SBOM + provenance to cVM
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
+          ssh root@${{ secrets.CVM_HOST }} "mkdir -p /opt/garnet/sbom"
+          scp /tmp/sbom-webui.spdx.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/sbom-webui-${{ needs.get-meta.outputs.revision }}.spdx.json
+          scp /tmp/provenance-webui.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/provenance-webui-${{ needs.get-meta.outputs.revision }}.json

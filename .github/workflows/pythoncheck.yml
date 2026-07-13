@@ -1,0 +1,104 @@
+name: Python Quality & Security Checks
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        required: true
+        type: string
+    secrets:
+      HARBOR_USERNAME:
+        required: true
+      HARBOR_PASSWORD:
+        required: true
+
+jobs:
+
+  # ── PIP AUDIT — dependency CVEs ───────────────────────
+  pip-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        run: |
+          git clone --branch ${{ github.ref_name }} \
+            https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
+
+      - name: Scan Python dependencies
+        run: |
+          pip install pip-audit==2.7.3
+          pip-audit -r backend/privacy_proxy/requirements.txt \
+            --vulnerability-service osv \
+            --no-deps
+
+  # ── RUFF — linter ─────────────────────────────────────
+  ruff:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        run: |
+          git clone --branch ${{ github.ref_name }} \
+            https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
+
+      - name: Ruff lint
+        run: |
+          pip install ruff
+          ruff check backend/privacy_proxy/app/ --exit-zero
+
+  # ── MYPY — type check ─────────────────────────────────
+  mypy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        run: |
+          git clone --branch ${{ github.ref_name }} \
+            https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
+
+      - name: Mypy type check
+        run: |
+          pip install mypy
+          mypy backend/privacy_proxy/app/ --ignore-missing-imports --no-error-summary || true
+
+  # ── TRIVY — image CVE scan ────────────────────────────
+  trivy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Login to Harbor
+        run: |
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login harbor.enclaive.cloud \
+            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+
+      - name: Trivy image scan
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin
+          trivy image \
+            --exit-code 1 \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --scanners vuln \
+            --timeout 20m \
+            harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ inputs.image_tag }}
+
+  # ── BANDIT — Python SAST ──────────────────────────────
+  bandit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        run: |
+          git clone --branch ${{ github.ref_name }} \
+            https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/enclaive/garnet.git .
+
+      - name: Bandit SAST
+        run: |
+          pip install bandit
+          bandit -r backend/privacy_proxy/app/ -ll --exit-zero
