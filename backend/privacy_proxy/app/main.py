@@ -1,5 +1,7 @@
 import os
 import re
+import time
+import uuid
 import hashlib
 import httpx
 import orjson
@@ -18,10 +20,13 @@ from app.logs import (
     log_health, log_vault_start, log_vault_done, log_vault_skip, log_vault_error,
     log_analyze, log_analyze_result,
     log_error, log_error_passthrough,
+    log_session, log_in_user_full, log_out_user_full, log_pseudo_diff,
+    log_context_size, log_llm_tokens, log_garnet_out, log_stream_done,
+    log_privacy_audit, log_file_delta,
 )
 
 IMAGE_MODELS = ["dall-e-3", "dall-e-2", "gpt-image-1"]
-RESPONSES_API_MODELS = {"gpt-5.5", "gpt-5.5-pro", "gpt-5.5-2026-04-23", "gpt-5.5-pro-2026-04-23"}
+RESPONSES_API_MODELS = set(os.getenv("RESPONSES_API_MODELS", "gpt-5.5,gpt-5.5-pro,gpt-5.5-2026-04-23,gpt-5.5-pro-2026-04-23").split(","))
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
@@ -175,7 +180,7 @@ async def expand_query(question: str, openai_url: str, auth_header: str) -> list
         return []
 
 
-async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, is_responses_api=False, variants=None):
+async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, is_responses_api=False, variants=None, t0=None):
     yield orjson.dumps({
         "type": "pseudonymized_prompt",
         "content": pseudonymized_prompt or "",
@@ -186,6 +191,12 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
 
     buffer = ""
     first_chunk = True
+    first_out = True
+    ttft_s = 0.0
+    chunk_count = 0
+    total_out_chars = 0
+    input_tokens = 0
+    output_tokens = 0
     async for raw_chunk in response_stream:
         for chunk in raw_chunk.split(b"\n"):
             if not chunk:
@@ -200,6 +211,28 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
 
             try:
                 parsed = orjson.loads(raw)
+                # capture token usage — OpenAI, Anthropic OpenAI-compat, and Anthropic native formats
+                usage = parsed.get("usage") or {}
+                if usage.get("input_tokens"):
+                    input_tokens = usage["input_tokens"]
+                if usage.get("output_tokens"):
+                    output_tokens = usage["output_tokens"]
+                if usage.get("prompt_tokens"):
+                    input_tokens = usage["prompt_tokens"]
+                if usage.get("completion_tokens"):
+                    output_tokens = usage["completion_tokens"]
+                # Anthropic native: message_start carries input_tokens in message.usage
+                chunk_type = parsed.get("type", "")
+                if chunk_type == "message_start":
+                    msg_usage = parsed.get("message", {}).get("usage", {})
+                    if msg_usage.get("input_tokens"):
+                        input_tokens = msg_usage["input_tokens"]
+                # Anthropic native: message_delta carries output_tokens in usage
+                if chunk_type == "message_delta":
+                    delta_usage = parsed.get("usage", {})
+                    if delta_usage.get("output_tokens"):
+                        output_tokens = delta_usage["output_tokens"]
+
                 if is_responses_api:
                     if parsed.get("type") == "response.output_text.delta":
                         chunk_text = parsed.get("delta", "")
@@ -213,7 +246,8 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
                 continue
 
             if first_chunk:
-                log_from_llm(chunk_text)
+                ttft_s = (time.perf_counter() - t0) if t0 else 0.0
+                log_from_llm(chunk_text, ttft_s)
                 first_chunk = False
 
             buffer += chunk_text
@@ -222,6 +256,11 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
             if safe:
                 for token in sorted(mapping.keys(), key=len, reverse=True):
                     safe = safe.replace(token, mapping[token])
+                chunk_count += 1
+                total_out_chars += len(safe)
+                if first_out:
+                    log_garnet_out(safe)
+                    first_out = False
                 yield b"data: " + orjson.dumps({
                     "choices": [{"delta": {"content": safe}}]
                 }) + b"\n\n"
@@ -231,11 +270,19 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
     if buffer:
         for token in sorted(mapping.keys(), key=len, reverse=True):
             buffer = buffer.replace(token, mapping[token])
+        chunk_count += 1
+        total_out_chars += len(buffer)
+        if first_out:
+            log_garnet_out(buffer)
         yield b"data: " + orjson.dumps({
             "choices": [{"delta": {"content": buffer}}]
         }) + b"\n\n"
 
-    log_to_user(len(mapping))
+    log_stream_done(chunk_count, total_out_chars)
+    if input_tokens or output_tokens:
+        log_llm_tokens(model, input_tokens, output_tokens)
+    log_to_user(len(mapping), ttft_s, (time.perf_counter() - t0) if t0 else 0.0)
+    log_privacy_audit(len(mapping), model, ttft_s, (time.perf_counter() - t0) if t0 else 0.0)
     log_sep()
     yield b"data: [DONE]\n\n"
 
@@ -330,6 +377,9 @@ async def ollama_tags():
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy(request: Request, path: str):
+    t0 = time.perf_counter()
+    request_id = uuid.uuid4().hex[:8]
+    user_id = request.headers.get("x-garnet-user-id", "anon")
     body = None
     if request.method in ("POST", "PUT"):
         body = await request.json()
@@ -406,6 +456,7 @@ async def proxy(request: Request, path: str):
 
         log_sep()
         log_garnet(session_id, provider_label, privacy_enabled, model, actual_path)
+        log_session(request_id, user_id, session_id)
         if query_expand:
             print(f"[QUERY EXPAND] header detected → expansion ON")
 
@@ -455,11 +506,13 @@ async def proxy(request: Request, path: str):
                 internal_type = detect_internal_type(original_content_text)
                 log_internal(internal_type)
                 use_responses_api = False
-                url = f"{openai_url.rstrip('/')}/{actual_path}"
+                if is_openai:
+                    url = f"{openai_url.rstrip('/')}/{actual_path}"
                 pseudonymized_user_message = original_content_text
 
             elif last_message.get("role") in ("user", "system", "developer"):
                 log_in_user(original_content_text)
+                log_in_user_full(original_content_text)
 
                 existing_keys_before = set(store.get_store().get(session_id, {}).keys())
 
@@ -502,6 +555,7 @@ async def proxy(request: Request, path: str):
                         )
                         msg["content"] = rebuild_content(content, pseudonymized_text)
                         log_out_file(pseudonymized_text)
+                        log_file_delta(len(content_text), len(pseudonymized_text))
                         file_msgs_scanned += 1
                     except Exception as e:
                         log_error(f"file pseudonymization failed: {e} — skipping chunk")
@@ -561,6 +615,10 @@ async def proxy(request: Request, path: str):
                     pseudonymized_user_message = pseudonymized_text
                     if pseudonymized_user_message != original_content_text:
                         log_out_user(pseudonymized_user_message)
+                        log_out_user_full(pseudonymized_user_message)
+                        _n_replaced = sum(1 for t in store.get_store().get(session_id, {}) if t in pseudonymized_user_message)
+                        _types = list({t.rsplit("_", 1)[0] for t in store.get_store().get(session_id, {}) if t in pseudonymized_user_message})
+                        log_pseudo_diff(len(original_content_text), len(pseudonymized_user_message), _n_replaced, _types)
                     else:
                         log_no_pii()
                     store.get_store().flush(session_id)
@@ -592,7 +650,11 @@ async def proxy(request: Request, path: str):
                 elif query_expand and not has_rag_context:
                     print(f"[QUERY EXPAND] skipped — no RAG context in this message")
 
-        log_to_llm(url, model)
+        if body:
+            _msgs = body.get("messages", [])
+            _total_chars = sum(len(extract_text_content(m.get("content", ""))) for m in _msgs)
+            log_context_size(len(_msgs), _total_chars)
+        log_to_llm(url, model, int((time.perf_counter() - t0) * 1000))
 
     if is_openai:
         forward_headers = {
@@ -663,7 +725,7 @@ async def proxy(request: Request, path: str):
             result["file_entity_count"] = file_entity_count
             result["query_variants"] = variants or []
 
-            log_to_user(len(session_mapping))
+            log_to_user(len(session_mapping), 0.0, time.perf_counter() - t0)
             log_sep()
             return ORJSONResponse(content=result)
 
@@ -724,13 +786,22 @@ async def proxy(request: Request, path: str):
                     headers=forward_headers,
                     timeout=60.0,
                 )
-                return ORJSONResponse(content=_resp.json())
+                result = _resp.json()
+                try:
+                    content = result["choices"][0]["message"]["content"] or ""
+                    for token in sorted(session_mapping.keys(), key=len, reverse=True):
+                        content = content.replace(token, session_mapping[token])
+                    result["choices"][0]["message"]["content"] = content
+                except (KeyError, IndexError, TypeError):
+                    pass
+                log_to_user(len(session_mapping), 0.0, time.perf_counter() - t0)
+                return ORJSONResponse(content=result)
 
         return StreamingResponse(
             stream_with_depseudo(
                 response_stream(), session_mapping, pseudonymized_user_message,
                 session_id, url, model, file_entity_count, garnet_breakdown,
-                is_responses_api=use_responses_api, variants=variants
+                is_responses_api=use_responses_api, variants=variants, t0=t0
             ),
             media_type="text/event-stream"
         )
