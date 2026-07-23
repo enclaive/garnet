@@ -9,6 +9,7 @@ on:
       - deploy/staging
       - deploy/prod
       - garnet-privacy-proxy
+      - demo1
   pull_request:
     branches:
       - garnet-privacy-proxy
