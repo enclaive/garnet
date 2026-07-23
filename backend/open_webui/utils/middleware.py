@@ -2193,8 +2193,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     form_data = await convert_url_images_to_base64(form_data)
 
-    event_emitter = get_event_emitter(metadata)
-    event_caller = get_event_call(metadata)
+    event_emitter = await get_event_emitter(metadata)
+    event_caller = await get_event_call(metadata)
 
     extra_params = {
         '__event_emitter__': event_emitter,
@@ -2232,14 +2232,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     chat_id = metadata.get('chat_id', None)
     folder_id = None
     if chat_id and user:
-        folder_id = Chats.get_chat_folder_id(chat_id, user.id)
+        folder_id = await Chats.get_chat_folder_id(chat_id, user.id)
 
     # Fallback: use folder_id from metadata (temporary chats have no DB record)
     if not folder_id:
         folder_id = metadata.get('folder_id', None)
 
     if folder_id and user:
-        folder = Folders.get_folder_by_id_and_user_id(folder_id, user.id)
+        folder = await Folders.get_folder_by_id_and_user_id(folder_id, user.id)
 
         if folder and folder.data:
             if 'system_prompt' in folder.data:
@@ -2437,7 +2437,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 # Get folder files
                 folder_id = file_item.get('id', None)
                 if folder_id:
-                    folder = Folders.get_folder_by_id_and_user_id(folder_id, user.id)
+                    folder = await Folders.get_folder_by_id_and_user_id(folder_id, user.id)
                     if folder and folder.data and 'files' in folder.data:
                         files = [f for f in files if f.get('id', None) != folder_id]
                         files = [*files, *folder.data['files']]
@@ -2748,7 +2748,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     return form_data, metadata, events
 
 
-def get_event_emitter_and_caller(metadata):
+async def get_event_emitter_and_caller(metadata):
     event_emitter = None
     event_caller = None
     if (
@@ -2759,13 +2759,13 @@ def get_event_emitter_and_caller(metadata):
         and 'message_id' in metadata
         and metadata['message_id']
     ):
-        event_emitter = get_event_emitter(metadata)
-        event_caller = get_event_call(metadata)
+        event_emitter = await get_event_emitter(metadata)
+        event_caller = await get_event_call(metadata)
     return event_emitter, event_caller
 
 
-def build_chat_response_context(request, form_data, user, model, metadata, tasks, events):
-    event_emitter, event_caller = get_event_emitter_and_caller(metadata)
+async def build_chat_response_context(request, form_data, user, model, metadata, tasks, events):
+    event_emitter, event_caller = await get_event_emitter_and_caller(metadata)
     return {
         'request': request,
         'form_data': form_data,
