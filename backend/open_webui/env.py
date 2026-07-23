@@ -972,6 +972,8 @@ else:
 if CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS == -1:
     CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS = None
 
+CHAT_RESPONSE_MAX_TOOL_CALL_RETRIES = CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS
+
 
 # WARNING: Experimental. Only enable if your upstream Responses API endpoint
 # supports stateful sessions (i.e. server-side response storage with
