@@ -35,6 +35,7 @@ privacyProxy.subscribe(value => {
 
 export const highlightEntities = writable<{ text: string; entities: any[] } | null>(null);
 export const socket: Writable<null | Socket> = writable(null);
+export const socketConnected: Writable<boolean> = writable(true);
 export const activeUserIds: Writable<null | string[]> = writable(null);
 export const activeChatIds: Writable<Set<string>> = writable(new Set());
 export const USAGE_POOL: Writable<null | string[]> = writable(null);
@@ -65,6 +66,7 @@ export const channelId = writable(null);
 
 export const chats = writable(null);
 export const pinnedChats = writable([]);
+export const pinnedNotes = writable([]);
 export const tags = writable([]);
 export const folders = writable([]);
 
@@ -117,6 +119,15 @@ export const artifactContents = writable(null);
 export const embed = writable(null);
 
 export const temporaryChatEnabled = writable(false);
+
+// Transient one-shot event from the desktop shell (Spotlight, drag-and-drop, etc.).
+// Set by +layout.svelte, consumed and cleared by Chat.svelte.
+export type DesktopEventFile = { name: string; mimeType: string; dataUrl: string };
+export type DesktopEvent = {
+	type: string;
+	data?: any;
+};
+export const desktopEvent: Writable<DesktopEvent | null> = writable(null);
 export const scrollPaginationEnabled = writable(false);
 export const currentChatPage = writable(1);
 
@@ -208,6 +219,7 @@ type Settings = {
 	iframeSandboxAllowForms?: boolean;
 	iframeSandboxAllowSameOrigin?: boolean;
 	scrollOnBranchChange?: boolean;
+	showFilesOnTerminalSelect?: boolean;
 	directConnections?: null;
 	chatBubble?: boolean;
 	copyFormatted?: boolean;
@@ -225,6 +237,11 @@ type Settings = {
 	chatDirection?: 'LTR' | 'RTL' | 'auto';
 	ctrlEnterToSend?: boolean;
 	renderMarkdownInPreviews?: boolean;
+	renderMarkdownInUserMessages?: boolean;
+	renderMarkdownInAssistantMessages?: boolean;
+	recentEmojis?: string[];
+	pinnedMenuItems?: string[];
+	pinnedNotesOrder?: string[];
 
 	system?: string;
 	seed?: number;
@@ -281,6 +298,8 @@ type Config = {
 		enable_signup: boolean;
 		enable_login_form: boolean;
 		enable_web_search?: boolean;
+		enable_web_search_confirmation?: boolean;
+		web_search_confirmation_content?: string;
 		enable_google_drive_integration: boolean;
 		enable_onedrive_integration: boolean;
 		enable_image_generation: boolean;
@@ -292,16 +311,19 @@ type Config = {
 		enable_autocomplete_generation: boolean;
 		enable_direct_connections: boolean;
 		enable_version_update_check: boolean;
+		enable_pyodide_file_persistence?: boolean;
 		folder_max_file_count?: number;
 	};
 	oauth: {
 		providers: {
 			[key: string]: string;
 		};
+		auto_redirect?: boolean;
 	};
 	ui?: {
 		pending_user_overlay_title?: string;
 		pending_user_overlay_content?: string;
+		iframe_csp?: string;
 	};
 };
 
