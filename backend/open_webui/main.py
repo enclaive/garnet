@@ -1017,6 +1017,8 @@ async def chat_completion(
     model_id = form_data.get('model', None)
     model_item = form_data.pop('model_item', {})
     tasks = form_data.pop('background_tasks', None)
+    # Garnet-specific field; downstream pipe/Pydantic models reject unknown keys
+    form_data.pop('privacy_proxy', None)
 
     metadata = {}
     try:

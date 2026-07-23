@@ -937,7 +937,7 @@ async def apply_source_context_to_messages(
         )
 
 
-def process_tool_result(
+async def process_tool_result(
     request,
     tool_function_name,
     tool_result,
@@ -1305,7 +1305,7 @@ async def chat_completion_tools_handler(
                 except Exception as e:
                     tool_result = str(e)
 
-                tool_result, tool_result_files, tool_result_embeds = process_tool_result(
+                tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
                     request,
                     tool_function_name,
                     tool_result,
@@ -1624,14 +1624,14 @@ def get_image_urls(delta_images, request, metadata, user) -> list[str]:
     return image_urls
 
 
-def add_file_context(messages: list, chat_id: str, user) -> list:
+async def add_file_context(messages: list, chat_id: str, user) -> list:
     """
     Add file URLs to messages for native function calling.
     """
     if not chat_id or chat_id.startswith('local:'):
         return messages
 
-    chat = Chats.get_chat_by_id_and_user_id(chat_id, user.id)
+    chat = await Chats.get_chat_by_id_and_user_id(chat_id, user.id)
     if not chat:
         return messages
 
@@ -1687,7 +1687,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
     if chat_id.startswith('local:'):
         message_list = form_data.get('messages', [])
     else:
-        chat = Chats.get_chat_by_id_and_user_id(chat_id, user.id)
+        chat = await Chats.get_chat_by_id_and_user_id(chat_id, user.id)
         await __event_emitter__(
             {
                 'type': 'status',
@@ -2067,12 +2067,12 @@ async def convert_url_images_to_base64(form_data):
     return form_data
 
 
-def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[dict]]:
+async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[dict]]:
     """
     Load the message chain from DB up to message_id,
     keeping only LLM-relevant fields (role, content, output).
     """
-    messages_map = Chats.get_messages_map_by_chat_id(chat_id)
+    messages_map = await Chats.get_messages_map_by_chat_id(chat_id)
     if not messages_map:
         return None
 
@@ -2150,7 +2150,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     parent_message_id = metadata.get('parent_message_id')
 
     if chat_id and parent_message_id and not chat_id.startswith('local:'):
-        db_messages = load_messages_from_db(chat_id, parent_message_id)
+        db_messages = await load_messages_from_db(chat_id, parent_message_id)
         if db_messages:
             system_message = get_system_message(form_data.get('messages', []))
             form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
@@ -2306,8 +2306,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         raise e
 
     try:
-        filter_ids = get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
-        filter_functions = Functions.get_functions_by_ids(filter_ids)
+        filter_ids = await get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
+        filter_functions = await Functions.get_functions_by_ids(filter_ids)
 
         form_data, flags = await process_filter_functions(
             request=request,
@@ -2660,8 +2660,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         if metadata.get('params', {}).get('function_calling') == 'native' and builtin_tools_enabled:
             # Add file context to user messages
             chat_id = metadata.get('chat_id')
-            form_data['messages'] = add_file_context(form_data.get('messages', []), chat_id, user)
-            builtin_tools = get_builtin_tools(
+            form_data['messages'] = await add_file_context(form_data.get('messages', []), chat_id, user)
+            builtin_tools = await get_builtin_tools(
                 request,
                 {
                     **extra_params,
@@ -2853,7 +2853,7 @@ async def background_tasks_handler(ctx):
     messages = []
 
     if 'chat_id' in metadata and not metadata['chat_id'].startswith('local:'):
-        messages_map = Chats.get_messages_map_by_chat_id(metadata['chat_id'])
+        messages_map = await Chats.get_messages_map_by_chat_id(metadata['chat_id'])
         message = messages_map.get(metadata['message_id']) if messages_map else None
 
         message_list = get_message_list(messages_map, metadata['message_id'])
@@ -2933,7 +2933,7 @@ async def background_tasks_handler(ctx):
                         )
 
                         if not metadata.get('chat_id', '').startswith('local:'):
-                            Chats.upsert_message_to_chat_by_id_and_message_id(
+                            await Chats.upsert_message_to_chat_by_id_and_message_id(
                                 metadata['chat_id'],
                                 metadata['message_id'],
                                 {
@@ -2986,7 +2986,7 @@ async def background_tasks_handler(ctx):
                             if not title:
                                 title = messages[0].get('content', user_message)
 
-                            Chats.update_chat_title_by_id(metadata['chat_id'], title)
+                            await Chats.update_chat_title_by_id(metadata['chat_id'], title)
 
                             await event_emitter(
                                 {
@@ -2998,7 +2998,7 @@ async def background_tasks_handler(ctx):
                     if title == None and len(messages) == 2 and (not messages_map or len(messages_map) <= 2):
                         title = messages[0].get('content', user_message)
 
-                        Chats.update_chat_title_by_id(metadata['chat_id'], title)
+                        await Chats.update_chat_title_by_id(metadata['chat_id'], title)
 
                         await event_emitter(
                             {
@@ -3032,7 +3032,7 @@ async def background_tasks_handler(ctx):
 
                         try:
                             tags = json.loads(tags_string).get('tags', [])
-                            Chats.update_chat_tags_by_id(metadata['chat_id'], tags, user)
+                            await Chats.update_chat_tags_by_id(metadata['chat_id'], tags, user)
 
                             await event_emitter(
                                 {
@@ -3067,7 +3067,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                 else:
                     error = str(error)
 
-                Chats.upsert_message_to_chat_by_id_and_message_id(
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
                     metadata['chat_id'],
                     metadata['message_id'],
                     {
@@ -3083,7 +3083,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                     )
 
             if 'selected_model_id' in response_data:
-                Chats.upsert_message_to_chat_by_id_and_message_id(
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
                     metadata['chat_id'],
                     metadata['message_id'],
                     {
@@ -3103,7 +3103,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                         }
                     )
 
-                    title = Chats.get_chat_title_by_id(metadata['chat_id'])
+                    title = await Chats.get_chat_title_by_id(metadata['chat_id'])
 
                     # Use output from backend if provided (OR-compliant backends),
                     # otherwise generate from response content
@@ -3144,7 +3144,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                     # Save message in the database
                     usage = normalize_usage(response_data.get('usage', {}) or {})
 
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {
@@ -3214,7 +3214,7 @@ async def streaming_chat_response_handler(response, ctx):
 
     filter_functions = [
         Functions.get_function_by_id(filter_id)
-        for filter_id in get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
+        for filter_id in await get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
     ]
 
     # Standard streaming response handler
@@ -3447,7 +3447,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                 return output, end_flag
 
-            message = Chats.get_message_by_id_and_message_id(metadata['chat_id'], metadata['message_id'])
+            message = await Chats.get_message_by_id_and_message_id(metadata['chat_id'], metadata['message_id'])
 
             tool_calls = []
 
@@ -3513,7 +3513,7 @@ async def streaming_chat_response_handler(response, ctx):
                     )
 
                     # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {
@@ -3603,7 +3603,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                                 if 'selected_model_id' in data:
                                     model_id = data['selected_model_id']
-                                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                                         metadata['chat_id'],
                                         metadata['message_id'],
                                         {
@@ -3779,7 +3779,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     image_urls = get_image_urls(delta.get('images', []), request, metadata, user)
                                     if image_urls:
                                         image_file_list = [{'type': 'image', 'url': url} for url in image_urls]
-                                        message_files = Chats.add_message_files_by_id_and_message_id(
+                                        message_files = await Chats.add_message_files_by_id_and_message_id(
                                             metadata['chat_id'],
                                             metadata['message_id'],
                                             image_file_list,
@@ -3977,7 +3977,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                                         if ENABLE_REALTIME_CHAT_SAVE:
                                             # Save message in the database
-                                            Chats.upsert_message_to_chat_by_id_and_message_id(
+                                            await Chats.upsert_message_to_chat_by_id_and_message_id(
                                                 metadata['chat_id'],
                                                 metadata['message_id'],
                                                 {
@@ -4214,7 +4214,7 @@ async def streaming_chat_response_handler(response, ctx):
                             except Exception as e:
                                 tool_result = str(e)
 
-                        tool_result, tool_result_files, tool_result_embeds = process_tool_result(
+                        tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
                             request,
                             tool_function_name,
                             tool_result,
@@ -4640,7 +4640,7 @@ async def streaming_chat_response_handler(response, ctx):
                     if item.get('status') == 'in_progress':
                         item['status'] = 'completed'
 
-                title = Chats.get_chat_title_by_id(metadata['chat_id'])
+                title = await Chats.get_chat_title_by_id(metadata['chat_id'])
                 data = {
                     'done': True,
                     'content': serialize_output(output),
@@ -4670,7 +4670,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {
@@ -4681,13 +4681,13 @@ async def streaming_chat_response_handler(response, ctx):
                         },
                     )
                 elif usage:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {'done': True, 'usage': usage},
                     )
                 else:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {'done': True},
@@ -4724,7 +4724,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {
@@ -4734,7 +4734,7 @@ async def streaming_chat_response_handler(response, ctx):
                         },
                     )
                 else:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {'done': True},

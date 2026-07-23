@@ -206,6 +206,9 @@ async def generate_function_chat_completion(request, form_data, user, models: di
     model_id = form_data.get('model')
     model_info = await Models.get_model_by_id(model_id)
 
+    # Garnet-specific field; pipe functions have strict Pydantic body validation
+    form_data.pop('privacy_proxy', None)
+
     metadata = form_data.pop('metadata', {})
 
     files = metadata.get('files', [])
