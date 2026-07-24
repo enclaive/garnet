@@ -215,4 +215,15 @@ def pseudonymize(text: str, session_id: str, store: dict, enabled_types=None) ->
         mapping[token] = original
         text = text[:entity["start"]] + token + text[entity["end"]:]
 
+    # Fallback: apply existing session mapping to catch entities Presidio missed
+    # (e.g. same PII detected on turn 1 but missed by NER on turn 2's history text).
+    # Longest-first so multi-word originals ("Max Mustermann") replace before substrings ("Max").
+    # Word-boundary regex to avoid partial matches inside other words.
+    if mapping:
+        for token, original in sorted(mapping.items(), key=lambda kv: len(kv[1]), reverse=True):
+            if not original or original not in text:
+                continue
+            pattern = r'(?<![A-Za-z0-9_])' + re.escape(original) + r'(?![A-Za-z0-9_])'
+            text = re.sub(pattern, token, text)
+
     return text

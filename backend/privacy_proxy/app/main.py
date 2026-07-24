@@ -15,7 +15,7 @@ from app.logs import (
     log_in_user, log_out_user, log_no_pii,
     log_in_file, log_out_file, log_large_file, log_out_file_chunked,
     log_file_scan, log_file_pii, log_file_pii_duplicate,
-    log_internal, log_privacy_off, log_history_depseudo,
+    log_internal, log_privacy_off, log_history_depseudo, log_history_scan, log_ctx_msg,
     log_to_llm, log_from_llm, log_to_user, log_mapping,
     log_self_loop, log_responses_api, log_image,
     log_health, log_vault_start, log_vault_done, log_vault_skip, log_vault_error,
@@ -34,7 +34,12 @@ OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
 
 SYSTEM_PROMPT_MARKERS = [
     "### Task:", "### Guidelines:", "### Output:",
-    "JSON format:", "follow_ups", "Generate", "Suggest"
+    "JSON format:", "follow_ups",
+    "Generate a concise",
+    "Generate 1-3 broad tags",
+    "categorizing the main themes",
+    "Generate a hypothetical",
+    "Suggest 3-5 relevant follow-up",
 ]
 
 
@@ -469,17 +474,27 @@ async def proxy(request: Request, path: str):
         # NOTE: excludes messages[-1]; last message handled by block below.
         if messages and privacy_enabled:
             hist_pseudo_count = 0
-            for msg in messages[:-1]:
+            skipped_empty = 0
+            skipped_system = 0
+            scanned = 0
+            for i, msg in enumerate(messages[:-1]):
+                scanned += 1
                 content = msg.get("content")
                 text = extract_text_content(content)
+                _text = text or ""
+                has_pseudo = any(tok in _text for tok in ("PERSON_", "ORGANIZATION_", "EMAIL_ADDRESS_", "IBAN_CODE_", "PHONE_NUMBER_", "LOCATION_", "ID_"))
+                log_ctx_msg(i, msg.get("role"), len(_text), has_pseudo, _text[:120])
                 if not text:
+                    skipped_empty += 1
                     continue
                 if any(marker in text for marker in SYSTEM_PROMPT_MARKERS):
+                    skipped_system += 1
                     continue
                 out = _pseudo_with_cache(text, session_id, enabled_types)
                 if out != text:
                     msg["content"] = rebuild_content(content, out)
                     hist_pseudo_count += 1
+            log_history_scan(scanned, hist_pseudo_count, skipped_empty, skipped_system)
             if hist_pseudo_count > 0:
                 log_history_depseudo(hist_pseudo_count)
 

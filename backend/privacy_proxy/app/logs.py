@@ -76,6 +76,12 @@ def log_privacy_off():
 def log_history_depseudo(count):
     _p(f"[HISTORY PSEUDO] pseudonymized {count} message(s) in history")
 
+def log_history_scan(scanned, changed, skipped_empty, skipped_system):
+    _p(f"[HISTORY SCAN] scanned={scanned} changed={changed} skipped_empty={skipped_empty} skipped_system={skipped_system}")
+
+def log_ctx_msg(i, role, text_len, has_pseudo, head):
+    _p(f"[CTX MSG] i={i} role={role} len={text_len} pseudo_tokens={has_pseudo} head={head!r}")
+
 # ── context / LLM call ────────────────────────────────────────────────────────
 
 def log_context_size(msg_count, total_chars):
