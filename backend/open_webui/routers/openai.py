@@ -1229,8 +1229,14 @@ async def generate_chat_completion(
         if logit_bias:
             payload['logit_bias'] = json.loads(logit_bias)
 
+    # Garnet: force outbound to privacy-proxy; keep real provider URL in header for routing.
+    real_url = url
+    force_url = os.environ.get('FORCE_OPENAI_BASE_URL')
+    if force_url:
+        url = force_url
+
     headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
-    headers['x-openai-base-url'] = url
+    headers['x-openai-base-url'] = real_url
 
     is_responses = api_config.get('api_type') == 'responses'
 
