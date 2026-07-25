@@ -925,13 +925,13 @@ async def apply_source_context_to_messages(
 
     if RAG_SYSTEM_CONTEXT:
         return add_or_update_system_message(
-            rag_template(await Config.get('rag.template'), context, user_message),
+            await rag_template(await Config.get('rag.template'), context, user_message),
             messages,
             append=True,
         )
     else:
         return add_or_update_user_message(
-            rag_template(await Config.get('rag.template'), context, user_message),
+            await rag_template(await Config.get('rag.template'), context, user_message),
             messages,
             append=False,
         )
@@ -4346,7 +4346,7 @@ async def streaming_chat_response_handler(response, ctx):
                             )
                             source_context = source_context.strip()
                             if source_context:
-                                rag_content = rag_template(
+                                rag_content = await rag_template(
                                     await Config.get('rag.template'),
                                     source_context,
                                     user_message,

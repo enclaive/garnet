@@ -1017,8 +1017,9 @@ async def chat_completion(
     model_id = form_data.get('model', None)
     model_item = form_data.pop('model_item', {})
     tasks = form_data.pop('background_tasks', None)
-    # Garnet-specific field; downstream pipe/Pydantic models reject unknown keys
-    form_data.pop('privacy_proxy', None)
+    # Garnet-specific field; popped here to avoid Pydantic validation errors,
+    # re-injected after process_chat_payload before the proxy call
+    _privacy_proxy = form_data.pop('privacy_proxy', True)
 
     metadata = {}
     try:
@@ -1476,6 +1477,7 @@ async def chat_completion(
         try:
             form_data, metadata, events = await process_chat_payload(request, form_data, user, metadata, model)
 
+            form_data['privacy_proxy'] = _privacy_proxy
             response = await chat_completion_handler(request, form_data, user)
 
             # When the upstream provider returns an error (e.g. HTTP 400
