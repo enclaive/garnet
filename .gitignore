@@ -1,4 +1,5 @@
 x.py
+graphify-out/
 yarn.lock
 .DS_Store
 node_modules
