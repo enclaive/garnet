@@ -708,11 +708,12 @@ async def proxy(request: Request, path: str):
                 headers=forward_headers,
                 timeout=300.0
             )
-        return Response(
-            content=response.content,
-            status_code=response.status_code,
-            media_type="application/json"
-        )
+        if response.status_code != 200:
+            return Response(content=response.content, status_code=response.status_code, media_type="application/json")
+        img_url = response.json()["data"][0].get("url", "")
+        content = f"![image]({img_url})"
+        sse = f'data: {{"choices":[{{"delta":{{"role":"assistant","content":{json.dumps(content)}}},"index":0}}]}}\n\ndata: [DONE]\n\n'
+        return StreamingResponse(iter([sse.encode()]), media_type="text/event-stream")
 
     if is_chat and body and not is_openai:
         async with httpx.AsyncClient() as client:
