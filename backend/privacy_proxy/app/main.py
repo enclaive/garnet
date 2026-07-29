@@ -790,9 +790,9 @@ async def proxy(request: Request, path: str):
                             if chunk:
                                 yield chunk
                     else:
-                        async for line in resp.aiter_lines():
-                            if line:
-                                yield line.encode()
+                        async for chunk in resp.aiter_bytes():
+                            if chunk:
+                                yield chunk
 
         session_mapping = dict(store.get_store().get(session_id, {}))
         if privacy_enabled:
