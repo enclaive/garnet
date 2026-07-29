@@ -706,13 +706,11 @@ async def proxy(request: Request, path: str):
             b64 = data.get("b64_json", "")
             img_url = f"data:image/png;base64,{b64}" if b64 else ""
         content = f"![image]({img_url})"
-        CHUNK = 60000
-        parts = [content[i:i+CHUNK] for i in range(0, len(content), CHUNK)]
-        sse_events = []
-        for i, part in enumerate(parts):
-            delta = {"role": "assistant", "content": part} if i == 0 else {"content": part}
-            sse_events.append(f'data: {{"choices":[{{"delta":{orjson.dumps(delta).decode()},"index":0}}]}}\n\n'.encode())
-        sse_events.append(b"data: [DONE]\n\n")
+        delta = orjson.dumps({"role": "assistant", "content": content}).decode()
+        sse_events = [
+            f'data: {{"choices":[{{"delta":{delta},"index":0}}]}}\n\n'.encode(),
+            b"data: [DONE]\n\n",
+        ]
         return StreamingResponse(iter(sse_events), media_type="text/event-stream")
 
     if is_chat and body and not is_openai:
