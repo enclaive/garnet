@@ -27,6 +27,7 @@ from app.logs import (
 )
 
 IMAGE_MODELS = ["dall-e-3", "dall-e-2", "gpt-image-1"]
+RESPONSES_API_MODELS = {"gpt-5.5-pro"}
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
@@ -442,6 +443,21 @@ async def proxy(request: Request, path: str):
             if body.get("tools") and "reasoning_effort" in body:
                 body.pop("reasoning_effort")
 
+        use_responses_api = is_openai and "api.openai.com" in url and model in RESPONSES_API_MODELS
+        if use_responses_api:
+            url = url.replace("/v1/chat/completions", "/v1/responses")
+            msgs = body.pop("messages", [])
+            system_parts = [m for m in msgs if m.get("role") == "system"]
+            if system_parts:
+                body["instructions"] = system_parts[0].get("content", "")
+            body["input"] = [m for m in msgs if m.get("role") != "system"]
+            body.pop("max_completion_tokens", None)
+            if "max_tokens" in body:
+                body["max_output_tokens"] = body.pop("max_tokens")
+            for f in ("stream_options", "top_p", "frequency_penalty", "presence_penalty",
+                      "logprobs", "top_logprobs", "n", "tools", "tool_choice", "reasoning_effort"):
+                body.pop(f, None)
+
         if "groq" in url:
             provider_label = "groq"
         elif "gemini" in url or "googleapis" in url:
@@ -799,9 +815,35 @@ async def proxy(request: Request, path: str):
                 log_to_user(len(session_mapping), 0.0, time.perf_counter() - t0)
                 return ORJSONResponse(content=result)
 
+        async def convert_responses_stream(source):
+            async for chunk in source:
+                if not chunk:
+                    continue
+                for line in chunk.decode("utf-8", errors="replace").split("\n"):
+                    line = line.strip()
+                    if not line.startswith("data: "):
+                        continue
+                    raw = line[6:]
+                    if raw == "[DONE]":
+                        yield b"data: [DONE]\n\n"
+                        return
+                    try:
+                        ev = orjson.loads(raw)
+                        ev_type = ev.get("type", "")
+                        if ev_type == "response.output_text.delta":
+                            delta = ev.get("delta", "")
+                            payload = orjson.dumps({"choices": [{"delta": {"content": delta}, "index": 0}]})
+                            yield f"data: {payload.decode()}\n\n".encode()
+                        elif ev_type in ("response.completed", "response.done"):
+                            yield b"data: [DONE]\n\n"
+                            return
+                    except Exception:
+                        pass
+
+        src = convert_responses_stream(response_stream()) if use_responses_api else response_stream()
         return StreamingResponse(
             stream_with_depseudo(
-                response_stream(), session_mapping, pseudonymized_user_message,
+                src, session_mapping, pseudonymized_user_message,
                 session_id, url, model, file_entity_count, garnet_breakdown,
                 variants=variants, t0=t0
             ),
