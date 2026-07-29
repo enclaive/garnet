@@ -710,7 +710,11 @@ async def proxy(request: Request, path: str):
             )
         if response.status_code != 200:
             return Response(content=response.content, status_code=response.status_code, media_type="application/json")
-        img_url = response.json()["data"][0].get("url", "")
+        data = response.json()["data"][0]
+        img_url = data.get("url") or ""
+        if not img_url:
+            b64 = data.get("b64_json", "")
+            img_url = f"data:image/png;base64,{b64}" if b64 else ""
         content = f"![image]({img_url})"
         sse = f'data: {{"choices":[{{"delta":{{"role":"assistant","content":{orjson.dumps(content).decode()}}},"index":0}}]}}\n\ndata: [DONE]\n\n'
         return StreamingResponse(iter([sse.encode()]), media_type="text/event-stream")
