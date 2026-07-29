@@ -712,7 +712,7 @@ async def proxy(request: Request, path: str):
             return Response(content=response.content, status_code=response.status_code, media_type="application/json")
         img_url = response.json()["data"][0].get("url", "")
         content = f"![image]({img_url})"
-        sse = f'data: {{"choices":[{{"delta":{{"role":"assistant","content":{json.dumps(content)}}},"index":0}}]}}\n\ndata: [DONE]\n\n'
+        sse = f'data: {{"choices":[{{"delta":{{"role":"assistant","content":{orjson.dumps(content).decode()}}},"index":0}}]}}\n\ndata: [DONE]\n\n'
         return StreamingResponse(iter([sse.encode()]), media_type="text/event-stream")
 
     if is_chat and body and not is_openai:
