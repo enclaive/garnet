@@ -436,8 +436,11 @@ async def proxy(request: Request, path: str):
         )
         body.pop("chat_id", None)
 
-        if is_openai and "api.openai.com" in url and "max_tokens" in body:
-            body["max_completion_tokens"] = body.pop("max_tokens")
+        if is_openai and "api.openai.com" in url:
+            if "max_tokens" in body:
+                body["max_completion_tokens"] = body.pop("max_tokens")
+            if body.get("tools") and "reasoning_effort" in body:
+                body.pop("reasoning_effort")
 
         if "groq" in url:
             provider_label = "groq"
