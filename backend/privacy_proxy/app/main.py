@@ -790,7 +790,8 @@ async def proxy(request: Request, path: str):
                     timeout=120.0
                 ) as resp:
                     if resp.status_code != 200:
-                        log_error(f"status={resp.status_code} provider={url}")
+                        err_body = await resp.aread()
+                        log_error(f"status={resp.status_code} provider={url} body={err_body[:500]}")
                     if "anthropic.com" in url:
                         async for chunk in resp.aiter_bytes():
                             if chunk:
