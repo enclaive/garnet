@@ -17,7 +17,7 @@ from app.logs import (
     log_file_scan, log_file_pii, log_file_pii_duplicate,
     log_internal, log_privacy_off, log_history_depseudo, log_history_scan, log_ctx_msg,
     log_to_llm, log_from_llm, log_to_user, log_mapping,
-    log_self_loop, log_responses_api, log_image,
+    log_self_loop, log_image,
     log_health, log_vault_start, log_vault_done, log_vault_skip, log_vault_error,
     log_analyze, log_analyze_result,
     log_error, log_error_passthrough,
@@ -27,7 +27,6 @@ from app.logs import (
 )
 
 IMAGE_MODELS = ["dall-e-3", "dall-e-2", "gpt-image-1"]
-RESPONSES_API_MODELS = set(os.getenv("RESPONSES_API_MODELS", "gpt-5.5,gpt-5.5-pro,gpt-5.5-2026-04-23,gpt-5.5-pro-2026-04-23").split(","))
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
@@ -186,7 +185,7 @@ async def expand_query(question: str, openai_url: str, auth_header: str) -> list
         return []
 
 
-async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, is_responses_api=False, variants=None, t0=None):
+async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, variants=None, t0=None):
     yield orjson.dumps({
         "type": "pseudonymized_prompt",
         "content": pseudonymized_prompt or "",
@@ -239,13 +238,7 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
                     if delta_usage.get("output_tokens"):
                         output_tokens = delta_usage["output_tokens"]
 
-                if is_responses_api:
-                    if parsed.get("type") == "response.output_text.delta":
-                        chunk_text = parsed.get("delta", "")
-                    else:
-                        continue
-                else:
-                    chunk_text = parsed["choices"][0]["delta"].get("content", "")
+                chunk_text = parsed["choices"][0]["delta"].get("content", "")
                 if not chunk_text:
                     continue
             except Exception:
@@ -399,7 +392,6 @@ async def proxy(request: Request, path: str):
     session_id = "default"
     file_entity_count = 0
     garnet_breakdown = {}
-    use_responses_api = False
     query_expand = request.headers.get("x-garnet-queryexpand", "").lower() == "true"
     variants = []
 
@@ -444,10 +436,8 @@ async def proxy(request: Request, path: str):
         )
         body.pop("chat_id", None)
 
-        use_responses_api = model in RESPONSES_API_MODELS
-        if use_responses_api and is_openai:
-            url = f"{openai_url.rstrip('/')}/responses"
-            log_responses_api(model)
+        if is_openai and "api.openai.com" in url and "max_tokens" in body:
+            body["max_completion_tokens"] = body.pop("max_tokens")
 
         if "groq" in url:
             provider_label = "groq"
@@ -521,9 +511,6 @@ async def proxy(request: Request, path: str):
             elif is_system_prompt:
                 internal_type = detect_internal_type(original_content_text)
                 log_internal(internal_type)
-                use_responses_api = False
-                if is_openai:
-                    url = f"{openai_url.rstrip('/')}/{actual_path}"
                 pseudonymized_user_message = original_content_text
 
             elif last_message.get("role") in ("user", "system", "developer"):
@@ -761,25 +748,6 @@ async def proxy(request: Request, path: str):
             return Response(content=response.content, status_code=response.status_code)
 
     if is_chat and body:
-        if use_responses_api:
-            system_messages = [m for m in messages if m.get("role") == "system"]
-            non_system = [m for m in messages if m.get("role") != "system"]
-
-            if system_messages:
-                body["instructions"] = "\n".join(
-                    extract_text_content(m["content"]) for m in system_messages
-                )
-
-            body["input"] = [
-                {"role": m["role"], "content": extract_text_content(m["content"])}
-                for m in non_system
-            ]
-
-            if "max_tokens" in body:
-                body["max_output_tokens"] = body.pop("max_tokens")
-
-            body.pop("messages", None)
-
         async def response_stream():
             async with httpx.AsyncClient() as client:
                 async with client.stream(
@@ -834,7 +802,7 @@ async def proxy(request: Request, path: str):
             stream_with_depseudo(
                 response_stream(), session_mapping, pseudonymized_user_message,
                 session_id, url, model, file_entity_count, garnet_breakdown,
-                is_responses_api=use_responses_api, variants=variants, t0=t0
+                variants=variants, t0=t0
             ),
             media_type="text/event-stream"
         )
