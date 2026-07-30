@@ -27,7 +27,7 @@ from app.logs import (
 )
 
 IMAGE_MODELS = ["dall-e-3", "dall-e-2", "gpt-image-1"]
-RESPONSES_API_MODELS = {"gpt-5.5-pro"}
+RESPONSES_API_MODELS = {"gpt-5.5-pro", "gpt-5.6-luna"}
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
