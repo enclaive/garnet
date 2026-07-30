@@ -722,12 +722,16 @@ async def proxy(request: Request, path: str):
             b64 = data.get("b64_json", "")
             img_url = f"data:image/png;base64,{b64}" if b64 else ""
         content = f"![image]({img_url})"
-        delta = orjson.dumps({"role": "assistant", "content": content}).decode()
-        sse_events = [
-            f'data: {{"choices":[{{"delta":{delta},"index":0}}]}}\n\n'.encode(),
-            b"data: [DONE]\n\n",
-        ]
-        return StreamingResponse(iter(sse_events), media_type="text/event-stream")
+
+        def _image_sse_chunks(text, chunk=50_000):
+            delta = orjson.dumps({"role": "assistant", "content": text[:chunk]}).decode()
+            yield f'data: {{"choices":[{{"delta":{delta},"index":0}}]}}\n\n'.encode()
+            for i in range(chunk, len(text), chunk):
+                piece = orjson.dumps({"content": text[i:i + chunk]}).decode()
+                yield f'data: {{"choices":[{{"delta":{piece},"index":0}}]}}\n\n'.encode()
+            yield b"data: [DONE]\n\n"
+
+        return StreamingResponse(_image_sse_chunks(content), media_type="text/event-stream")
 
     if is_chat and body and not is_openai:
         async with httpx.AsyncClient() as client:
