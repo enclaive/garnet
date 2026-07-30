@@ -32,6 +32,7 @@ RESPONSES_API_MODELS = {"gpt-5.5-pro", "gpt-5.6-luna"}
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
+OWU_SERVICE_URL = os.getenv("OWU_SERVICE_URL", "http://open-webui:8080")
 
 SYSTEM_PROMPT_MARKERS = [
     "### Task:", "### Guidelines:", "### Output:",
@@ -722,7 +723,7 @@ async def proxy(request: Request, path: str):
         if not img_url:
             b64 = data.get("b64_json", "")
             if b64:
-                token = request.headers.get("authorization", "")
+                token = request.headers.get("x-owu-auth", "")
                 img_bytes = base64.b64decode(b64)
                 async with httpx.AsyncClient() as up:
                     up_resp = await up.post(
