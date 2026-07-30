@@ -691,7 +691,7 @@ async def proxy(request: Request, path: str):
     else:
         forward_headers = {}
 
-    if body and body.get("model") in IMAGE_MODELS:
+    if body and body.get("model") in IMAGE_MODELS and "images/generations" not in actual_path:
         url = f"{openai_url.rstrip('/')}/images/generations"
         messages = body.get("messages", [])
         prompt = ""
