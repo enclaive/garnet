@@ -3,6 +3,7 @@ import os
 import re
 import time
 import uuid
+import base64
 import hashlib
 import httpx
 import orjson
@@ -720,18 +721,25 @@ async def proxy(request: Request, path: str):
         img_url = data.get("url") or ""
         if not img_url:
             b64 = data.get("b64_json", "")
-            img_url = f"data:image/png;base64,{b64}" if b64 else ""
-        content = f"![image]({img_url})"
-
-        def _image_sse_chunks(text, chunk=50_000):
-            delta = orjson.dumps({"role": "assistant", "content": text[:chunk]}).decode()
-            yield f'data: {{"choices":[{{"delta":{delta},"index":0}}]}}\n\n'.encode()
-            for i in range(chunk, len(text), chunk):
-                piece = orjson.dumps({"content": text[i:i + chunk]}).decode()
-                yield f'data: {{"choices":[{{"delta":{piece},"index":0}}]}}\n\n'.encode()
-            yield b"data: [DONE]\n\n"
-
-        return StreamingResponse(_image_sse_chunks(content), media_type="text/event-stream")
+            if b64:
+                token = request.headers.get("authorization", "")
+                img_bytes = base64.b64decode(b64)
+                async with httpx.AsyncClient() as up:
+                    up_resp = await up.post(
+                        "http://open-webui:8080/api/v1/files/",
+                        headers={"Authorization": token},
+                        files={"file": ("image.png", img_bytes, "image/png")},
+                        timeout=30.0,
+                    )
+                if up_resp.status_code == 200:
+                    file_id = up_resp.json().get("id", "")
+                    img_url = f"/api/v1/files/{file_id}/content" if file_id else ""
+        content = f"![image]({img_url})" if img_url else "_(image generation failed)_"
+        delta = orjson.dumps({"role": "assistant", "content": content}).decode()
+        return StreamingResponse(
+            iter([f'data: {{"choices":[{{"delta":{delta},"index":0}}]}}\n\n'.encode(), b"data: [DONE]\n\n"]),
+            media_type="text/event-stream",
+        )
 
     if is_chat and body and not is_openai:
         async with httpx.AsyncClient() as client:
