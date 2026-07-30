@@ -442,7 +442,7 @@ async def proxy(request: Request, path: str):
             if body.get("tools") and "reasoning_effort" in body:
                 body.pop("reasoning_effort")
 
-        use_responses_api = is_openai and "api.openai.com" in url and model in RESPONSES_API_MODELS
+        use_responses_api = is_openai and "api.openai.com" in url and any(model.startswith(m) for m in RESPONSES_API_MODELS)
         if use_responses_api:
             url = url.replace("/v1/chat/completions", "/v1/responses")
             msgs = body.pop("messages", [])
