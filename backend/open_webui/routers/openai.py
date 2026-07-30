@@ -1237,7 +1237,6 @@ async def generate_chat_completion(
 
     headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
     headers['x-openai-base-url'] = real_url
-    headers['x-owu-auth'] = request.headers.get('authorization', '')
 
     is_responses = api_config.get('api_type') == 'responses'
 

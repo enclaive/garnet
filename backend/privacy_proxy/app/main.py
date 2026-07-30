@@ -3,7 +3,6 @@ import os
 import re
 import time
 import uuid
-import base64
 import hashlib
 import httpx
 import orjson
@@ -18,7 +17,7 @@ from app.logs import (
     log_file_scan, log_file_pii, log_file_pii_duplicate,
     log_internal, log_privacy_off, log_history_depseudo, log_history_scan, log_ctx_msg,
     log_to_llm, log_from_llm, log_to_user, log_mapping,
-    log_self_loop, log_image,
+    log_self_loop,
     log_health, log_vault_start, log_vault_done, log_vault_skip, log_vault_error,
     log_analyze, log_analyze_result,
     log_error, log_error_passthrough,
@@ -27,12 +26,10 @@ from app.logs import (
     log_privacy_audit, log_file_delta,
 )
 
-IMAGE_MODELS = ["dall-e-3", "dall-e-2", "gpt-image-1"]
 RESPONSES_API_MODELS = {"gpt-5.5-pro", "gpt-5.6-luna"}
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
-OWU_SERVICE_URL = os.getenv("OWU_SERVICE_URL", "http://open-webui:8080")
 
 SYSTEM_PROMPT_MARKERS = [
     "### Task:", "### Guidelines:", "### Output:",
@@ -692,55 +689,6 @@ async def proxy(request: Request, path: str):
             forward_headers.setdefault("anthropic-version", "2023-06-01")
     else:
         forward_headers = {}
-
-    if body and body.get("model") in IMAGE_MODELS and "images/generations" not in actual_path:
-        url = f"{openai_url.rstrip('/')}/images/generations"
-        messages = body.get("messages", [])
-        prompt = ""
-        for msg in messages:
-            if msg.get("role") == "user":
-                prompt = extract_text_content(msg.get("content", ""))
-                break
-        image_body = {
-            "model": body.get("model"),
-            "prompt": prompt,
-            "n": 1,
-            "size": "1024x1024"
-        }
-        log_image(body.get("model"), prompt, url)
-        async with httpx.AsyncClient() as client:
-            response = await client.request(
-                method="POST",
-                url=url,
-                json=image_body,
-                headers=forward_headers,
-                timeout=300.0
-            )
-        if response.status_code != 200:
-            return Response(content=response.content, status_code=response.status_code, media_type="application/json")
-        data = response.json()["data"][0]
-        img_url = data.get("url") or ""
-        if not img_url:
-            b64 = data.get("b64_json", "")
-            if b64:
-                token = request.headers.get("x-owu-auth", "")
-                img_bytes = base64.b64decode(b64)
-                async with httpx.AsyncClient() as up:
-                    up_resp = await up.post(
-                        "http://open-webui:8080/api/v1/files/",
-                        headers={"Authorization": token},
-                        files={"file": ("image.png", img_bytes, "image/png")},
-                        timeout=30.0,
-                    )
-                if up_resp.status_code == 200:
-                    file_id = up_resp.json().get("id", "")
-                    img_url = f"/api/v1/files/{file_id}/content" if file_id else ""
-        content = f"![image]({img_url})" if img_url else "_(image generation failed)_"
-        delta = orjson.dumps({"role": "assistant", "content": content}).decode()
-        return StreamingResponse(
-            iter([f'data: {{"choices":[{{"delta":{delta},"index":0}}]}}\n\n'.encode(), b"data: [DONE]\n\n"]),
-            media_type="text/event-stream",
-        )
 
     if is_chat and body and not is_openai:
         async with httpx.AsyncClient() as client:
