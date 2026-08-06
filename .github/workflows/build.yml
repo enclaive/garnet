@@ -10,6 +10,7 @@ on:
       - deploy/prod
       - garnet-privacy-proxy
       - demo1
+      - demo1upgrade
   pull_request:
     branches:
       - garnet-privacy-proxy
@@ -20,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
-      tag: ${{ steps.get_tag.outputs.name }}
+      tag: ${{ steps.get_tag.outputs.name }}claude
       revision: ${{ steps.get_revision.outputs.revision }}
       proxy_changed: ${{ steps.changes.outputs.proxy }}
       webui_changed: ${{ steps.changes.outputs.webui }}
