@@ -26,7 +26,7 @@ from app.logs import (
     log_privacy_audit, log_file_delta,
 )
 
-RESPONSES_API_MODELS = {"gpt-5.5-pro", "gpt-5.6-luna"}
+RESPONSES_API_MODELS = {"gpt-5", "gpt-5.5-pro", "gpt-5.6-luna"}
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
@@ -453,6 +453,9 @@ async def proxy(request: Request, path: str):
             body.pop("max_completion_tokens", None)
             if "max_tokens" in body:
                 body["max_output_tokens"] = body.pop("max_tokens")
+            # ponytail: Responses API wants reasoning.effort nested, not flat reasoning_effort
+            if "reasoning_effort" in body:
+                body["reasoning"] = {"effort": body.pop("reasoning_effort")}
             for f in ("stream_options", "top_p", "frequency_penalty", "presence_penalty",
                       "logprobs", "top_logprobs", "n", "tools", "tool_choice", "reasoning_effort"):
                 body.pop(f, None)

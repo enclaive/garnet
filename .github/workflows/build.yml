@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
-      tag: ${{ steps.get_tag.outputs.name }}claude
+      tag: ${{ steps.get_tag.outputs.name }}
       revision: ${{ steps.get_revision.outputs.revision }}
       proxy_changed: ${{ steps.changes.outputs.proxy }}
       webui_changed: ${{ steps.changes.outputs.webui }}
