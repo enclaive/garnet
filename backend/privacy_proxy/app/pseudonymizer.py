@@ -20,6 +20,7 @@ def build_analyzer(language: str) -> AnalyzerEngine:
     if language == "de":
         provider = NlpEngineProvider(nlp_configuration={
             "nlp_engine_name": "spacy",
+            # ponytail: trf variant catches short German names + PERSON/LOC ambiguity md misses
             "models": [{"lang_code": "de", "model_name": "de_core_news_trf"}],
         })
         recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de, id_recognizer_de]
