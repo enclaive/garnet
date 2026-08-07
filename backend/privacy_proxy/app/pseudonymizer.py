@@ -27,13 +27,13 @@ def build_analyzer(language: str) -> AnalyzerEngine:
             # ponytail: lg catches short names + disambiguation md misses; trf has no NER in de
             "models": [{"lang_code": "de", "model_name": "de_core_news_lg"}],
         })
-        recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de, id_recognizer_de]
+        recognizers = [email_recognizer_de, org_recognizer_de, iban_recognizer_de, phone_recognizer_de]
     else:
         provider = NlpEngineProvider(nlp_configuration={
             "nlp_engine_name": "spacy",
             "models": [{"lang_code": "en", "model_name": "en_core_web_md"}],
         })
-        recognizers = [email_recognizer_en, org_recognizer_en, iban_recognizer_en, phone_recognizer_en, id_recognizer_en]
+        recognizers = [email_recognizer_en, org_recognizer_en, iban_recognizer_en, phone_recognizer_en]
 
     analyzer = AnalyzerEngine(nlp_engine=provider.create_engine())
     for r in recognizers:
