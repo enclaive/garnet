@@ -10,4 +10,4 @@ https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.7.
 redis
 jaraco.context>=6.1.0
 orjson==3.11.6
-cryptography>=48.0.1
+cryptography>=50.0.0
