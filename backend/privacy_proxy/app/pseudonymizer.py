@@ -20,6 +20,18 @@ PHONE_REGEX = re.compile(r'\+\d{1,3}[\s.-]?\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{0,5}')
 ORG_CONTEXT_WORDS = {"GmbH", "Inc", "Ltd", "AG", "Corp", "LLC", "SE", "Co", "SA", "company", "corporation", "founded"}
 WEEKDAYS_DE = {"Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"}
 
+# ponytail: lazy singleton — GLiNER loads transformer weights once, reused across requests
+_GLINER_LABELS = ["person", "location", "organization"]
+_GLINER_MAP = {"person": "PERSON", "location": "LOCATION", "organization": "ORGANIZATION"}
+_gliner_instance = None
+
+def _get_gliner():
+    global _gliner_instance
+    if _gliner_instance is None:
+        from gliner import GLiNER
+        _gliner_instance = GLiNER.from_pretrained("urchade/gliner_multi_pii-v1")
+    return _gliner_instance
+
 def build_analyzer(language: str) -> AnalyzerEngine:
     if language == "de":
         provider = NlpEngineProvider(nlp_configuration={
@@ -113,6 +125,16 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
     if not enabled_types or "PHONE_NUMBER" in enabled_types:
         for match in PHONE_REGEX.finditer(original_text):
             entities.append({"start": match.start(), "end": match.end(), "type": "PHONE_NUMBER"})
+
+    # GLiNER: zero-shot transformer NER — better person/location disambiguation than spaCy lg.
+    # Inserted before Presidio results so GLiNER wins overlaps via stable-sort first-wins dedup.
+    try:
+        for h in _get_gliner().predict_entities(original_text, _GLINER_LABELS, threshold=0.3):
+            ptype = _GLINER_MAP.get(h["label"].lower())
+            if ptype and (not enabled_types or ptype in enabled_types):
+                entities.append({"start": h["start"], "end": h["end"], "type": ptype, "score": h["score"]})
+    except Exception:
+        pass  # GLiNER failure is non-fatal; Presidio NER still runs as fallback
 
     email_matches = list(EMAIL_REGEX.finditer(original_text))
     phone_matches = list(PHONE_REGEX.finditer(original_text))
