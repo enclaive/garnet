@@ -131,6 +131,9 @@ def log_self_loop(resolved_url):
 def log_responses_api(model):
     _p(f"[RESPONSES API] model={model} → using /responses endpoint")
 
+def log_reasoning_effort(effort):
+    _p(f"[REASONING] effort={effort}")
+
 def log_image(model, prompt, url):
     _p(f"[IMAGE] model={model} prompt={prompt[:80]} → {url}")
 

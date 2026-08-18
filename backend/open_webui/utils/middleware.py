@@ -1076,7 +1076,7 @@ async def process_tool_result(
                                 pass
                         tool_response.append(text)
                     elif item.get('type') in ['image', 'audio']:
-                        file_url = get_file_url_from_base64(
+                        file_url = await get_file_url_from_base64(
                             request,
                             f'data:{item.get("mimeType")};base64,{item.get("data", item.get("blob", ""))}',
                             {

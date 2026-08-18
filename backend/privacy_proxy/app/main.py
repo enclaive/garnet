@@ -24,6 +24,7 @@ from app.logs import (
     log_session, log_in_user_full, log_out_user_full, log_pseudo_diff,
     log_context_size, log_llm_tokens, log_garnet_out, log_stream_done,
     log_privacy_audit, log_file_delta,
+    log_reasoning_effort,
 )
 
 RESPONSES_API_MODELS = {"gpt-5", "gpt-5.5-pro", "gpt-5.6-luna"}
@@ -288,7 +289,6 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
 
 @app.get("/health")
 async def health():
-    log_health()
     return {"status": "ok"}
 
 
@@ -449,13 +449,39 @@ async def proxy(request: Request, path: str):
             system_parts = [m for m in msgs if m.get("role") == "system"]
             if system_parts:
                 body["instructions"] = system_parts[0].get("content", "")
-            body["input"] = [m for m in msgs if m.get("role") != "system"]
+            def _remap_content(content):
+                if not isinstance(content, list):
+                    return content
+                out = []
+                for block in content:
+                    t = block.get("type") if isinstance(block, dict) else None
+                    if t == "text":
+                        out.append({**block, "type": "input_text"})
+                    elif t == "image_url":
+                        url = block.get("image_url", {}).get("url", "")
+                        out.append({"type": "input_image", "image_url": url})
+                    else:
+                        out.append(block)
+                return out
+            body["input"] = [{**m, "content": _remap_content(m.get("content", ""))} for m in msgs if m.get("role") != "system"]
             body.pop("max_completion_tokens", None)
             if "max_tokens" in body:
                 body["max_output_tokens"] = body.pop("max_tokens")
             # ponytail: Responses API wants reasoning.effort nested, not flat reasoning_effort
             if "reasoning_effort" in body:
-                body["reasoning"] = {"effort": body.pop("reasoning_effort")}
+                effort = body.pop("reasoning_effort")
+                body["reasoning"] = {"effort": effort}
+                log_reasoning_effort(effort)
+            if "response_format" in body:
+                rf = body.pop("response_format")
+                if rf.get("type") == "json_schema":
+                    js = rf.get("json_schema", {})
+                    body["text"] = {"format": {
+                        "type": "json_schema",
+                        "name": js.get("name", "output"),
+                        "schema": js.get("schema", {}),
+                        "strict": js.get("strict", True),
+                    }}
             for f in ("stream_options", "top_p", "frequency_penalty", "presence_penalty",
                       "logprobs", "top_logprobs", "n", "tools", "tool_choice", "reasoning_effort"):
                 body.pop(f, None)
