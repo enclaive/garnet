@@ -129,7 +129,9 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
     # GLiNER: zero-shot transformer NER — better person/location disambiguation than spaCy lg.
     # Inserted before Presidio results so GLiNER wins overlaps via stable-sort first-wins dedup.
     try:
-        for h in _get_gliner().predict_entities(original_text, _GLINER_LABELS, threshold=0.3):
+        for h in _get_gliner().predict_entities(original_text, _GLINER_LABELS, threshold=0.5):
+            span = original_text[h["start"]:h["end"]]
+            if re.match(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4})+", span): continue
             ptype = _GLINER_MAP.get(h["label"].lower())
             if ptype and (not enabled_types or ptype in enabled_types):
                 entities.append({"start": h["start"], "end": h["end"], "type": ptype, "score": h["score"]})
@@ -218,6 +220,8 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
         if not overlap:
             filtered.append(e)
 
+    _UUID_FRAG = re.compile(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4})+")
+    filtered = [e for e in filtered if not _UUID_FRAG.match(re.sub(r"\s+", "", original_text[e["start"]:e["end"]]))]
     return sorted(filtered, key=lambda x: x["start"])
 
 
