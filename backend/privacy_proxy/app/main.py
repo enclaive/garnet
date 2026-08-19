@@ -806,29 +806,47 @@ async def proxy(request: Request, path: str):
                 return ORJSONResponse(content=result)
 
         async def convert_responses_stream(source):
+            # ponytail: buffer partial SSE lines across HTTP chunks — httpx
+            # chunks can split a "data: {...}\n" line mid-JSON, and dropping
+            # them silently corrupts the depseudo output (missing chars).
+            partial = ""
+            def _process(line: str):
+                if not line.startswith("data: "):
+                    return None
+                raw = line[6:]
+                if raw == "[DONE]":
+                    return b"data: [DONE]\n\n", True
+                try:
+                    ev = orjson.loads(raw)
+                    ev_type = ev.get("type", "")
+                    if ev_type == "response.output_text.delta":
+                        delta = ev.get("delta", "")
+                        payload = orjson.dumps({"choices": [{"delta": {"content": delta}, "index": 0}]})
+                        return f"data: {payload.decode()}\n\n".encode(), False
+                    if ev_type in ("response.completed", "response.done"):
+                        return b"data: [DONE]\n\n", True
+                except Exception:
+                    return None
+                return None
+
             async for chunk in source:
                 if not chunk:
                     continue
-                for line in chunk.decode("utf-8", errors="replace").split("\n"):
-                    line = line.strip()
-                    if not line.startswith("data: "):
+                text = partial + chunk.decode("utf-8", errors="replace")
+                lines = text.split("\n")
+                partial = lines[-1]  # last piece may be incomplete
+                for line in lines[:-1]:
+                    result = _process(line.strip())
+                    if result is None:
                         continue
-                    raw = line[6:]
-                    if raw == "[DONE]":
-                        yield b"data: [DONE]\n\n"
+                    out, done = result
+                    yield out
+                    if done:
                         return
-                    try:
-                        ev = orjson.loads(raw)
-                        ev_type = ev.get("type", "")
-                        if ev_type == "response.output_text.delta":
-                            delta = ev.get("delta", "")
-                            payload = orjson.dumps({"choices": [{"delta": {"content": delta}, "index": 0}]})
-                            yield f"data: {payload.decode()}\n\n".encode()
-                        elif ev_type in ("response.completed", "response.done"):
-                            yield b"data: [DONE]\n\n"
-                            return
-                    except Exception:
-                        pass
+            if partial.strip():
+                result = _process(partial.strip())
+                if result is not None:
+                    yield result[0]
 
         src = convert_responses_stream(response_stream()) if use_responses_api else response_stream()
         return StreamingResponse(
