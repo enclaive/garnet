@@ -1,9 +1,12 @@
 # ci: trigger build
+import asyncio
 import os
 import re
+import secrets
 import time
 import uuid
 import hashlib
+from collections import OrderedDict
 import httpx
 import orjson
 from fastapi import FastAPI, Request
@@ -51,9 +54,8 @@ class ORJSONResponse(Response):
 
 app = FastAPI(default_response_class=ORJSONResponse)
 store = MappingStore(ttl=3600)
-# ponytail: per-session pseudonymize cache. TTL is implicit — same 1h window as store;
-# evicted on process restart, not on session expiry. Add active eviction if memory becomes measurable.
-pseudo_cache: dict[str, dict[str, str]] = {}
+_PSEUDO_MAX = int(os.getenv("PSEUDO_CACHE_MAX", "5000"))
+pseudo_cache: "OrderedDict[tuple[str, str, str], str]" = OrderedDict()
 
 
 def extract_text_content(content) -> str:
@@ -82,19 +84,56 @@ def rebuild_content(original_content, pseudonymized_text: str):
     return pseudonymized_text
 
 
-def _pseudo_with_cache(text: str, session_id: str, enabled_types) -> str:
+# ponytail: in-memory index of file:* mapping tokens across all sessions.
+# Replaces per-turn Redis KEYS/SCAN. Hydrated lazily from Redis on first proxy() call.
+# Drift on session expiry is cosmetic (privacy badge count only) — accepted trade-off.
+_file_tokens: set[str] = set()
+_file_breakdown: dict[str, int] = {}
+_file_index_ready = False
+
+
+def _register_file_tokens(new_tokens):
+    for token in new_tokens:
+        if token in _file_tokens:
+            continue
+        _file_tokens.add(token)
+        prefix = token.rsplit("_", 1)[0]
+        _file_breakdown[prefix] = _file_breakdown.get(prefix, 0) + 1
+
+
+def _ensure_file_index():
+    global _file_index_ready
+    if _file_index_ready:
+        return
+    _file_index_ready = True
+    try:
+        from app.mapping_store import _redis_client
+        if _redis_client:
+            for rkey in _redis_client.scan_iter(match="garnet:mapping:file:*", count=200):
+                raw = _redis_client.get(rkey)
+                if raw:
+                    import json as _json
+                    _register_file_tokens(_json.loads(raw).keys())
+    except Exception:
+        pass
+
+
+async def _pseudo_with_cache(text: str, session_id: str, enabled_types) -> str:
     if not text:
         return text
-    h = hashlib.md5(text.encode("utf-8")).hexdigest()
-    session_cache = pseudo_cache.setdefault(session_id, {})
-    hit = session_cache.get(h)
+    types_key = ",".join(sorted(enabled_types or []))
+    key = (session_id, hashlib.md5(text.encode("utf-8")).hexdigest(), types_key)
+    hit = pseudo_cache.get(key)
     if hit is not None:
+        pseudo_cache.move_to_end(key)
         return hit
-    out = pseudonymize(text, session_id, store.get_store(), enabled_types=enabled_types)
-    session_cache[h] = out
+    out = await asyncio.to_thread(pseudonymize, text, session_id, store.get_store(), enabled_types=enabled_types)
+    pseudo_cache[key] = out
+    if len(pseudo_cache) > _PSEUDO_MAX:
+        pseudo_cache.popitem(last=False)
     return out
 
-
+#safe depseudonymization boundary — avoid splitting a token like "PERSON_abc123" across chunks
 def split_at_safe_boundary(buffer: str):
     TOKEN_NAMES = ['PERSON', 'ORGANIZATION', 'EMAIL_ADDRESS', 'IBAN_CODE', 'PHONE_NUMBER', 'ID', 'LOCATION']
     partial_pattern = r'(PERSON|ORGANIZATION|EMAIL_ADDRESS|IBAN_CODE|PHONE_NUMBER|ID|LOCATION)_[a-f0-9]{0,7}$'
@@ -126,66 +165,34 @@ def detect_internal_type(content: str) -> str:
     return "internal"
 
 
-async def expand_query(question: str, openai_url: str, auth_header: str) -> list[str]:
-    """
-    Calls gpt-4o-mini to generate 3 short search query variants.
-    Used to enrich embedding vector for better Chroma retrieval.
-    Returns [] on any failure — expansion never breaks the main request.
-    """
-    if not question or not auth_header:
-        print(f"[QUERY EXPAND] skipped: missing question or auth")
-        return []
+# dead code: x-garnet-queryexpand header no longer sent by UI
+# async def expand_query(question: str, openai_url: str, auth_header: str) -> list[str]:
+#     if not question or not auth_header:
+#         return []
+#     prompt = (
+#         "You are a search query generator for a private company knowledge base.\n"
+#         "Generate 3 short alternative search queries, one per line.\n\n"
+#         f"Question: {question}"
+#     )
+#     try:
+#         async with httpx.AsyncClient() as client:
+#             resp = await client.post(
+#                 f"{openai_url.rstrip('/')}/chat/completions",
+#                 headers={"Authorization": auth_header, "Content-Type": "application/json"},
+#                 json={"model": "gpt-4o-mini", "stream": False,
+#                       "messages": [{"role": "user", "content": prompt}],
+#                       "temperature": 0.3, "max_tokens": 150},
+#                 timeout=15.0
+#             )
+#         if resp.status_code != 200:
+#             return []
+#         text = orjson.loads(resp.content)["choices"][0]["message"]["content"].strip()
+#         variants = [v.strip("-•* \t\"'") for v in text.split("\n") if v.strip()]
+#         return [v for v in variants if v and len(v) > 3][:3]
+#     except Exception:
+#         return []
 
-    prompt = (
-        "You are a search query generator for a private company knowledge base.\n"
-        "The user asked the question below. Generate 3 short alternative search queries "
-        "that would help retrieve relevant documents from the knowledge base.\n"
-        "Do NOT answer the question. Do NOT add explanations.\n"
-        "Return ONLY 3 queries, one per line, no numbering, no bullets, no quotes.\n\n"
-        f"Question: {question}"
-    )
-
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{openai_url.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": auth_header,
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-4o-mini",
-                    "stream": False,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                    "max_tokens": 150
-                },
-                timeout=15.0
-            )
-
-        if resp.status_code != 200:
-            print(f"[QUERY EXPAND] LLM call failed status={resp.status_code} body={resp.text[:200]}")
-            return []
-
-        result = orjson.loads(resp.content)
-        text = result["choices"][0]["message"]["content"].strip()
-        variants = [v.strip("-•* \t\"'") for v in text.split("\n") if v.strip()]
-        variants = [v for v in variants if v and len(v) > 3][:3]
-
-        if not variants:
-            print(f"[QUERY EXPAND] LLM returned empty variants, raw={text[:200]}")
-            return []
-
-        return variants
-
-    except httpx.TimeoutException:
-        print(f"[QUERY EXPAND] timeout after 15s")
-        return []
-    except Exception as e:
-        print(f"[QUERY EXPAND] exception: {type(e).__name__}: {e}")
-        return []
-
-
+#
 async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, variants=None, t0=None):
     yield orjson.dumps({
         "type": "pseudonymized_prompt",
@@ -324,7 +331,7 @@ async def vault_scan(request: Request):
     log_vault_start(file_id, session_id, enabled_types)
 
     existing_keys_before = set(store.get_store().get(session_id, {}).keys())
-    pseudonymized = pseudonymize(text, session_id, store.get_store(), enabled_types=enabled_types)
+    pseudonymized = await asyncio.to_thread(pseudonymize, text, session_id, store.get_store(), enabled_types=enabled_types)
     new_keys = set(store.get_store().get(session_id, {}).keys()) - existing_keys_before
 
     report = {}
@@ -332,6 +339,7 @@ async def vault_scan(request: Request):
         prefix = token.rsplit("_", 1)[0]
         report[prefix] = report.get(prefix, 0) + 1
 
+    _register_file_tokens(new_keys)
     log_vault_done(file_id, len(new_keys), report)
 
     return ORJSONResponse({
@@ -432,7 +440,7 @@ async def proxy(request: Request, path: str):
         session_id = (
             body.get("chat_id")
             or (messages[0].get("id") if messages else None)
-            or (hashlib.md5(first_msg.encode()).hexdigest()[:12] if first_msg else "default")
+            or f"anon-{secrets.token_hex(6)}"
         )
         body.pop("chat_id", None)
 
@@ -524,10 +532,12 @@ async def proxy(request: Request, path: str):
                 if not text:
                     skipped_empty += 1
                     continue
+                if has_pseudo:
+                    continue
                 if any(marker in text for marker in SYSTEM_PROMPT_MARKERS):
                     skipped_system += 1
                     continue
-                out = _pseudo_with_cache(text, session_id, enabled_types)
+                out = await _pseudo_with_cache(text, session_id, enabled_types)
                 if out != text:
                     msg["content"] = rebuild_content(content, out)
                     hist_pseudo_count += 1
@@ -590,18 +600,18 @@ async def proxy(request: Request, path: str):
                             for i in range(0, len(content_text), chunk_size)
                         ]
                         log_large_file(len(content_text), len(chunks))
-                        pseudo_chunks = [
-                            pseudonymize(c, session_id, store.get_store(), enabled_types=enabled_types)
+                        pseudo_chunks = list(await asyncio.gather(*[
+                            asyncio.to_thread(pseudonymize, c, session_id, store.get_store(), enabled_types=enabled_types)
                             for c in chunks
-                        ]
+                        ]))
                         pseudo = "".join(pseudo_chunks)
                         msg["content"] = rebuild_content(msg["content"], pseudo)
                         log_out_file_chunked(len(chunks), len(pseudo))
                         continue
 
                     try:
-                        pseudonymized_text = pseudonymize(
-                            content_text, session_id, store.get_store(), enabled_types=enabled_types
+                        pseudonymized_text = await asyncio.to_thread(
+                            pseudonymize, content_text, session_id, store.get_store(), enabled_types=enabled_types
                         )
                         msg["content"] = rebuild_content(content, pseudonymized_text)
                         log_out_file(pseudonymized_text)
@@ -612,44 +622,16 @@ async def proxy(request: Request, path: str):
                         continue
 
                 if file_msgs_scanned > 0:
-                    store.get_store().flush(session_id)
+                    await store.get_store().flush(session_id)
                     log_file_scan(file_msgs_scanned)
 
                 new_keys = set(store.get_store().get(session_id, {}).keys()) - existing_keys_before
                 file_entity_count = len(new_keys)
 
+                _ensure_file_index()
                 if file_entity_count == 0:
-                    seen_tokens = set()
-                    for key, mapping in store._store.items():
-                        if key.startswith("file:"):
-                            seen_tokens.update(mapping.keys())
-                    if not seen_tokens:
-                        try:
-                            from app.mapping_store import _redis_client
-                            if _redis_client:
-                                for rkey in _redis_client.keys("garnet:mapping:file:*"):
-                                    raw = _redis_client.get(rkey)
-                                    if raw:
-                                        import json
-                                        mapping = json.loads(raw)
-                                        seen_tokens.update(mapping.keys())
-                        except Exception:
-                            pass
-                    file_entity_count = len(seen_tokens)
-
-                garnet_breakdown = {}
-                try:
-                    from app.mapping_store import _redis_client
-                    if _redis_client:
-                        for rkey in _redis_client.keys("garnet:mapping:file:*"):
-                            raw = _redis_client.get(rkey)
-                            if raw:
-                                import json as _json
-                                for token in _json.loads(raw).keys():
-                                    prefix = token.rsplit("_", 1)[0]
-                                    garnet_breakdown[prefix] = garnet_breakdown.get(prefix, 0) + 1
-                except Exception:
-                    pass
+                    file_entity_count = len(_file_tokens)
+                garnet_breakdown = dict(_file_breakdown)
 
                 if file_entity_count > 0:
                     log_file_pii(file_entity_count, garnet_breakdown)
@@ -658,8 +640,8 @@ async def proxy(request: Request, path: str):
                         log_file_pii_duplicate()
 
                 try:
-                    pseudonymized_text = pseudonymize(
-                        original_content_text, session_id, store.get_store(), enabled_types=enabled_types
+                    pseudonymized_text = await asyncio.to_thread(
+                        pseudonymize, original_content_text, session_id, store.get_store(), enabled_types=enabled_types
                     )
                     last_message["content"] = rebuild_content(original_content, pseudonymized_text)
                     pseudonymized_user_message = pseudonymized_text
@@ -671,34 +653,15 @@ async def proxy(request: Request, path: str):
                         log_pseudo_diff(len(original_content_text), len(pseudonymized_user_message), _n_replaced, _types)
                     else:
                         log_no_pii()
-                    store.get_store().flush(session_id)
+                    await store.get_store().flush(session_id)
                 except Exception as e:
                     log_error(f"user pseudonymization failed: {e} — forwarding raw")
                     pseudonymized_user_message = original_content_text
                     last_message["content"] = original_content
 
-                # Query expansion — enrich the question for better RAG retrieval
-                # NOTE: variants from gpt-4o-mini are NOT pseudonymized; they reach
-                # the embedding model in OWU only, not the main LLM (known minor leak vector).
-                if query_expand and has_rag_context:
-                    print(f"[QUERY EXPAND] starting → question='{original_content_text[:100]}'")
-                    auth_header = request.headers.get("authorization", "")
-                    _expand_url = (openai_url if is_openai else OPENAI_API_URL)
-                    variants = await expand_query(original_content_text, _expand_url, auth_header)
-
-                    if variants:
-                        print(f"[QUERY EXPAND] {len(variants)} variants generated:")
-                        for i, v in enumerate(variants, 1):
-                            print(f"  [{i}] {v}")
-
-                        # Concatenate: pseudonymized original + variants → richer embed vector
-                        enriched = pseudonymized_user_message + "\n" + "\n".join(variants)
-                        last_message["content"] = rebuild_content(original_content, enriched)
-                        print(f"[QUERY EXPAND] enriched query injected → {len(pseudonymized_user_message)} → {len(enriched)} chars")
-                    else:
-                        print(f"[QUERY EXPAND] no variants generated → using original query only")
-                elif query_expand and not has_rag_context:
-                    print(f"[QUERY EXPAND] skipped — no RAG context in this message")
+                # dead code: query expansion removed (header never sent by UI)
+                # if query_expand and has_rag_context:
+                #     variants = await expand_query(original_content_text, _expand_url, auth_header)
 
         if body:
             _msgs = body.get("messages", [])

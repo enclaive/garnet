@@ -1,6 +1,7 @@
 import re
 import json
 import hashlib
+from functools import lru_cache
 from langdetect import detect
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
@@ -32,6 +33,7 @@ def _get_gliner():
         _gliner_instance = GLiNER.from_pretrained("urchade/gliner_multi_pii-v1")
     return _gliner_instance
 
+@lru_cache(maxsize=4)
 def build_analyzer(language: str) -> AnalyzerEngine:
     if language == "de":
         provider = NlpEngineProvider(nlp_configuration={

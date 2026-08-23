@@ -5,14 +5,17 @@ import json
 
 try:
     import redis
+    import redis.asyncio as aioredis
     REDIS_URL = os.getenv("REDIS_URL")
-    _redis_client = redis.from_url(REDIS_URL) if REDIS_URL else None
+    _redis_client = redis.from_url(REDIS_URL) if REDIS_URL else None      # sync: cold get/setitem
+    _redis_async = aioredis.from_url(REDIS_URL) if REDIS_URL else None    # async: flush (hot path)
     if _redis_client:
         _redis_client.ping()
         print("[MAPPING STORE] Redis connected")
 except Exception as e:
     print(f"[MAPPING STORE] Redis unavailable, using memory only: {e}")
     _redis_client = None
+    _redis_async = None
 
 
 class MappingStore:
@@ -85,10 +88,10 @@ class _RedisAwareStore:
             except Exception as e:
                 print(f"[MAPPING STORE] Redis write error: {e}")
 
-    def flush(self, session_id: str):
-        if _redis_client and session_id in self._memory:
+    async def flush(self, session_id: str):
+        if _redis_async and session_id in self._memory:
             try:
-                _redis_client.setex(
+                await _redis_async.setex(
                     f"garnet:mapping:{session_id}",
                     self._ttl,
                     json.dumps(self._memory[session_id])
@@ -110,5 +113,5 @@ class _TrackedDict(dict):
         super().__setitem__(key, value)
         self._store._memory[self._session_id] = dict(self)
 
-    def flush(self):
-        self._store.flush(self._session_id)
+    async def flush(self):
+        await self._store.flush(self._session_id)
