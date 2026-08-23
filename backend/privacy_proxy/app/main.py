@@ -53,6 +53,7 @@ class ORJSONResponse(Response):
 
 
 app = FastAPI(default_response_class=ORJSONResponse)
+_http_client = httpx.AsyncClient(timeout=120.0)
 store = MappingStore(ttl=3600)
 _PSEUDO_MAX = int(os.getenv("PSEUDO_CACHE_MAX", "5000"))
 pseudo_cache: "OrderedDict[tuple[str, str, str], str]" = OrderedDict()
@@ -373,8 +374,7 @@ async def analyze(request: Request):
 
 @app.get("/openai/api/tags")
 async def ollama_tags():
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"{OLLAMA_URL}/api/tags", timeout=30.0)
+    response = await _http_client.get(f"{OLLAMA_URL}/api/tags", timeout=30.0)
     return Response(
         content=response.content,
         status_code=response.status_code,
@@ -683,14 +683,13 @@ async def proxy(request: Request, path: str):
         forward_headers = {}
 
     if is_chat and body and not is_openai:
-        async with httpx.AsyncClient() as client:
-            response = await client.request(
-                method=request.method,
-                url=url,
-                json=body,
-                headers=forward_headers,
-                timeout=120.0
-            )
+        response = await _http_client.request(
+            method=request.method,
+            url=url,
+            json=body,
+            headers=forward_headers,
+            timeout=120.0
+        )
         try:
             result = orjson.loads(response.content)
             content = result.get("message", {}).get("content", "")
@@ -719,14 +718,13 @@ async def proxy(request: Request, path: str):
 
     if is_chat and body:
         async def response_stream():
-            async with httpx.AsyncClient() as client:
-                async with client.stream(
-                    method=request.method,
-                    url=url,
-                    json=body,
-                    headers=forward_headers,
-                    timeout=120.0
-                ) as resp:
+            async with _http_client.stream(
+                method=request.method,
+                url=url,
+                json=body,
+                headers=forward_headers,
+                timeout=120.0
+            ) as resp:
                     if resp.status_code != 200:
                         err_body = await resp.aread()
                         log_error(f"status={resp.status_code} provider={url} body={err_body[:500]}")
@@ -749,24 +747,23 @@ async def proxy(request: Request, path: str):
         log_mapping(session_id, len(session_mapping))
 
         if not body.get("stream", True):
-            async with httpx.AsyncClient(timeout=60.0) as _client:
-                _resp = await _client.request(
-                    method=request.method,
-                    url=url,
-                    json=body,
-                    headers=forward_headers,
-                    timeout=60.0,
-                )
-                result = _resp.json()
-                try:
-                    content = result["choices"][0]["message"]["content"] or ""
-                    for token in sorted(session_mapping.keys(), key=len, reverse=True):
-                        content = content.replace(token, session_mapping[token])
-                    result["choices"][0]["message"]["content"] = content
-                except (KeyError, IndexError, TypeError):
-                    pass
-                log_to_user(len(session_mapping), 0.0, time.perf_counter() - t0)
-                return ORJSONResponse(content=result)
+            _resp = await _http_client.request(
+                method=request.method,
+                url=url,
+                json=body,
+                headers=forward_headers,
+                timeout=60.0,
+            )
+            result = _resp.json()
+            try:
+                content = result["choices"][0]["message"]["content"] or ""
+                for token in sorted(session_mapping.keys(), key=len, reverse=True):
+                    content = content.replace(token, session_mapping[token])
+                result["choices"][0]["message"]["content"] = content
+            except (KeyError, IndexError, TypeError):
+                pass
+            log_to_user(len(session_mapping), 0.0, time.perf_counter() - t0)
+            return ORJSONResponse(content=result)
 
         async def convert_responses_stream(source):
             # ponytail: buffer partial SSE lines across HTTP chunks — httpx
@@ -826,22 +823,21 @@ async def proxy(request: Request, path: str):
         body.pop("response_format", None)
         print(f"[IMAGE GEN] stripped response_format → forwarding to {url}")
 
-    async with httpx.AsyncClient() as client:
-        if body:
-            response = await client.request(
-                method=request.method,
-                url=url,
-                json=body,
-                headers=forward_headers,
-                timeout=120.0
-            )
-        else:
-            response = await client.request(
-                method=request.method,
-                url=url,
-                headers=forward_headers,
-                timeout=120.0
-            )
+    if body:
+        response = await _http_client.request(
+            method=request.method,
+            url=url,
+            json=body,
+            headers=forward_headers,
+            timeout=120.0
+        )
+    else:
+        response = await _http_client.request(
+            method=request.method,
+            url=url,
+            headers=forward_headers,
+            timeout=120.0
+        )
 
     if response.status_code != 200:
         log_error_passthrough(response.status_code, url, response.text)
