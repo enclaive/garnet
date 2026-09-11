@@ -22,6 +22,7 @@ os.environ.setdefault("REDIS_URL", "")
 from app.pseudonymizer import pseudonymize
 
 _candidates = [
+    pathlib.Path(__file__).parent / "fixtures" / "vendor_defect_cases.jsonl",
     pathlib.Path(__file__).parent.parent.parent.parent / ".claude/demo1/vendor_defect_cases.jsonl",
     pathlib.Path("/tmp/vendor_defect_cases.jsonl"),
     pathlib.Path("/app/.claude/demo1/vendor_defect_cases.jsonl"),
