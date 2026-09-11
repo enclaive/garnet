@@ -149,6 +149,33 @@ def test_P1B_BP_061_neutral_document_unchanged():
         )
 
 
+def test_T4D_B1_hyphenated_unicode_person():
+    """B1 (T4D 2026-09): 'Anna Müller-Öztürk' must be one PERSON marker; no name component leaks."""
+    cases = {c["test_case_id"]: c for c in load_cases()}
+    c = cases["T4D-B1-V1"]
+    r = pseudo_body(c["input"], "b1-regression")
+    name = r.get("name", "")
+    for token in ("Anna", "Müller", "Öztürk"):
+        assert token not in name, f"'{token}' leaked in name: {name}"
+    assert name.startswith("PERSON_"), f"name should be a single PERSON marker: {name}"
+
+
+def test_T4D_B1_variants_multipart_unicode_hyphenated():
+    """General fix must cover multi-part, Unicode, and hyphenated / apostrophe surnames."""
+    variants = [
+        ("Jean-François Müller", ["Jean", "François", "Müller"]),
+        ("José García-López",    ["José", "García", "López"]),
+        ("Anne O'Brien",         ["Anne", "Brien"]),
+        ("Ahmed Al-Rashid",      ["Ahmed", "Rashid"]),
+    ]
+    for surface, components in variants:
+        r = pseudo_body({"name": surface}, f"variant-{surface[:5]}")
+        name = r.get("name", "")
+        for token in components:
+            assert token not in name, f"'{token}' leaked from '{surface}': {name}"
+        assert name.startswith("PERSON_"), f"'{surface}' not a single PERSON marker: {name}"
+
+
 # ── standalone report ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -165,6 +192,8 @@ if __name__ == "__main__":
         ("P1B-BP-096-V0", test_P1B_BP_096_json_structure_intact),
         ("P1B-BP-030-V6", test_P1B_BP_030_email_uuid_not_mutated),
         ("P1B-BP-061-V5", test_P1B_BP_061_neutral_document_unchanged),
+        ("T4D-B1-V1",     test_T4D_B1_hyphenated_unicode_person),
+        ("T4D-B1-VARIANTS", test_T4D_B1_variants_multipart_unicode_hyphenated),
     ]
 
     print("\n=== T4D REPRO HARNESS ===\n")
@@ -177,6 +206,7 @@ if __name__ == "__main__":
             print(f"  FAIL  {case_id}: {e}")
             failed += 1
 
-    print(f"\nResult: {passed}/7 pass, {failed}/7 fail")
+    total = len(checks)
+    print(f"\nResult: {passed}/{total} pass, {failed}/{total} fail")
     print("(All should FAIL on the frozen build — that confirms reproduction.)\n")
     sys.exit(0 if failed > 0 else 1)  # exit 0 if bugs reproduced, 1 if nothing to fix

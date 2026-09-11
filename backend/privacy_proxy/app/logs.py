@@ -1,6 +1,10 @@
+import os
 from datetime import datetime, timezone
 
 SEP = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# ponytail: raw prompt logging off by default in prod; opt-in for local diagnostics
+_LOG_RAW_INPUT = os.getenv("LOG_RAW_INPUT", "0") == "1"
 
 def _p(msg): print(f"{datetime.now(timezone.utc).strftime('%H:%M:%S.%f')[:-3]} {msg}", flush=True)
 
@@ -20,9 +24,14 @@ def log_entity_filter(enabled_types):
 # ── user message ─────────────────────────────────────────────────────────────
 
 def log_in_user(text):
+    if not _LOG_RAW_INPUT:
+        _p(f"[IN  USER] <raw input suppressed; set LOG_RAW_INPUT=1 to enable> ({len(text)} chars)")
+        return
     _p(f"[IN  USER] {text[:200]}")
 
 def log_in_user_full(text):
+    if not _LOG_RAW_INPUT:
+        return
     _p(f"[IN  USER+] {text}")
 
 def log_out_user(text):
@@ -41,6 +50,9 @@ def log_pseudo_diff(original_len, pseudo_len, n_replaced, types):
 # ── file / RAG / web content ──────────────────────────────────────────────────
 
 def log_in_file(role, length, text):
+    if not _LOG_RAW_INPUT:
+        _p(f"[IN  FILE] role={role} len={length} | <raw content suppressed>")
+        return
     _p(f"[IN  FILE] role={role} len={length} | {text[:200]}")
 
 def log_out_file(text):
