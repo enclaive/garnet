@@ -1,3 +1,4 @@
+<!-- screening-speed feature -->
 <script lang="ts">
   import { onMount } from 'svelte';
 
