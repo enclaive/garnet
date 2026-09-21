@@ -1978,9 +1978,7 @@
 						return { token, entity };
 					});
 
-					const requested = parseInt(localStorage.getItem('garnet_screening_speed') || '2000');
-					const minSafe = Math.max(500, Math.min(3000, marked.length * 5));
-					const screeningSpeed = requested >= minSafe ? requested : 0;
+					const screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '2000');
 
 					const renderFrame = (i) => {
 						const labeledEntities = new Set();
@@ -2012,21 +2010,17 @@
 						}).join('');
 					};
 
-					if (screeningSpeed === 0) {
-						renderFrame(marked.length);
-					} else {
-						const t0 = Date.now();
-						let lastI = -1;
-						while (true) {
-							const elapsed = Date.now() - t0;
-							const i = Math.min(marked.length, Math.floor((elapsed / screeningSpeed) * marked.length));
-							if (i !== lastI) {
-								renderFrame(i);
-								lastI = i;
-							}
-							if (elapsed >= screeningSpeed) { renderFrame(marked.length); break; }
-							await new Promise(r => requestAnimationFrame(r));
+					const t0 = Date.now();
+					let lastI = -1;
+					while (true) {
+						const elapsed = Date.now() - t0;
+						const i = Math.min(marked.length, Math.floor((elapsed / screeningSpeed) * marked.length));
+						if (i !== lastI) {
+							renderFrame(i);
+							lastI = i;
 						}
+						if (elapsed >= screeningSpeed) { renderFrame(marked.length); break; }
+						await new Promise(r => requestAnimationFrame(r));
 					}
 					// hold highlighted state for 2s so user can hover for tooltips
 					await new Promise(r => setTimeout(r, 2000));

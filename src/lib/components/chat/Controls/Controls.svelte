@@ -24,8 +24,6 @@
 
 	let entityToggles: Record<string, boolean> = {};
 	let screeningSpeed: number = 0;
-	let liveWordCount: number = 0;
-	$: minSafe = Math.max(500, Math.min(3000, liveWordCount * 5));
 
 	onMount(() => {
 		const saved = localStorage.getItem('garnet_entity_toggles');
@@ -35,13 +33,7 @@
 			ENTITY_TYPES.forEach(e => (entityToggles[e.key] = true));
 			localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
 		}
-		screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '0');
-		const poll = setInterval(() => {
-			const ta = document.getElementById('chat-input') as HTMLTextAreaElement | null;
-			const text = ta?.value ?? '';
-			liveWordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
-		}, 300);
-		return () => clearInterval(poll);
+		screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '2000');
 	});
 
 	function onEntityChange(key: string, value: string) {
@@ -179,37 +171,6 @@
 					</div>
 				</Collapsible>
 
-				<Collapsible
-					title={$i18n.t('Screening Speed')}
-					bind:open={showGarnet}
-					buttonClassName="w-full"
-				>
-					<div class="text-sm mt-1.5" slot="content">
-						<div class="py-0.5 flex w-full justify-between items-center">
-							<div class="self-center text-xs text-gray-500">
-								Min safe: {minSafe} ms
-								{#if liveWordCount > 0}
-									<span class="opacity-60">({liveWordCount} words)</span>
-								{/if}
-							</div>
-							<input
-								type="number"
-								min="0"
-								step="500"
-								placeholder={String(minSafe)}
-								bind:value={screeningSpeed}
-								on:change={onSpeedChange}
-								class="p-1 px-2 text-xs w-24 rounded-sm
-									   dark:bg-gray-850 dark:text-gray-200 dark:border-gray-700
-									   bg-white text-gray-700 border border-gray-200
-									   focus:outline-none"
-							/>
-						</div>
-						<div class="text-xs text-gray-400 mt-1">
-							Below min = instant reveal. Above = exact animation.
-						</div>
-					</div>
-				</Collapsible>
 			{/if}
 
 			<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
@@ -243,6 +204,20 @@
 								</div>
 							</div>
 						{/each}
+						<div class="py-0.5 flex w-full justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+							<div class="self-center text-xs">Screening Speed (ms)</div>
+							<input
+								type="number"
+								min="0"
+								step="500"
+								bind:value={screeningSpeed}
+								on:change={onSpeedChange}
+								class="p-1 px-2 text-xs w-24 rounded-sm
+									   dark:bg-gray-850 dark:text-gray-200 dark:border-gray-700
+									   bg-white text-gray-700 border border-gray-200
+									   focus:outline-none"
+							/>
+						</div>
 					</div>
 				</div>
 			</Collapsible>
