@@ -25,13 +25,15 @@ export const analyzeMessageEntities = async (
 			.filter(([_, on]) => on)
 			.map(([k]) => k)
 			.join(',');
+		const screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '0');
 		const res = await fetch(`/openai/privacy/analyze`, {
 			method: 'POST',
 			headers: {
 				Accept: 'application/json',
 				'Content-Type': 'application/json',
 				authorization: `Bearer ${token}`,
-				'x-garnet-entities': enabledEntities
+				'x-garnet-entities': enabledEntities,
+				...(screeningSpeed > 0 ? { 'x-garnet-screening-speed': String(screeningSpeed) } : {}),
 			},
 			body: JSON.stringify({
 				text: messageText

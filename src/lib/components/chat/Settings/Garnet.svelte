@@ -11,6 +11,7 @@
   ];
 
   let entityToggles: Record<string, boolean> = {};
+  let screeningSpeed: number = 0;
 
   onMount(() => {
     const saved = localStorage.getItem('garnet_entity_toggles');
@@ -20,12 +21,17 @@
       ENTITY_TYPES.forEach(e => (entityToggles[e.key] = true));
       localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
     }
+    screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '0');
   });
 
   function onChange(key: string, value: string) {
     entityToggles[key] = value === 'on';
     localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
     entityToggles = { ...entityToggles };
+  }
+
+  function onSpeedChange() {
+    localStorage.setItem('garnet_screening_speed', String(screeningSpeed));
   }
 </script>
 
@@ -62,5 +68,18 @@
         </div>
       </div>
     {/each}
+  </div>
+
+  <div class="mt-6">
+    <h3 class="text-sm font-semibold text-gray-200">Screening Speed</h3>
+    <p class="text-xs text-gray-400 mt-1">Total time (ms) to screen the prompt. 0 = unlimited.</p>
+    <input
+      type="number"
+      min="0"
+      step="500"
+      bind:value={screeningSpeed}
+      on:change={onSpeedChange}
+      class="mt-2 bg-gray-700 text-white text-sm rounded px-3 py-1 border border-gray-600 focus:outline-none focus:border-blue-500 w-32"
+    />
   </div>
 </div>
