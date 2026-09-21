@@ -1,4 +1,3 @@
-# ci: trigger build — screening-speed feature
 import asyncio
 import os
 import re
@@ -119,23 +118,9 @@ def _ensure_file_index():
         pass
 
 
-async def _pseudo_with_cache(text: str, session_id: str, enabled_types, screening_speed_ms: int = None) -> str:
+async def _pseudo_with_cache(text: str, session_id: str, enabled_types) -> str:
     if not text:
         return text
-    if screening_speed_ms and screening_speed_ms > 0:
-        # ponytail: word-budget mode — each word gets screening_speed_ms/word_count ms; bounds total screening time
-        parts = text.split(' ')
-        word_count = max(sum(1 for w in parts if w.strip()), 1)
-        per_word_s = screening_speed_ms / word_count / 1000
-        result = []
-        for part in parts:
-            t_w = asyncio.get_event_loop().time()
-            pseudo = await asyncio.to_thread(pseudonymize, part, session_id, store.get_store(), enabled_types=enabled_types) if part.strip() else part
-            result.append(pseudo)
-            slack = per_word_s - (asyncio.get_event_loop().time() - t_w)
-            if slack > 0:
-                await asyncio.sleep(slack)
-        return ' '.join(result)
     types_key = ",".join(sorted(enabled_types or []))
     key = (session_id, hashlib.md5(text.encode("utf-8")).hexdigest(), types_key)
     hit = pseudo_cache.get(key)
@@ -529,7 +514,6 @@ async def proxy(request: Request, path: str):
         enabled_types = [e.strip() for e in enabled_header.split(",") if e.strip()] if enabled_header else None
         if enabled_types:
             log_entity_filter(enabled_types)
-        screening_speed_ms = int(request.headers.get("x-garnet-screening-speed", 0) or 0) or None
 
         # NOTE: excludes messages[-1]; last message handled by block below.
         if messages and privacy_enabled:
@@ -552,7 +536,7 @@ async def proxy(request: Request, path: str):
                 if any(marker in text for marker in SYSTEM_PROMPT_MARKERS):
                     skipped_system += 1
                     continue
-                out = await _pseudo_with_cache(text, session_id, enabled_types, screening_speed_ms)
+                out = await _pseudo_with_cache(text, session_id, enabled_types)
                 if out != text:
                     msg["content"] = rebuild_content(content, out)
                     hist_pseudo_count += 1
@@ -655,7 +639,9 @@ async def proxy(request: Request, path: str):
                         log_file_pii_duplicate()
 
                 try:
-                    pseudonymized_text = await _pseudo_with_cache(original_content_text, session_id, enabled_types, screening_speed_ms)
+                    pseudonymized_text = await asyncio.to_thread(
+                        pseudonymize, original_content_text, session_id, store.get_store(), enabled_types=enabled_types
+                    )
                     last_message["content"] = rebuild_content(original_content, pseudonymized_text)
                     pseudonymized_user_message = pseudonymized_text
                     if pseudonymized_user_message != original_content_text:

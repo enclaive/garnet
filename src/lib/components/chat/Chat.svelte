@@ -1978,7 +1978,8 @@
 						return { token, entity };
 					});
 
-					const delay = Math.max(1, Math.floor(2000 / marked.length));
+					const screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '2000');
+					const delay = Math.max(1, Math.floor(screeningSpeed / marked.length));
 
 					for (let i = 0; i <= marked.length; i++) {
 						const labeledEntities = new Set();
