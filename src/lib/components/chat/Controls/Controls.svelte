@@ -23,6 +23,7 @@
 	];
 
 	let entityToggles: Record<string, boolean> = {};
+	let screeningSpeed: number = 0;
 
 	onMount(() => {
 		const saved = localStorage.getItem('garnet_entity_toggles');
@@ -32,12 +33,17 @@
 			ENTITY_TYPES.forEach(e => (entityToggles[e.key] = true));
 			localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
 		}
+		screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '0');
 	});
 
 	function onEntityChange(key: string, value: string) {
 		entityToggles[key] = value === 'on';
 		localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
 		entityToggles = { ...entityToggles };
+	}
+
+	function onSpeedChange() {
+		localStorage.setItem('garnet_screening_speed', String(screeningSpeed));
 	}
 	export let models = [];
 	export let chatFiles = [];
@@ -161,6 +167,20 @@
 					<div class="text-sm mt-1.5" slot="content">
 						<div>
 							<AdvancedParams admin={$user?.role === 'admin'} custom={true} bind:params />
+						</div>
+						<div class="py-0.5 flex w-full justify-between mt-1">
+							<div class="self-center text-xs">Screening Speed (ms)</div>
+							<input
+								type="number"
+								min="0"
+								step="500"
+								bind:value={screeningSpeed}
+								on:change={onSpeedChange}
+								class="p-1 px-2 text-xs w-24 rounded-sm
+									   dark:bg-gray-850 dark:text-gray-200 dark:border-gray-700
+									   bg-white text-gray-700 border border-gray-200
+									   focus:outline-none"
+							/>
 						</div>
 					</div>
 				</Collapsible>
