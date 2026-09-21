@@ -11,6 +11,7 @@ on:
       - garnet-privacy-proxy
       - demo1
       - demo1upgrade
+      - feat/**
   pull_request:
     branches:
       - garnet-privacy-proxy
