@@ -205,7 +205,7 @@
 							</div>
 						{/each}
 						<div class="py-0.5 flex w-full justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-							<div class="self-center text-xs">Screening Speed (ms)</div>
+							<div class="self-center text-xs">Screening Speed</div>
 							<input
 								type="number"
 								min="0"
