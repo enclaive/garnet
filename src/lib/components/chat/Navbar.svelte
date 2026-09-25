@@ -65,6 +65,7 @@
 	let showShareChatModal = false;
 	let showDownloadChatModal = false;
 
+	// privacy_enforce capability: locks privacy toggle ON for models flagged in the editor
 	$: activeModel = $models.find((m) => m.id === selectedModels[0]);
 	$: forcedPrivacy =
 		activeModel?.owned_by === 'ollama' ||
