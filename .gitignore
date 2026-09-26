@@ -314,3 +314,7 @@ cypress/screenshots
 cosign.key
 cosign.key
 .claude/
+
+# local scratch
+aws-availability.sh
+output.csv
