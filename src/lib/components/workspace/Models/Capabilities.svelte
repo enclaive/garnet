@@ -31,6 +31,12 @@
 			label: $i18n.t('Code Interpreter'),
 			description: $i18n.t('Model can execute code and perform calculations')
 		},
+		terminal: {
+			label: $i18n.t('Terminal'),
+			description: $i18n.t(
+				'Model can access Open Terminal for command execution and file management'
+			)
+		},
 		usage: {
 			label: $i18n.t('Usage'),
 			description: $i18n.t(
@@ -50,6 +56,12 @@
 			description: $i18n.t(
 				'Automatically inject system tools in native function calling mode (e.g., timestamps, memory, chat history, notes, etc.)'
 			)
+		},
+		privacy_enforce: {
+			label: $i18n.t('Privacy Mode (enforced)'),
+			description: $i18n.t(
+				'Force Garnet privacy proxy ON for this model. Users cannot disable the toggle.'
+			)
 		}
 	};
 
@@ -60,10 +72,12 @@
 		web_search?: boolean;
 		image_generation?: boolean;
 		code_interpreter?: boolean;
+		terminal?: boolean;
 		usage?: boolean;
 		citations?: boolean;
 		status_updates?: boolean;
 		builtin_tools?: boolean;
+		privacy_enforce?: boolean;
 	} = {};
 
 	// Hide file_context when file_upload is disabled

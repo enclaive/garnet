@@ -28,8 +28,7 @@ jobs:
             runner: ubuntu-24.04-arm
 
     steps:
-      # GitHub Packages requires the entire repository name to be in lowercase
-      # although the repository owner has a lowercase username, this prevents some people from running actions after forking
+    
       - name: Set repository and image name to lowercase
         run: |
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >>${GITHUB_ENV}

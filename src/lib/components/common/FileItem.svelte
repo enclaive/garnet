@@ -38,6 +38,22 @@
 	import Folder from '../icons/Folder.svelte';
 	let showModal = false;
 
+	let showVaultPreview = false;
+
+	$: garnetCount = (item?.file?.data?.garnet_entity_count || 0) as number;
+	$: garnetBreakdown = (item?.file?.data?.garnet_breakdown || {}) as Record<string, number>;
+	$: hasVaultData = garnetCount > 0;
+	$: if (hasVaultData) console.warn('[GARNET] vault data:', garnetCount, garnetBreakdown);
+
+	const ENTITY_COLORS: Record<string, string> = {
+		PERSON: 'bg-blue-400',
+		EMAIL_ADDRESS: 'bg-red-400',
+		ORGANIZATION: 'bg-green-400',
+		IBAN_CODE: 'bg-yellow-400',
+		PHONE_NUMBER: 'bg-purple-400',
+		ID: 'bg-orange-400',
+	};
+
 	const decodeString = (str: string) => {
 		try {
 			return decodeURIComponent(str);
@@ -52,7 +68,7 @@
 {/if}
 
 <button
-	class="relative group p-1.5 {className} flex items-center gap-1 {colorClassName} {small
+	class="relative group p-1.5 {className} flex flex-col gap-1 {colorClassName} {small
 		? 'rounded-xl p-2'
 		: 'rounded-2xl'} text-left"
 	type="button"
@@ -174,6 +190,39 @@
 				</div>
 			</div>
 		</Tooltip>
+	{/if}
+
+	{#if hasVaultData}
+		<div class="w-full px-2.5 pb-1.5" on:click|stopPropagation>
+			<div class="flex items-center gap-1 text-xs text-green-400 font-medium mb-1">
+				<span>🛡</span>
+				<span>{garnetCount} sensitive items vaulted</span>
+				<button
+					class="ml-auto text-gray-400 hover:text-white text-xs underline"
+					on:click|stopPropagation={() => showVaultPreview = !showVaultPreview}
+				>
+					{showVaultPreview ? 'hide' : '👁 preview'}
+				</button>
+			</div>
+
+			{#if showVaultPreview}
+				<div class="flex flex-col gap-0.5 mt-1">
+					{#each Object.entries(garnetBreakdown) as [type, count]}
+						{@const maxCount = Math.max(...Object.values(garnetBreakdown))}
+						<div class="flex items-center gap-1">
+							<span class="text-gray-400 text-xs w-28 truncate">{type}</span>
+							<div class="flex-1 bg-gray-700 rounded h-1.5">
+								<div
+									class="h-1.5 rounded {ENTITY_COLORS[type] ?? 'bg-gray-400'}"
+									style="width: {(count / maxCount) * 100}%"
+								></div>
+							</div>
+							<span class="text-gray-300 text-xs w-4 text-right">{count}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
 	{/if}
 
 	{#if dismissible}

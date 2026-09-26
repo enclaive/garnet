@@ -70,6 +70,7 @@ from open_webui.utils.files import (
 from open_webui.models.users import UserModel
 from open_webui.models.functions import Functions
 from open_webui.models.models import Models
+from open_webui.models.config import Config
 
 from open_webui.retrieval.utils import get_sources_from_items
 
@@ -898,7 +899,7 @@ def get_source_context(sources: list, source_ids: dict = None, include_content: 
     return context_string
 
 
-def apply_source_context_to_messages(
+async def apply_source_context_to_messages(
     request: Request,
     messages: list,
     sources: list,
@@ -924,19 +925,19 @@ def apply_source_context_to_messages(
 
     if RAG_SYSTEM_CONTEXT:
         return add_or_update_system_message(
-            rag_template(request.app.state.config.RAG_TEMPLATE, context, user_message),
+            await rag_template(await Config.get('rag.template'), context, user_message),
             messages,
             append=True,
         )
     else:
         return add_or_update_user_message(
-            rag_template(request.app.state.config.RAG_TEMPLATE, context, user_message),
+            await rag_template(await Config.get('rag.template'), context, user_message),
             messages,
             append=False,
         )
 
 
-def process_tool_result(
+async def process_tool_result(
     request,
     tool_function_name,
     tool_result,
@@ -1075,7 +1076,7 @@ def process_tool_result(
                                 pass
                         tool_response.append(text)
                     elif item.get('type') in ['image', 'audio']:
-                        file_url = get_file_url_from_base64(
+                        file_url = await get_file_url_from_base64(
                             request,
                             f'data:{item.get("mimeType")};base64,{item.get("data", item.get("blob", ""))}',
                             {
@@ -1225,8 +1226,8 @@ async def chat_completion_tools_handler(
 
     task_model_id = get_task_model_id(
         body['model'],
-        request.app.state.config.TASK_MODEL,
-        request.app.state.config.TASK_MODEL_EXTERNAL,
+        await Config.get('task.model.default'),
+        await Config.get('task.model.external'),
         models,
     )
 
@@ -1236,8 +1237,8 @@ async def chat_completion_tools_handler(
     specs = [tool['spec'] for tool in tools.values()]
     tools_specs = json.dumps(specs, ensure_ascii=False)
 
-    if request.app.state.config.TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE != '':
-        template = request.app.state.config.TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE
+    if await Config.get('task.tools.prompt_template') != '':
+        template = await Config.get('task.tools.prompt_template')
     else:
         template = DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE
 
@@ -1304,7 +1305,7 @@ async def chat_completion_tools_handler(
                 except Exception as e:
                     tool_result = str(e)
 
-                tool_result, tool_result_files, tool_result_embeds = process_tool_result(
+                tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
                     request,
                     tool_function_name,
                     tool_result,
@@ -1602,7 +1603,7 @@ def get_images_from_messages(message_list):
     return images
 
 
-def get_image_urls(delta_images, request, metadata, user) -> list[str]:
+async def get_image_urls(delta_images, request, metadata, user) -> list[str]:
     if not isinstance(delta_images, list):
         return []
 
@@ -1616,21 +1617,21 @@ def get_image_urls(delta_images, request, metadata, user) -> list[str]:
             continue
 
         if url.startswith('data:image/png;base64'):
-            url = get_image_url_from_base64(request, url, metadata, user)
+            url = await get_image_url_from_base64(request, url, metadata, user)
 
         image_urls.append(url)
 
     return image_urls
 
 
-def add_file_context(messages: list, chat_id: str, user) -> list:
+async def add_file_context(messages: list, chat_id: str, user) -> list:
     """
     Add file URLs to messages for native function calling.
     """
     if not chat_id or chat_id.startswith('local:'):
         return messages
 
-    chat = Chats.get_chat_by_id_and_user_id(chat_id, user.id)
+    chat = await Chats.get_chat_by_id_and_user_id(chat_id, user.id)
     if not chat:
         return messages
 
@@ -1686,7 +1687,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
     if chat_id.startswith('local:'):
         message_list = form_data.get('messages', [])
     else:
-        chat = Chats.get_chat_by_id_and_user_id(chat_id, user.id)
+        chat = await Chats.get_chat_by_id_and_user_id(chat_id, user.id)
         await __event_emitter__(
             {
                 'type': 'status',
@@ -1714,7 +1715,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
 
     system_message_content = ''
 
-    if len(input_images) > 0 and request.app.state.config.ENABLE_IMAGE_EDIT:
+    if len(input_images) > 0 and await Config.get('images.edit.enable'):
         # Edit image(s)
         try:
             images = await image_edits(
@@ -1774,7 +1775,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
 
     else:
         # Create image(s)
-        if request.app.state.config.ENABLE_IMAGE_PROMPT_GENERATION:
+        if await Config.get('image_generation.prompt.enable'):
             try:
                 res = await generate_image_prompt(
                     request,
@@ -1931,17 +1932,17 @@ async def chat_completion_files_handler(
                 embedding_function=lambda query, prefix: request.app.state.EMBEDDING_FUNCTION(
                     query, prefix=prefix, user=user
                 ),
-                k=request.app.state.config.TOP_K,
+                k=await Config.get('rag.top_k'),
                 reranking_function=(
                     (lambda query, documents: request.app.state.RERANKING_FUNCTION(query, documents, user=user))
                     if request.app.state.RERANKING_FUNCTION
                     else None
                 ),
-                k_reranker=request.app.state.config.TOP_K_RERANKER,
-                r=request.app.state.config.RELEVANCE_THRESHOLD,
-                hybrid_bm25_weight=request.app.state.config.HYBRID_BM25_WEIGHT,
-                hybrid_search=request.app.state.config.ENABLE_RAG_HYBRID_SEARCH,
-                full_context=all_full_context or request.app.state.config.RAG_FULL_CONTEXT,
+                k_reranker=await Config.get('rag.top_k_reranker'),
+                r=await Config.get('rag.relevance_threshold'),
+                hybrid_bm25_weight=await Config.get('rag.hybrid_bm25_weight'),
+                hybrid_search=await Config.get('rag.enable_hybrid_search'),
+                full_context=all_full_context or await Config.get('rag.full_context'),
                 user=user,
             )
         except Exception as e:
@@ -2066,12 +2067,12 @@ async def convert_url_images_to_base64(form_data):
     return form_data
 
 
-def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[dict]]:
+async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[dict]]:
     """
     Load the message chain from DB up to message_id,
     keeping only LLM-relevant fields (role, content, output).
     """
-    messages_map = Chats.get_messages_map_by_chat_id(chat_id)
+    messages_map = await Chats.get_messages_map_by_chat_id(chat_id)
     if not messages_map:
         return None
 
@@ -2149,7 +2150,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     parent_message_id = metadata.get('parent_message_id')
 
     if chat_id and parent_message_id and not chat_id.startswith('local:'):
-        db_messages = load_messages_from_db(chat_id, parent_message_id)
+        db_messages = await load_messages_from_db(chat_id, parent_message_id)
         if db_messages:
             system_message = get_system_message(form_data.get('messages', []))
             form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
@@ -2184,7 +2185,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     system_message = get_system_message(form_data.get('messages', []))
     if system_message:  # Chat Controls/User Settings
         try:
-            form_data = apply_system_prompt_to_body(
+            form_data = await apply_system_prompt_to_body(
                 system_message.get('content'), form_data, metadata, user, replace=True
             )  # Required to handle system prompt variables
         except Exception:
@@ -2192,8 +2193,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     form_data = await convert_url_images_to_base64(form_data)
 
-    event_emitter = get_event_emitter(metadata)
-    event_caller = get_event_call(metadata)
+    event_emitter = await get_event_emitter(metadata)
+    event_caller = await get_event_call(metadata)
 
     extra_params = {
         '__event_emitter__': event_emitter,
@@ -2217,8 +2218,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     task_model_id = get_task_model_id(
         form_data['model'],
-        request.app.state.config.TASK_MODEL,
-        request.app.state.config.TASK_MODEL_EXTERNAL,
+        await Config.get('task.model.default'),
+        await Config.get('task.model.external'),
         models,
     )
 
@@ -2231,18 +2232,18 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     chat_id = metadata.get('chat_id', None)
     folder_id = None
     if chat_id and user:
-        folder_id = Chats.get_chat_folder_id(chat_id, user.id)
+        folder_id = await Chats.get_chat_folder_id(chat_id, user.id)
 
     # Fallback: use folder_id from metadata (temporary chats have no DB record)
     if not folder_id:
         folder_id = metadata.get('folder_id', None)
 
     if folder_id and user:
-        folder = Folders.get_folder_by_id_and_user_id(folder_id, user.id)
+        folder = await Folders.get_folder_by_id_and_user_id(folder_id, user.id)
 
         if folder and folder.data:
             if 'system_prompt' in folder.data:
-                form_data = apply_system_prompt_to_body(folder.data['system_prompt'], form_data, metadata, user)
+                form_data = await apply_system_prompt_to_body(folder.data['system_prompt'], form_data, metadata, user)
             if 'files' in folder.data:
                 if metadata.get('params', {}).get('function_calling') != 'native':
                     form_data['files'] = [
@@ -2305,8 +2306,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         raise e
 
     try:
-        filter_ids = get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
-        filter_functions = Functions.get_functions_by_ids(filter_ids)
+        filter_ids = await get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
+        filter_functions = await Functions.get_functions_by_ids(filter_ids)
 
         form_data, flags = await process_filter_functions(
             request=request,
@@ -2322,9 +2323,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     extra_params['__features__'] = features
     if features:
         if 'voice' in features and features['voice']:
-            if request.app.state.config.VOICE_MODE_PROMPT_TEMPLATE != None:
-                if request.app.state.config.VOICE_MODE_PROMPT_TEMPLATE != '':
-                    template = request.app.state.config.VOICE_MODE_PROMPT_TEMPLATE
+            if await Config.get('task.voice.prompt_template') != None:
+                if await Config.get('task.voice.prompt_template') != '':
+                    template = await Config.get('task.voice.prompt_template')
                 else:
                     template = DEFAULT_VOICE_MODE_PROMPT_TEMPLATE
 
@@ -2349,14 +2350,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 form_data = await chat_image_generation_handler(request, form_data, extra_params, user)
 
         if 'code_interpreter' in features and features['code_interpreter']:
-            engine = getattr(request.app.state.config, 'CODE_INTERPRETER_ENGINE', 'pyodide')
+            engine = await Config.get('code_interpreter.engine', 'pyodide')
 
             # Skip XML-tag prompt injection when native FC is enabled —
             # execute_code will be injected as a builtin tool instead
             if metadata.get('params', {}).get('function_calling') != 'native':
                 prompt = (
-                    request.app.state.config.CODE_INTERPRETER_PROMPT_TEMPLATE
-                    if request.app.state.config.CODE_INTERPRETER_PROMPT_TEMPLATE != ''
+                    await Config.get('code_interpreter.prompt_template')
+                    if await Config.get('code_interpreter.prompt_template') != ''
                     else DEFAULT_CODE_INTERPRETER_PROMPT
                 )
 
@@ -2436,7 +2437,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 # Get folder files
                 folder_id = file_item.get('id', None)
                 if folder_id:
-                    folder = Folders.get_folder_by_id_and_user_id(folder_id, user.id)
+                    folder = await Folders.get_folder_by_id_and_user_id(folder_id, user.id)
                     if folder and folder.data and 'files' in folder.data:
                         files = [f for f in files if f.get('id', None) != folder_id]
                         files = [*files, *folder.data['files']]
@@ -2477,7 +2478,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         server_id = tool_id[len('server:mcp:') :]
 
                         mcp_server_connection = None
-                        for server_connection in request.app.state.config.TOOL_SERVER_CONNECTIONS:
+                        for server_connection in await Config.get('tool_server.connections', []):
                             if (
                                 server_connection.get('type', '') == 'mcp'
                                 and server_connection.get('info', {}).get('id') == server_id
@@ -2659,8 +2660,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         if metadata.get('params', {}).get('function_calling') == 'native' and builtin_tools_enabled:
             # Add file context to user messages
             chat_id = metadata.get('chat_id')
-            form_data['messages'] = add_file_context(form_data.get('messages', []), chat_id, user)
-            builtin_tools = get_builtin_tools(
+            form_data['messages'] = await add_file_context(form_data.get('messages', []), chat_id, user)
+            builtin_tools = await get_builtin_tools(
                 request,
                 {
                     **extra_params,
@@ -2711,7 +2712,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # If context is not empty, insert it into the messages
     if sources and prompt:
-        form_data['messages'] = apply_source_context_to_messages(request, form_data['messages'], sources, prompt)
+        form_data['messages'] = await apply_source_context_to_messages(request, form_data['messages'], sources, prompt)
 
     # If there are citations, add them to the data_items
     sources = [
@@ -2747,7 +2748,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     return form_data, metadata, events
 
 
-def get_event_emitter_and_caller(metadata):
+async def get_event_emitter_and_caller(metadata):
     event_emitter = None
     event_caller = None
     if (
@@ -2758,13 +2759,13 @@ def get_event_emitter_and_caller(metadata):
         and 'message_id' in metadata
         and metadata['message_id']
     ):
-        event_emitter = get_event_emitter(metadata)
-        event_caller = get_event_call(metadata)
+        event_emitter = await get_event_emitter(metadata)
+        event_caller = await get_event_call(metadata)
     return event_emitter, event_caller
 
 
-def build_chat_response_context(request, form_data, user, model, metadata, tasks, events):
-    event_emitter, event_caller = get_event_emitter_and_caller(metadata)
+async def build_chat_response_context(request, form_data, user, model, metadata, tasks, events):
+    event_emitter, event_caller = await get_event_emitter_and_caller(metadata)
     return {
         'request': request,
         'form_data': form_data,
@@ -2852,7 +2853,7 @@ async def background_tasks_handler(ctx):
     messages = []
 
     if 'chat_id' in metadata and not metadata['chat_id'].startswith('local:'):
-        messages_map = Chats.get_messages_map_by_chat_id(metadata['chat_id'])
+        messages_map = await Chats.get_messages_map_by_chat_id(metadata['chat_id'])
         message = messages_map.get(metadata['message_id']) if messages_map else None
 
         message_list = get_message_list(messages_map, metadata['message_id'])
@@ -2932,7 +2933,7 @@ async def background_tasks_handler(ctx):
                         )
 
                         if not metadata.get('chat_id', '').startswith('local:'):
-                            Chats.upsert_message_to_chat_by_id_and_message_id(
+                            await Chats.upsert_message_to_chat_by_id_and_message_id(
                                 metadata['chat_id'],
                                 metadata['message_id'],
                                 {
@@ -2985,7 +2986,7 @@ async def background_tasks_handler(ctx):
                             if not title:
                                 title = messages[0].get('content', user_message)
 
-                            Chats.update_chat_title_by_id(metadata['chat_id'], title)
+                            await Chats.update_chat_title_by_id(metadata['chat_id'], title)
 
                             await event_emitter(
                                 {
@@ -2997,7 +2998,7 @@ async def background_tasks_handler(ctx):
                     if title == None and len(messages) == 2 and (not messages_map or len(messages_map) <= 2):
                         title = messages[0].get('content', user_message)
 
-                        Chats.update_chat_title_by_id(metadata['chat_id'], title)
+                        await Chats.update_chat_title_by_id(metadata['chat_id'], title)
 
                         await event_emitter(
                             {
@@ -3031,7 +3032,7 @@ async def background_tasks_handler(ctx):
 
                         try:
                             tags = json.loads(tags_string).get('tags', [])
-                            Chats.update_chat_tags_by_id(metadata['chat_id'], tags, user)
+                            await Chats.update_chat_tags_by_id(metadata['chat_id'], tags, user)
 
                             await event_emitter(
                                 {
@@ -3066,7 +3067,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                 else:
                     error = str(error)
 
-                Chats.upsert_message_to_chat_by_id_and_message_id(
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
                     metadata['chat_id'],
                     metadata['message_id'],
                     {
@@ -3082,7 +3083,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                     )
 
             if 'selected_model_id' in response_data:
-                Chats.upsert_message_to_chat_by_id_and_message_id(
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
                     metadata['chat_id'],
                     metadata['message_id'],
                     {
@@ -3102,7 +3103,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                         }
                     )
 
-                    title = Chats.get_chat_title_by_id(metadata['chat_id'])
+                    title = await Chats.get_chat_title_by_id(metadata['chat_id'])
 
                     # Use output from backend if provided (OR-compliant backends),
                     # otherwise generate from response content
@@ -3126,6 +3127,16 @@ async def non_streaming_chat_response_handler(response, ctx):
                                 'content': content,
                                 'output': response_output,
                                 'title': title,
+                                **(
+                                    {'pseudonymized_prompt': response_data['pseudonymized_prompt']}
+                                    if 'pseudonymized_prompt' in response_data
+                                    else {}
+                                ),
+                                **(
+                                    {'query_variants': response_data['query_variants']}
+                                    if 'query_variants' in response_data
+                                    else {}
+                                ),
                             },
                         }
                     )
@@ -3133,7 +3144,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                     # Save message in the database
                     usage = normalize_usage(response_data.get('usage', {}) or {})
 
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {
@@ -3146,18 +3157,19 @@ async def non_streaming_chat_response_handler(response, ctx):
                     )
 
                     # Send a webhook notification if the user is not active
-                    if request.app.state.config.ENABLE_USER_WEBHOOKS and not Users.is_user_active(user.id):
+                    if await Config.get('ui.enable_user_webhooks') and not Users.is_user_active(user.id):
                         webhook_url = Users.get_user_webhook_url_by_id(user.id)
                         if webhook_url:
+                            webui_url = await Config.get('webui.url')
                             await post_webhook(
                                 request.app.state.WEBUI_NAME,
                                 webhook_url,
-                                f'{title} - {request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}\n\n{content}',
+                                f'{title} - {webui_url}/c/{metadata["chat_id"]}\n\n{content}',
                                 {
                                     'action': 'chat',
                                     'message': content,
                                     'title': title,
-                                    'url': f'{request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}',
+                                    'url': f'{webui_url}/c/{metadata["chat_id"]}',
                                 },
                             )
 
@@ -3202,7 +3214,7 @@ async def streaming_chat_response_handler(response, ctx):
 
     filter_functions = [
         Functions.get_function_by_id(filter_id)
-        for filter_id in get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
+        for filter_id in await get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
     ]
 
     # Standard streaming response handler
@@ -3435,7 +3447,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                 return output, end_flag
 
-            message = Chats.get_message_by_id_and_message_id(metadata['chat_id'], metadata['message_id'])
+            message = await Chats.get_message_by_id_and_message_id(metadata['chat_id'], metadata['message_id'])
 
             tool_calls = []
 
@@ -3472,6 +3484,10 @@ async def streaming_chat_response_handler(response, ctx):
             usage = None
             prior_output = []
             last_response_id = None
+            pseudonymized_prompt = None
+            file_entity_count = 0
+            garnet_breakdown = {}
+            query_variants = []
 
             def full_output():
                 return prior_output + output if prior_output else output
@@ -3497,7 +3513,7 @@ async def streaming_chat_response_handler(response, ctx):
                     )
 
                     # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {
@@ -3511,6 +3527,10 @@ async def streaming_chat_response_handler(response, ctx):
                     nonlocal output
                     nonlocal prior_output
                     nonlocal last_response_id
+                    nonlocal pseudonymized_prompt
+                    nonlocal file_entity_count
+                    nonlocal garnet_breakdown
+                    nonlocal query_variants
 
                     response_tool_calls = []
 
@@ -3550,8 +3570,24 @@ async def streaming_chat_response_handler(response, ctx):
                         # Remove the prefix
                         data = data[len('data:') :].strip()
 
+                        # Skip SSE terminator — not JSON, must not reach json.loads
+                        if data == '[DONE]' or data == 'DONE':
+                            continue
+                        # Skip anything that doesn't look like a JSON object/array
+                        if not data or data[0] not in '{[':
+                            continue
+
                         try:
                             data = json.loads(data)
+
+                            if 'pseudonymized_prompt' in data:
+                                pseudonymized_prompt = data['pseudonymized_prompt']
+                            if 'file_entity_count' in data:
+                                file_entity_count = data['file_entity_count']
+                            if 'garnet_breakdown' in data:
+                                garnet_breakdown = data['garnet_breakdown']
+                            if 'query_variants' in data:
+                                query_variants = data['query_variants']
 
                             data, _ = await process_filter_functions(
                                 request=request,
@@ -3567,7 +3603,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                                 if 'selected_model_id' in data:
                                     model_id = data['selected_model_id']
-                                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                                         metadata['chat_id'],
                                         metadata['message_id'],
                                         {
@@ -3740,10 +3776,10 @@ async def streaming_chat_response_handler(response, ctx):
                                                 }
                                             )
 
-                                    image_urls = get_image_urls(delta.get('images', []), request, metadata, user)
+                                    image_urls = await get_image_urls(delta.get('images', []), request, metadata, user)
                                     if image_urls:
                                         image_file_list = [{'type': 'image', 'url': url} for url in image_urls]
-                                        message_files = Chats.add_message_files_by_id_and_message_id(
+                                        message_files = await Chats.add_message_files_by_id_and_message_id(
                                             metadata['chat_id'],
                                             metadata['message_id'],
                                             image_file_list,
@@ -3941,7 +3977,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                                         if ENABLE_REALTIME_CHAT_SAVE:
                                             # Save message in the database
-                                            Chats.upsert_message_to_chat_by_id_and_message_id(
+                                            await Chats.upsert_message_to_chat_by_id_and_message_id(
                                                 metadata['chat_id'],
                                                 metadata['message_id'],
                                                 {
@@ -3966,6 +4002,9 @@ async def streaming_chat_response_handler(response, ctx):
                                             'data': data,
                                         }
                                     )
+                        except json.JSONDecodeError as e:
+                            log.warning(f"[GARNET] SSE parse skipped: {e} | raw={data[:120]!r}")
+                            continue
                         except Exception as e:
                             done = 'data: [DONE]' in line
                             if done:
@@ -4175,7 +4214,7 @@ async def streaming_chat_response_handler(response, ctx):
                             except Exception as e:
                                 tool_result = str(e)
 
-                        tool_result, tool_result_files, tool_result_embeds = process_tool_result(
+                        tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
                             request,
                             tool_function_name,
                             tool_result,
@@ -4307,8 +4346,8 @@ async def streaming_chat_response_handler(response, ctx):
                             )
                             source_context = source_context.strip()
                             if source_context:
-                                rag_content = rag_template(
-                                    request.app.state.config.RAG_TEMPLATE,
+                                rag_content = await rag_template(
+                                    await Config.get('rag.template'),
                                     source_context,
                                     user_message,
                                 )
@@ -4479,7 +4518,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     )
                                     code = blocking_code + '\n' + code
 
-                                if request.app.state.config.CODE_INTERPRETER_ENGINE == 'pyodide':
+                                if await Config.get('code_interpreter.engine') == 'pyodide':
                                     ci_output = await event_caller(
                                         {
                                             'type': 'execute:python',
@@ -4491,21 +4530,21 @@ async def streaming_chat_response_handler(response, ctx):
                                             },
                                         }
                                     )
-                                elif request.app.state.config.CODE_INTERPRETER_ENGINE == 'jupyter':
+                                elif await Config.get('code_interpreter.engine') == 'jupyter':
                                     ci_output = await execute_code_jupyter(
-                                        request.app.state.config.CODE_INTERPRETER_JUPYTER_URL,
+                                        await Config.get('code_interpreter.jupyter.url'),
                                         code,
                                         (
-                                            request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_TOKEN
-                                            if request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH == 'token'
+                                            await Config.get('code_interpreter.jupyter.auth_token')
+                                            if await Config.get('code_interpreter.jupyter.auth') == 'token'
                                             else None
                                         ),
                                         (
-                                            request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD
-                                            if request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH == 'password'
+                                            await Config.get('code_interpreter.jupyter.auth_password')
+                                            if await Config.get('code_interpreter.jupyter.auth') == 'password'
                                             else None
                                         ),
-                                        request.app.state.config.CODE_INTERPRETER_JUPYTER_TIMEOUT,
+                                        await Config.get('code_interpreter.jupyter.timeout'),
                                     )
                                 else:
                                     ci_output = {'stdout': 'Code interpreter engine not configured.'}
@@ -4601,17 +4640,37 @@ async def streaming_chat_response_handler(response, ctx):
                     if item.get('status') == 'in_progress':
                         item['status'] = 'completed'
 
-                title = Chats.get_chat_title_by_id(metadata['chat_id'])
+                title = await Chats.get_chat_title_by_id(metadata['chat_id'])
                 data = {
                     'done': True,
                     'content': serialize_output(output),
                     'output': output,
                     'title': title,
+                    **(
+                        {'pseudonymized_prompt': pseudonymized_prompt}
+                        if pseudonymized_prompt
+                        else {}
+                    ),
+                    **(
+                        {'file_entity_count': file_entity_count}
+                        if file_entity_count
+                        else {}
+                    ),
+                    **(
+                        {'garnet_breakdown': garnet_breakdown}
+                        if garnet_breakdown
+                        else {}
+                    ),
+                    **(
+                        {'query_variants': query_variants}
+                        if query_variants
+                        else {}
+                    ),
                 }
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {
@@ -4622,31 +4681,32 @@ async def streaming_chat_response_handler(response, ctx):
                         },
                     )
                 elif usage:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {'done': True, 'usage': usage},
                     )
                 else:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {'done': True},
                     )
 
                 # Send a webhook notification if the user is not active
-                if request.app.state.config.ENABLE_USER_WEBHOOKS and not Users.is_user_active(user.id):
+                if await Config.get('ui.enable_user_webhooks') and not Users.is_user_active(user.id):
                     webhook_url = Users.get_user_webhook_url_by_id(user.id)
                     if webhook_url:
+                        webui_url = await Config.get('webui.url')
                         await post_webhook(
                             request.app.state.WEBUI_NAME,
                             webhook_url,
-                            f'{title} - {request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}\n\n{content}',
+                            f'{title} - {webui_url}/c/{metadata["chat_id"]}\n\n{content}',
                             {
                                 'action': 'chat',
                                 'message': content,
                                 'title': title,
-                                'url': f'{request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}',
+                                'url': f'{webui_url}/c/{metadata["chat_id"]}',
                             },
                         )
 
@@ -4664,7 +4724,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {
@@ -4674,7 +4734,7 @@ async def streaming_chat_response_handler(response, ctx):
                         },
                     )
                 else:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata['chat_id'],
                         metadata['message_id'],
                         {'done': True},

@@ -1,0 +1,24 @@
+name: Proxy Test Suite
+
+on:
+  workflow_call:
+    secrets:
+      SSH_PRIVATE_KEY:
+        required: true
+      CVM_HOST:
+        required: true
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Run proxy test suite
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
+          ssh root@${{ secrets.CVM_HOST }} \
+            "docker exec -w /service garnet-privacy-proxy-1 python3 app/test_proxy.py"

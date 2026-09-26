@@ -8,6 +8,9 @@
 	import { updateUserSettings } from '$lib/apis/users';
 	const i18n = getContext('i18n');
 
+	let mounted = false;
+	onMount(() => { setTimeout(() => { mounted = true; }, 3000); });
+
 	export let selectedModels = [''];
 	export let disabled = false;
 
@@ -23,6 +26,7 @@
 		await updateUserSettings(localStorage.token, { ui: $settings });
 
 		toast.success($i18n.t('Default model updated'));
+		showSetDefault = false;
 	};
 
 	const pinModelHandler = async (modelId) => {
@@ -38,13 +42,26 @@
 		await updateUserSettings(localStorage.token, { ui: $settings });
 	};
 
+	const autoSaveDefaultModel = async () => {
+		const hasEmptyModel = selectedModels.filter((it) => it === '');
+		if (hasEmptyModel.length) return;
+		const updatedSettings = { ...$settings, models: selectedModels };
+		settings.set(updatedSettings);
+		localStorage.setItem('settings', JSON.stringify(updatedSettings));
+		document.cookie = `garnet_default_model=${selectedModels[0]};path=/;max-age=31536000`;
+		sessionStorage.removeItem('selectedModels');
+		await updateUserSettings(localStorage.token, { ui: updatedSettings });
+	};
+
 	$: if (selectedModels.length > 0 && $models.length > 0) {
 		const _selectedModels = selectedModels.map((model) =>
 			$models.map((m) => m.id).includes(model) ? model : ''
 		);
 
 		if (JSON.stringify(_selectedModels) !== JSON.stringify(selectedModels)) {
-			selectedModels = _selectedModels;
+			if (!_selectedModels.every((m) => m === '')) {
+				selectedModels = _selectedModels;
+			}
 		}
 	}
 </script>
@@ -64,6 +81,7 @@
 						}))}
 						{pinModelHandler}
 						bind:value={selectedModel}
+					on:change={autoSaveDefaultModel}
 					/>
 				</div>
 			</div>
@@ -126,11 +144,3 @@
 		</div>
 	{/each}
 </div>
-
-{#if showSetDefault}
-	<div
-		class="relative text-left mt-[1px] ml-1 text-[0.7rem] text-gray-600 dark:text-gray-400 font-primary"
-	>
-		<button on:click={saveDefaultModel}> {$i18n.t('Set as default')}</button>
-	</div>
-{/if}

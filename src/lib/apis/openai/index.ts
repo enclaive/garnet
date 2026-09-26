@@ -1,4 +1,5 @@
 import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+import { get } from 'svelte/store';
 
 export const getOpenAIConfig = async (token: string = '') => {
 	let error = null;
@@ -72,140 +73,6 @@ export const updateOpenAIConfig = async (token: string = '', config: OpenAIConfi
 	}
 
 	return res;
-};
-
-export const getOpenAIUrls = async (token: string = '') => {
-	let error = null;
-
-	const res = await fetch(`${OPENAI_API_BASE_URL}/urls`, {
-		method: 'GET',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
-		}
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((err) => {
-			console.error(err);
-			if ('detail' in err) {
-				error = err.detail;
-			} else {
-				error = 'Server connection failed';
-			}
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
-
-	return res?.OPENAI_API_BASE_URLS ?? [];
-};
-
-export const updateOpenAIUrls = async (token: string = '', urls: string[]) => {
-	let error = null;
-
-	const res = await fetch(`${OPENAI_API_BASE_URL}/urls/update`, {
-		method: 'POST',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
-		},
-		body: JSON.stringify({
-			urls: urls
-		})
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((err) => {
-			console.error(err);
-			if ('detail' in err) {
-				error = err.detail;
-			} else {
-				error = 'Server connection failed';
-			}
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
-
-	return res.OPENAI_API_BASE_URLS;
-};
-
-export const getOpenAIKeys = async (token: string = '') => {
-	let error = null;
-
-	const res = await fetch(`${OPENAI_API_BASE_URL}/keys`, {
-		method: 'GET',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
-		}
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((err) => {
-			console.error(err);
-			if ('detail' in err) {
-				error = err.detail;
-			} else {
-				error = 'Server connection failed';
-			}
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
-
-	return res?.OPENAI_API_KEYS ?? [];
-};
-
-export const updateOpenAIKeys = async (token: string = '', keys: string[]) => {
-	let error = null;
-
-	const res = await fetch(`${OPENAI_API_BASE_URL}/keys/update`, {
-		method: 'POST',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
-		},
-		body: JSON.stringify({
-			keys: keys
-		})
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((err) => {
-			console.error(err);
-			if ('detail' in err) {
-				error = err.detail;
-			} else {
-				error = 'Server connection failed';
-			}
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
-
-	return res.OPENAI_API_KEYS;
 };
 
 export const getOpenAIModelsDirect = async (url: string, key: string) => {
@@ -366,11 +233,18 @@ export const generateOpenAIChatCompletion = async (
 ) => {
 	let error = null;
 
+	const garnetToggles = JSON.parse(localStorage.getItem('garnet_entity_toggles') || '{}');
+	const enabledEntities = Object.entries(garnetToggles)
+		.filter(([_, on]) => on)
+		.map(([k]) => k)
+		.join(',');
+
 	const res = await fetch(`${url}/chat/completions`, {
 		method: 'POST',
 		headers: {
 			Authorization: `Bearer ${token}`,
-			'Content-Type': 'application/json'
+			'Content-Type': 'application/json',
+			'x-garnet-entities': enabledEntities,
 		},
 		credentials: 'include',
 		body: JSON.stringify(body)

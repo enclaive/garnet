@@ -1,4 +1,5 @@
 <script lang="ts">
+	// ci: trigger build
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
@@ -10,7 +11,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 
-	import { get, type Unsubscriber, type Writable } from 'svelte/store';
+	import { get, type Unsubscriber, type Writable, writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
@@ -46,7 +47,8 @@
 		selectedTerminalId,
 		showFileNavPath,
 		showFileNavDir,
-		chatRequestQueues
+		chatRequestQueues,
+        privacyProxy
 	} from '$lib/stores';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
@@ -92,6 +94,8 @@
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { getFunctions } from '$lib/apis/functions';
 	import { updateFolderById } from '$lib/apis/folders';
+	import { analyzeMessageEntities } from '$lib/apis/privacy';
+	import type { EntitySpan } from '$lib/apis/privacy';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -155,6 +159,9 @@
 	let generating = false;
 	let dragged = false;
 	let generationController = null;
+
+	// Force Vite to keep privacy module by referencing the function at module scope
+	let _privacyAnalyzer = analyzeMessageEntities;
 
 	let chat = null;
 	let tags = [];
@@ -246,7 +253,7 @@
 	};
 
 	$: if (selectedModels && chatIdProp !== '') {
-		saveSessionSelectedModels();
+		// saveSessionSelectedModels(); — disabled, default model persisted via localStorage/DB
 	}
 
 	const saveSessionSelectedModels = () => {
@@ -258,8 +265,11 @@
 		) {
 			return;
 		}
+		const savedDefault = JSON.parse(localStorage.getItem('settings') ?? '{}')?.models;
+		if (savedDefault && JSON.stringify(savedDefault) === selectedModelsString) {
+			return;
+		}
 		sessionStorage.selectedModels = selectedModelsString;
-		console.log('saveSessionSelectedModels', selectedModels, sessionStorage.selectedModels);
 	};
 
 	let oldSelectedModelIds = [''];
@@ -423,6 +433,7 @@
 			if (message) {
 				const type = event?.data?.type ?? null;
 				const data = event?.data?.data ?? null;
+				console.warn('[GARNET ALL EVENTS]', type, Object.keys(data || {}));
 
 				if (type === 'status') {
 					if (message?.statusHistory) {
@@ -431,6 +442,7 @@
 						message.statusHistory = [data];
 					}
 				} else if (type === 'chat:completion') {
+					console.warn('[GARNET TRIGGER] chat:completion fired, data:', data);
 					chatCompletionEventHandler(data, message, event.chat_id);
 				} else if (type === 'chat:tasks:cancel') {
 					if (event.message_id === history.currentId) {
@@ -875,7 +887,7 @@
 
 			// Upload file to server
 			console.log('Uploading file to server...');
-			const uploadedFile = await uploadFile(localStorage.token, file, metadata);
+			const uploadedFile = await uploadFile(localStorage.token, file, metadata, undefined, get(privacyProxy));
 
 			if (!uploadedFile) {
 				throw new Error('Server returned null response for file upload');
@@ -1078,45 +1090,54 @@
 					}
 				} else {
 					// Model found; set it as selected
-					selectedModels = urlModels;
+					console.error('[GARNET TRACE] setting from url (single found):', urlModels);
+				selectedModels = urlModels;
 				}
 			} else {
 				// Multiple models; set as selected
+				console.error('[GARNET TRACE] setting from url (multiple):', urlModels);
 				selectedModels = urlModels;
 			}
 
 			// Unavailable models filtering
+			console.error('[GARNET TRACE] filtering url models against $models:', selectedModels);
 			selectedModels = selectedModels.filter((modelId) =>
 				$models.map((m) => m.id).includes(modelId)
 			);
 		} else {
 			if ($selectedFolder?.data?.model_ids) {
-				// Set from folder model IDs
+				console.error('[GARNET TRACE] setting from folder:', $selectedFolder?.data?.model_ids);
 				selectedModels = $selectedFolder?.data?.model_ids;
 			} else {
-				if (sessionStorage.selectedModels) {
-					// Set from session storage (temporary selection)
+				const _cookieModel = document.cookie.split(';').find(c => c.trim().startsWith('garnet_default_model='))?.split('=')?.[1];
+				if (_cookieModel) {
+					console.error('[GARNET TRACE] setting from cookie:', [_cookieModel]);
+					selectedModels = [_cookieModel];
+					// skip availableModels filter — models may not be loaded yet
+				} else if ($settings?.models) {
+					console.error('[GARNET TRACE] setting from $settings.models:', $settings?.models);
+					selectedModels = $settings?.models;
+				} else if (sessionStorage.selectedModels) {
+					console.error('[GARNET TRACE] setting from sessionStorage:', sessionStorage.selectedModels);
 					selectedModels = JSON.parse(sessionStorage.selectedModels);
 					sessionStorage.removeItem('selectedModels');
-				} else {
-					if ($settings?.models) {
-						// Set from user settings
-						selectedModels = $settings?.models;
-					} else if (defaultModels && defaultModels.length > 0) {
-						// Set from default models
-						selectedModels = defaultModels;
-					}
+				} else if (defaultModels && defaultModels.length > 0) {
+					console.error('[GARNET TRACE] setting from defaultModels:', defaultModels);
+					selectedModels = defaultModels;
 				}
 			}
-
-			// Unavailable & hidden models filtering
-			selectedModels = selectedModels.filter((modelId) => availableModels.includes(modelId));
+			if (availableModels.length > 0) {
+				console.error('[GARNET TRACE] filtering against availableModels, before:', selectedModels);
+				selectedModels = selectedModels.filter((modelId) => availableModels.includes(modelId));
+				console.error('[GARNET TRACE] after availableModels filter:', selectedModels);
+			}
 		}
 
 		// Ensure at least one model is selected
 		if (selectedModels.length === 0 || (selectedModels.length === 1 && selectedModels[0] === '')) {
 			if (availableModels.length > 0) {
 				if (defaultModels && defaultModels.length > 0) {
+					console.error('[GARNET TRACE] fallback to defaultModels (filtered):', defaultModels);
 					selectedModels = defaultModels.filter((modelId) => availableModels.includes(modelId));
 				}
 
@@ -1125,9 +1146,11 @@
 					(selectedModels.length === 1 && selectedModels[0] === '')
 				) {
 					// Only fall back to first available model if default models didn't resolve
+					console.error('[GARNET TRACE] fallback to first available model:', availableModels?.at(0));
 					selectedModels = [availableModels?.at(0) ?? ''];
 				}
 			} else {
+				console.error('[GARNET TRACE] no available models, setting empty');
 				selectedModels = [''];
 			}
 		}
@@ -1217,9 +1240,11 @@
 			}
 		}
 
+		console.error('[GARNET TRACE] end-of-initNewChat remap, before:', selectedModels);
 		selectedModels = selectedModels.map((modelId) =>
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''
 		);
+		console.error('[GARNET TRACE] end-of-initNewChat remap, after:', selectedModels);
 
 		const chatInput = document.getElementById('chat-input');
 		setTimeout(() => chatInput?.focus(), 0);
@@ -1247,10 +1272,11 @@
 			if (chatContent) {
 				console.log(chatContent);
 
-				selectedModels =
-					(chatContent?.models ?? undefined) !== undefined
-						? chatContent.models
-						: [chatContent.models ?? ''];
+				const _chatModels = (chatContent?.models ?? undefined) !== undefined
+					? chatContent.models
+					: [chatContent.models ?? ''];
+				const _cookieDefault = document.cookie.split(';').find(c => c.trim().startsWith('garnet_default_model='))?.split('=')?.[1];
+				selectedModels = _cookieDefault ? [_cookieDefault] : _chatModels;
 
 				if (!($user?.role === 'admin' || ($user?.permissions?.chat?.multiple_models ?? true))) {
 					selectedModels = selectedModels.length > 0 ? [selectedModels[0]] : [''];
@@ -1586,7 +1612,9 @@
 	};
 
 	const chatCompletionEventHandler = async (data, message, chatId) => {
-		const { id, done, choices, content, output, sources, selected_model_id, error, usage } = data;
+		console.warn('[GARNET ENTRY]', data);
+		const { id, done, choices, content, output, sources, selected_model_id, error, usage, pseudonymized_prompt, file_entity_count, garnet_breakdown, query_variants } = data;
+		const queryVariants = query_variants || [];
 
 		// Store raw OR-aligned output items from backend
 		if (output) {
@@ -1688,6 +1716,20 @@
 			message.usage = usage;
 		}
 
+		if (pseudonymized_prompt || file_entity_count > 0 || queryVariants.length > 0) {
+			const userMsgId = message.parentId;
+			if (userMsgId && history.messages[userMsgId]) {
+				history.messages[userMsgId] = {
+					...history.messages[userMsgId],
+					...(pseudonymized_prompt ? { pseudonymized_prompt } : {}),
+					file_entity_count: file_entity_count ?? 0,
+					garnet_breakdown: garnet_breakdown ?? {},
+					query_variants: queryVariants
+				};
+				console.warn('[GARNET MESSAGE SET]', userMsgId, pseudonymized_prompt, 'file_entity_count:', file_entity_count, 'query_variants:', queryVariants);
+			}
+		}
+
 		history.messages[message.id] = message;
 
 		if (done) {
@@ -1760,6 +1802,7 @@
 	//////////////////////////
 
 	const submitPrompt = async (userPrompt, { _raw = false } = {}) => {
+		console.warn('[GARNET] submitPrompt called');
 		console.log('submitPrompt', userPrompt, $chatId);
 
 		const _selectedModels = selectedModels.map((modelId) =>
@@ -1860,6 +1903,7 @@
 		);
 
 		files = [];
+
 		messageInput?.setText('');
 
 		// Create user message
@@ -1875,7 +1919,7 @@
 			models: selectedModels
 		};
 
-		// Add message to history and Set currentId to messageId
+		// Add message to history and render it
 		history.messages[userMessageId] = userMessage;
 		history.currentId = userMessageId;
 
@@ -1890,6 +1934,112 @@
 
 		saveSessionSelectedModels();
 
+		await tick();
+
+		// Animate on rendered bubble if private mode
+		const _selectedModel = $models.find((m) => m.id === selectedModels[0]);
+		const _isOllama = _selectedModel?.owned_by === 'ollama';
+		if ($privacyProxy && !_isOllama) {
+			const entities = await analyzeMessageEntities(localStorage.token, userPrompt);
+			const garnetToggles = JSON.parse(localStorage.getItem('garnet_entity_toggles') || '{}');
+			const filteredEntities = entities
+				? entities.filter(e => {
+						const type = e.type ?? e.entity_type;
+						return garnetToggles[type] !== false;
+					})
+				: [];
+			if (filteredEntities.length > 0) {
+				const bubble = document.getElementById(`message-${userMessageId}`);
+				if (bubble) {
+					const contentBox = bubble.querySelector('.rounded-3xl') ?? bubble;
+					const style = document.createElement('style');
+					style.textContent = '@keyframes garnet-blink { 50% { opacity: 0; } }';
+					bubble.appendChild(style);
+
+					// Bug A: hide Svelte-managed paragraphs so only the overlay is visible
+					const originalParagraphs = Array.from(bubble.querySelectorAll('p'));
+					originalParagraphs.forEach(p => { p.style.display = 'none'; });
+					const animOverlay = document.createElement('div');
+					animOverlay.style.position = 'relative';
+					animOverlay.style.top = '0';
+					animOverlay.style.margin = '0';
+					animOverlay.style.padding = '0';
+					animOverlay.style.width = '100%';
+					animOverlay.style.lineHeight = '1.5';
+					animOverlay.style.whiteSpace = 'pre-wrap';
+					animOverlay.style.wordBreak = 'break-word';
+					contentBox.appendChild(animOverlay);
+
+					const tokens = userPrompt.split(/(\s+)/);
+					let pos = 0;
+					const marked = tokens.map(token => {
+						const start = pos; const end = pos + token.length; pos = end;
+						const entity = filteredEntities.find(e => start < e.end && end > e.start);
+						return { token, entity };
+					});
+
+					const screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '2000');
+
+					const renderFrame = (i) => {
+						const labeledEntities = new Set();
+						animOverlay.innerHTML = marked.map((t, j) => {
+							const cleanToken = t.token.replace(/\*\*/g, '').replace(/\*/g, '');
+							if (j < i) {
+								if (t.entity) {
+									const entityKey = `${t.entity.start}-${t.entity.end}`;
+									const entityType = t.entity.type ?? t.entity.entity_type;
+									const color = entityType === 'PERSON' ? '#3b82f6'
+										: entityType === 'EMAIL_ADDRESS' ? '#ef4444'
+										: entityType === 'ORGANIZATION' ? '#22c55e'
+										: entityType === 'LOCATION' ? '#a855f7'
+										: entityType === 'PHONE_NUMBER' ? '#f97316'
+										: entityType === 'IBAN_CODE' ? '#eab308'
+										: entityType === 'ID' ? '#ec4899'
+										: '#f59e0b';
+									if (labeledEntities.has(entityKey)) {
+										return `<span style="color:${color}"></span>`;
+									}
+									labeledEntities.add(entityKey);
+									return `<span style="position:relative;display:inline;cursor:pointer" onmouseenter="this.lastChild.style.display='block'" onmouseleave="this.lastChild.style.display='none'"><span style="color:${color}">${entityType}</span><span style="display:none;position:absolute;bottom:100%;left:0;background:#1a1a1a;color:white;font-size:11px;padding:2px 6px;border-radius:4px;white-space:nowrap;z-index:9999;pointer-events:none">${entityType}</span></span>`;
+								}
+								return `<span>${cleanToken}</span>`;
+							} else if (j === i) {
+								return `<span style="border-left:2px solid white;animation:garnet-blink 0.8s infinite"></span>${cleanToken}`;
+							}
+							return `<span style="opacity:0.4">${cleanToken}</span>`;
+						}).join('');
+					};
+
+					const t0 = Date.now();
+					let lastI = -1;
+					while (true) {
+						const elapsed = Date.now() - t0;
+						const i = Math.min(marked.length, Math.floor((elapsed / screeningSpeed) * marked.length));
+						if (i !== lastI) {
+							renderFrame(i);
+							lastI = i;
+						}
+						if (elapsed >= screeningSpeed) { renderFrame(marked.length); break; }
+						await new Promise(r => requestAnimationFrame(r));
+					}
+					// hold highlighted state for 2s so user can hover for tooltips
+					await new Promise(r => setTimeout(r, 2000));
+					animOverlay.remove();
+					originalParagraphs.forEach(p => { p.style.display = ''; });
+					style.remove();
+				}
+			}
+		}
+
+		// Read entity toggles before sending — used to filter proxy analysis
+		const garnetToggles = JSON.parse(localStorage.getItem('garnet_entity_toggles') || '{}');
+		const enabledEntities = Object.entries(garnetToggles)
+			.filter(([_, on]) => on)
+			.map(([k]) => k)
+			.join(',');
+		console.warn('[garnet] enabled entities:', enabledEntities);
+
+		// Now send to backend
 		await sendMessage(history, userMessageId, { newChat: true });
 	};
 
@@ -2025,11 +2175,7 @@
 		if ($config?.features)
 			features = {
 				voice: $showCallOverlay,
-				image_generation:
-					$config?.features?.enable_image_generation &&
-					($user?.role === 'admin' || $user?.permissions?.features?.image_generation)
-						? imageGenerationEnabled
-						: false,
+				image_generation: imageGenerationEnabled,
 				code_interpreter:
 					$config?.features?.enable_code_interpreter &&
 					($user?.role === 'admin' || $user?.permissions?.features?.code_interpreter)
@@ -2225,6 +2371,8 @@
 		// Use the user-selected terminal from the dropdown
 		const activeTerminalId = $selectedTerminalId ?? null;
 
+		const _privacyProxyNow = get(privacyProxy);
+		console.warn('[PRIVACY DEBUG] sending privacy_proxy:', _privacyProxyNow, '(reactive $privacyProxy was:', $privacyProxy, ')');
 		const res = await generateOpenAIChatCompletion(
 			localStorage.token,
 			{
@@ -2251,6 +2399,7 @@
 					...($terminalServers ?? []).filter((t) => !t.id)
 				],
 				features: getFeatures(),
+				privacy_proxy: _privacyProxyNow,
 				variables: {
 					...getPromptVariables(
 						$user?.name,
@@ -2375,6 +2524,118 @@
 		}
 
 		history.messages[responseMessage.id] = responseMessage;
+	};
+
+	/**
+	 * Tokenize message text: split by spaces and map character positions to tokens
+	 */
+	const tokenizeMessage = (text: string) => {
+		const tokens: Array<{ text: string; start: number; end: number }> = [];
+		const words = text.split(/(\s+)/); // Keep spaces
+
+		let charPos = 0;
+		for (const word of words) {
+			if (word === '') continue;
+
+			// Only add non-whitespace tokens
+			if (word.trim()) {
+				tokens.push({
+					text: word,
+					start: charPos,
+					end: charPos + word.length
+				});
+			}
+			charPos += word.length;
+		}
+
+		return tokens;
+	};
+
+	/**
+	 * Get color for entity type
+	 */
+	const getEntityColor = (entityType: string): string => {
+		switch (entityType.toUpperCase()) {
+			case 'PERSON':
+				return '#3b82f6'; // blue
+			case 'EMAIL':
+				return '#ef4444'; // red
+			case 'ORGANIZATION':
+				return '#22c55e'; // green
+			default:
+				return '#f59e0b'; // amber
+		}
+	};
+
+	/**
+	 * Run entity highlighting animation on the user message
+	 */
+	const animateEntityHighlighting = async (
+		messageElement: HTMLElement,
+		messageText: string,
+		entities: EntitySpan[]
+	): Promise<void> => {
+		const tokens = tokenizeMessage(messageText);
+		if (tokens.length === 0) return;
+
+		// Calculate animation parameters
+		const animationDuration = 2000; // 2 seconds total
+		const tokenDuration = animationDuration / tokens.length;
+		const highlightPauseDuration = 200; // how long to hold highlight
+
+		return new Promise((resolve) => {
+			let currentTokenIndex = 0;
+
+			const animateNextToken = () => {
+				if (currentTokenIndex >= tokens.length) {
+					// Animation complete - restore original content
+					messageElement.textContent = messageText;
+					resolve();
+					return;
+				}
+
+				const token = tokens[currentTokenIndex];
+
+				// Find entities that overlap with this token
+				const overlappingEntities = entities.filter(
+					(entity) => entity.start < token.end && entity.end > token.start
+				);
+
+				if (overlappingEntities.length > 0) {
+					// Highlight this token
+					const entity = overlappingEntities[0];
+					const color = getEntityColor(entity.type ?? entity.entity_type);
+
+					// Build highlighted content
+					let content = '';
+					for (let i = 0; i < tokens.length; i++) {
+						const t = tokens[i];
+						const isHighlighted = i <= currentTokenIndex;
+						const isSensitive = overlappingEntities.filter((e) => e.start < t.end && e.end > t.start)
+							.length > 0;
+
+						if (isHighlighted && isSensitive) {
+							content += `<span style="font-weight: bold; color: ${color};">${t.text}</span> `;
+						} else {
+							content += `${t.text} `;
+						}
+					}
+
+					messageElement.innerHTML = content.trim();
+
+					// Hold highlight for a moment
+					setTimeout(() => {
+						currentTokenIndex++;
+						animateNextToken();
+					}, tokenDuration + highlightPauseDuration);
+				} else {
+					currentTokenIndex++;
+					animateNextToken();
+				}
+			};
+
+			animateNextToken();
+		});
 	};
 
 	const stopResponse = async () => {
@@ -3001,5 +3262,11 @@
 	::-webkit-scrollbar {
 		height: 0.5rem;
 		width: 0.5rem;
+	}
+
+	@keyframes blink {
+		50% {
+			opacity: 0;
+		}
 	}
 </style>

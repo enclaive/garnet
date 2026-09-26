@@ -10,6 +10,41 @@
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
 	import { user, settings } from '$lib/stores';
+	import { onMount } from 'svelte';
+
+	const ENTITY_TYPES = [
+		{ key: 'PERSON',        label: 'Name / Person' },
+		{ key: 'ORGANIZATION',  label: 'Organization' },
+		{ key: 'EMAIL_ADDRESS', label: 'Email' },
+		{ key: 'IBAN_CODE',     label: 'IBAN' },
+		{ key: 'PHONE_NUMBER',  label: 'Phone Number' },
+		{ key: 'ID',            label: 'ID' },
+		{ key: 'LOCATION',      label: 'Location' },
+	];
+
+	let entityToggles: Record<string, boolean> = {};
+	let screeningSpeed: number = 0;
+
+	onMount(() => {
+		const saved = localStorage.getItem('garnet_entity_toggles');
+		if (saved) {
+			entityToggles = JSON.parse(saved);
+		} else {
+			ENTITY_TYPES.forEach(e => (entityToggles[e.key] = true));
+			localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
+		}
+		screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '2000');
+	});
+
+	function onEntityChange(key: string, value: string) {
+		entityToggles[key] = value === 'on';
+		localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
+		entityToggles = { ...entityToggles };
+	}
+
+	function onSpeedChange() {
+		localStorage.setItem('garnet_screening_speed', String(screeningSpeed));
+	}
 	export let models = [];
 	export let chatFiles = [];
 	export let params = {};
@@ -28,6 +63,7 @@
 	let showValves = getOpen('valves', false);
 	let showSystemPrompt = getOpen('systemPrompt');
 	let showAdvancedParams = getOpen('advancedParams');
+	let showGarnet = getOpen('garnet', true);
 </script>
 
 <div class=" dark:text-white">
@@ -134,7 +170,57 @@
 						</div>
 					</div>
 				</Collapsible>
+
 			{/if}
+
+			<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
+
+			<Collapsible
+				title={$i18n.t('Garnet')}
+				bind:open={showGarnet}
+				onChange={setOpen('garnet')}
+				buttonClassName="w-full"
+			>
+				<div class="text-sm mt-1.5" slot="content">
+					<div class="flex flex-col gap-0.5">
+						{#each ENTITY_TYPES as entity}
+							<div class="py-0.5 flex w-full justify-between">
+								<div class="self-center text-xs">
+									{entity.label}
+								</div>
+								<div class="flex items-center">
+									<select
+										value={entityToggles[entity.key] ? 'on' : 'off'}
+										on:change={(e) => onEntityChange(entity.key, e.currentTarget.value)}
+										class="p-1 px-3 text-xs flex rounded-sm transition
+											   dark:bg-gray-850 dark:text-gray-200 dark:hover:bg-gray-800
+											   bg-white text-gray-700 hover:bg-gray-100
+											   border border-gray-200 dark:border-gray-700
+											   focus:outline-none cursor-pointer"
+									>
+										<option value="on">{$i18n.t('On')}</option>
+										<option value="off">{$i18n.t('Off')}</option>
+									</select>
+								</div>
+							</div>
+						{/each}
+						<div class="py-0.5 flex w-full justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+							<div class="self-center text-xs">Screening Speed</div>
+							<input
+								type="number"
+								min="0"
+								step="500"
+								bind:value={screeningSpeed}
+								on:change={onSpeedChange}
+								class="p-1 px-2 text-xs w-24 rounded-sm
+									   dark:bg-gray-850 dark:text-gray-200 dark:border-gray-700
+									   bg-white text-gray-700 border border-gray-200
+									   focus:outline-none"
+							/>
+						</div>
+					</div>
+				</div>
+			</Collapsible>
 		</div>
 	{/if}
 </div>

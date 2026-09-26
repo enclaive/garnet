@@ -8,13 +8,16 @@
 		chatId,
 		config,
 		mobile,
+		models,
 		settings,
 		showArchivedChats,
 		showControls,
 		showSidebar,
 		temporaryChatEnabled,
-		user
+		user,
+		privacyProxy
 	} from '$lib/stores';
+	import { queryExpand } from '$lib/stores/garnet';
 
 	import { slide } from 'svelte/transition';
 	import { page } from '$app/stores';
@@ -38,7 +41,8 @@
 	import ChatPlus from '../icons/ChatPlus.svelte';
 	import ChatCheck from '../icons/ChatCheck.svelte';
 	import Knobs from '../icons/Knobs.svelte';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import EntityRelationshipMap from '../chat/EntityRelationshipMap.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -47,18 +51,28 @@
 	export let scrollTop = 0;
 
 	export let chat;
+	export let showModelSelector = true;
 	export let history;
 	export let selectedModels;
-	export let showModelSelector = true;
-
 	export let onSaveTempChat: () => {};
 	export let archiveChatHandler: (id: string) => void;
 	export let moveChatHandler: (id: string, folderId: string) => void;
 
 	let closedBannerIds = [];
+	let showEntityMap = false;
+	$: hasPseudonymized = Object.values(history?.messages ?? {}).some((m: any) => m.pseudonymized_prompt);
 
 	let showShareChatModal = false;
 	let showDownloadChatModal = false;
+
+	// privacy_enforce capability: locks privacy toggle ON for models flagged in the editor
+	$: activeModel = $models.find((m) => m.id === selectedModels[0]);
+	$: forcedPrivacy =
+		activeModel?.owned_by === 'ollama' ||
+		activeModel?.info?.meta?.capabilities?.privacy_enforce === true;
+	$: if (forcedPrivacy) {
+		$privacyProxy = true;
+	}
 </script>
 
 <ShareChatModal bind:show={showShareChatModal} chatId={$chatId} />
@@ -107,13 +121,45 @@
 				{/if}
 
 				<div
-					class="flex-1 overflow-hidden max-w-full mt-0.5 py-0.5
+					class="flex flex-row items-center flex-1 overflow-hidden max-w-full mt-0.5 py-0.5
 			{$showSidebar ? 'ml-1' : ''}
 			"
 				>
-					{#if showModelSelector}
-						<ModelSelector bind:selectedModels showSetDefault={!shareEnabled} />
-					{/if}
+{#if showModelSelector}
+    {#if selectedModels?.length > 0}{ console.log('[DEBUG MODEL]', $models?.find((m) => m.id === selectedModels[0])) }{/if}
+    <div class="flex flex-row items-center gap-2 min-w-0">
+        <ModelSelector bind:selectedModels showSetDefault={!shareEnabled} />
+        {#if activeModel?.owned_by !== 'ollama'}
+        <Tooltip content={forcedPrivacy ? $i18n.t('Privacy enforced by this model') : ''}>
+        <button
+            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition shrink-0
+                {$privacyProxy
+                    ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                    : 'bg-gray-500/20 text-gray-400 hover:bg-gray-500/30'}
+                {forcedPrivacy ? 'opacity-75 cursor-not-allowed' : ''}"
+            disabled={forcedPrivacy}
+            on:click={() => { if (!forcedPrivacy) { $privacyProxy = !$privacyProxy; console.log('[privacyProxy] toggled to:', $privacyProxy); } }}
+        >
+            <span class="text-[11px]">private{forcedPrivacy ? ' 🔒' : ''}</span>
+            <span class="relative inline-flex h-4 w-7 items-center rounded-full transition-colors {$privacyProxy ? 'bg-emerald-500' : 'bg-gray-500'}">
+                <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {$privacyProxy ? 'translate-x-3.5' : 'translate-x-0.5'}" />
+            </span>
+        </button>
+        </Tooltip>
+        <!-- entity map button hidden temporarily
+        {#if hasPseudonymized}
+        <button
+            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition shrink-0 bg-gray-500/20 text-gray-400 hover:bg-gray-500/30"
+            on:click={() => showEntityMap = true}
+            title="Entity Map"
+        >
+            <span class="text-[11px]">⬡</span>
+        </button>
+        {/if}
+        -->
+        {/if}
+    </div>
+{/if}
 				</div>
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
@@ -319,4 +365,8 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if showEntityMap}
+		<EntityRelationshipMap {history} on:close={() => showEntityMap = false} />
+	{/if}
 </nav>

@@ -7,6 +7,7 @@
 	import { user as _user } from '$lib/stores';
 	import { copyToClipboard as _copyToClipboard, formatDate } from '$lib/utils';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import equal from 'fast-deep-equal';
 
 	import Name from './Name.svelte';
 	import ProfileImage from './ProfileImage.svelte';
@@ -42,6 +43,9 @@
 	export let topPadding = false;
 
 	let showDeleteConfirm = false;
+	let showInfoTooltip = false;
+	let infoTooltipX = 0;
+	let infoTooltipY = 0;
 
 	let messageIndexEdit = false;
 
@@ -58,7 +62,7 @@
 		if (source) {
 			if (message.content !== source.content) {
 				message = structuredClone(source);
-			} else if (JSON.stringify(message) !== JSON.stringify(source)) {
+			} else if (!equal(message, source)) {
 				message = structuredClone(source);
 			}
 		}
@@ -159,7 +163,7 @@
 						<div
 							class="self-center text-xs font-medium first-letter:capitalize ml-0.5 translate-y-[1px] {($settings?.highContrastMode ??
 							false)
-								? 'dark:text-gray-900 text-gray-100'
+								? 'dark:text-gray-100 text-gray-900'
 								: 'invisible group-hover:visible transition'}"
 						>
 							<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
@@ -375,12 +379,18 @@
 								: ' w-full'}"
 						>
 							{#if message.content}
-								<Markdown
-									id={`${chatId}-${message.id}`}
-									content={message.content}
-									{editCodeBlock}
-									{topPadding}
-								/>
+								{#if $settings?.renderMarkdownInUserMessages ?? true}
+									<Markdown
+										id={`${chatId}-${message.id}`}
+										content={message.content}
+										{editCodeBlock}
+										{topPadding}
+									/>
+								{:else}
+									<div class="whitespace-pre-wrap" dir={$settings?.chatDirection ?? 'auto'}>
+										{message.content}
+									</div>
+								{/if}
 							{/if}
 						</div>
 					</div>
@@ -543,15 +553,93 @@
 						</Tooltip>
 					{/if}
 
-					{#if $_user?.role === 'admin' || ($_user?.permissions?.chat?.delete_message ?? false)}
-						{#if !readOnly && (!isFirstMessage || siblings.length > 1)}
+				<!-- (i) button: shows pseudonymized prompt and/or query expansion variants -->
+				{#if message.pseudonymized_prompt || (message.query_variants && message.query_variants.length > 0)}
+					<button
+						aria-label={message.pseudonymized_prompt ? 'Show pseudonymized prompt' : 'Show query expansion'}
+						class="{($settings?.highContrastMode ?? false)
+							? 'visible'
+							: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
+						on:mouseenter={(e) => {
+							const rect = e.currentTarget.getBoundingClientRect();
+							infoTooltipX = rect.left;
+							infoTooltipY = rect.bottom + 8;
+							showInfoTooltip = true;
+						}}
+						on:mouseleave={() => { showInfoTooltip = false; }}
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4">
+							<circle cx="12" cy="12" r="10"/>
+							<line x1="12" y1="16" x2="12" y2="12"/>
+							<line x1="12" y1="8" x2="12.01" y2="8"/>
+						</svg>
+					</button>
+					{#if showInfoTooltip}
+						<div
+							class="fixed z-50 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none"
+							style="top:{infoTooltipY}px; left:{infoTooltipX}px; max-width: 400px; max-height: 70vh; overflow-y: auto;"
+						>
+							{#if message.pseudonymized_prompt}
+								<div style="font-family: ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap; word-break: break-word;">
+									{message.pseudonymized_prompt}
+								</div>
+							{/if}
+							{#if message.query_variants && message.query_variants.length > 0}
+								<div style="
+									margin-top: {message.pseudonymized_prompt ? '8px' : '0'};
+									padding-top: {message.pseudonymized_prompt ? '8px' : '0'};
+									border-top: {message.pseudonymized_prompt ? '1px solid rgba(255,255,255,0.2)' : 'none'};
+								">
+									<div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">
+										Query Expansion
+									</div>
+									{#each message.query_variants as variant}
+										<div style="font-size: 12px; color: #6ee7b7; font-family: ui-monospace, SFMono-Regular, monospace; margin-bottom: 2px; white-space: pre-wrap; word-break: break-word;">
+											→ {variant}
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/if}
+				{/if}
+
+				{#if message.file_entity_count > 0 && message.files?.length > 0}
+					<div class="text-xs text-gray-500 mt-1">
+						<div class="flex items-center gap-1 relative group/vault">
+							<span>📎 {message.file_entity_count} sensitive items detected in file</span>
+							{#if message.garnet_breakdown && Object.keys(message.garnet_breakdown).length > 0}
+								<span class="cursor-pointer text-gray-400 hover:text-white text-xs">▸ details</span>
+								<div class="absolute bottom-5 left-0 z-50 hidden group-hover/vault:flex flex-col gap-1 bg-gray-800 border border-gray-700 rounded-lg p-2 w-48 shadow-lg">
+									{#each Object.entries(message.garnet_breakdown) as [type, count]}
+										{@const maxCount = Math.max(...Object.values(message.garnet_breakdown))}
+										<div class="flex items-center gap-2">
+											<span class="text-gray-400 w-24 truncate text-xs">{type}</span>
+											<div class="flex-1 bg-gray-700 rounded h-1.5">
+												<div class="h-1.5 rounded bg-green-400" style="width: {(count / maxCount) * 100}%"></div>
+											</div>
+											<span class="text-gray-300 w-3 text-right text-xs">{count}</span>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+
+				{#if $_user?.role === 'admin' || ($_user?.permissions?.chat?.delete_message ?? false)}
+					{#if !readOnly && (!isFirstMessage || siblings.length > 1)}
 							<Tooltip content={$i18n.t('Delete')} placement="bottom">
 								<button
 									class="{($settings?.highContrastMode ?? false)
 										? ''
 										: 'invisible group-hover:visible'} p-1 rounded-sm dark:hover:text-white hover:text-black transition"
-									on:click={() => {
-										showDeleteConfirm = true;
+									on:click={(e) => {
+										if (e.shiftKey) {
+											deleteMessageHandler();
+										} else {
+											showDeleteConfirm = true;
+										}
 									}}
 								>
 									<svg
