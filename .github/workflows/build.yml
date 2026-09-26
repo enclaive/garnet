@@ -61,7 +61,7 @@ jobs:
       - name: Check changed files
         id: changes
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "proxy=true" >> $GITHUB_OUTPUT
             echo "webui=true" >> $GITHUB_OUTPUT
           else
