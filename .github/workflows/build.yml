@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - v*
+      - enclaivev*
     branches:
       - deploy/staging
       - deploy/prod
@@ -35,7 +35,7 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          if [[ "${GITHUB_REF}" == refs/tags/enclaivev* ]]; then
             echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           else
             echo "version=$(cat version/VERSION).nightly" >> $GITHUB_OUTPUT
@@ -51,7 +51,7 @@ jobs:
           case "${GITHUB_REF}" in
             refs/heads/deploy/staging) NAME=staging ;;
             refs/heads/deploy/prod)    NAME=prod    ;;
-            refs/tags/v*)              NAME=latest  ;;
+            refs/tags/enclaivev*)      NAME=latest  ;;
             *)                         NAME="${FALLBACK}" ;;
           esac
           echo "name=${NAME}" >> $GITHUB_OUTPUT
