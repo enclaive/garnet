@@ -75,7 +75,6 @@ jobs:
 
   build-proxy:
     needs: get-meta
-    if: needs.get-meta.outputs.proxy_changed == 'true'
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -183,7 +182,6 @@ jobs:
 
   python-checks:
     needs: [get-meta, build-proxy]
-    if: needs.get-meta.outputs.proxy_changed == 'true'
     uses: ./.github/workflows/pythoncheck.yml
     with:
       image_tag: ${{ needs.get-meta.outputs.revision }}
@@ -193,7 +191,6 @@ jobs:
 
   build-webui:
     needs: get-meta
-    if: needs.get-meta.outputs.webui_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
