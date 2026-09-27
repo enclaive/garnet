@@ -30,10 +30,12 @@ async def _fetch_smart_router_pool(client: httpx.AsyncClient) -> list[str]:
             timeout=5.0,
         )
         models = r.json().get("data", [])
-        _smart_router_cache = [
-            m["id"] for m in models
-            if (m.get("info") or {}).get("meta", {}).get("capabilities", {}).get("smart_router")
-        ]
+        def _has_smart_router(m):
+            if not isinstance(m, dict):
+                return False
+            caps = ((m.get("info") or {}).get("meta") or {}).get("capabilities") or {}
+            return bool(caps.get("smart_router"))
+        _smart_router_cache = [m["id"] for m in models if _has_smart_router(m)]
         _smart_router_cache_ts = now
     except Exception:
         pass
