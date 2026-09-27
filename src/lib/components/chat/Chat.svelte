@@ -1617,6 +1617,7 @@
 		if (picked_model) {
 			message.picked_model = picked_model;
 			message.model = picked_model;
+			history = history;
 		}
 		const queryVariants = query_variants || [];
 

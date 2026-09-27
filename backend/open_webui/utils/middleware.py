@@ -3137,6 +3137,11 @@ async def non_streaming_chat_response_handler(response, ctx):
                                     if 'query_variants' in response_data
                                     else {}
                                 ),
+                                **(
+                                    {'picked_model': response_data['picked_model']}
+                                    if 'picked_model' in response_data
+                                    else {}
+                                ),
                             },
                         }
                     )
@@ -3488,6 +3493,7 @@ async def streaming_chat_response_handler(response, ctx):
             file_entity_count = 0
             garnet_breakdown = {}
             query_variants = []
+            picked_model = None
 
             def full_output():
                 return prior_output + output if prior_output else output
@@ -3588,6 +3594,8 @@ async def streaming_chat_response_handler(response, ctx):
                                 garnet_breakdown = data['garnet_breakdown']
                             if 'query_variants' in data:
                                 query_variants = data['query_variants']
+                            if 'picked_model' in data:
+                                picked_model = data['picked_model']
 
                             data, _ = await process_filter_functions(
                                 request=request,
@@ -4664,6 +4672,11 @@ async def streaming_chat_response_handler(response, ctx):
                     **(
                         {'query_variants': query_variants}
                         if query_variants
+                        else {}
+                    ),
+                    **(
+                        {'picked_model': picked_model}
+                        if picked_model
                         else {}
                     ),
                 }
