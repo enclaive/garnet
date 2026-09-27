@@ -62,6 +62,12 @@
 			description: $i18n.t(
 				'Force Garnet privacy proxy ON for this model. Users cannot disable the toggle.'
 			)
+		},
+		smart_router: {
+			label: $i18n.t('Smart Router'),
+			description: $i18n.t(
+				'Include this model in the Jev Smart Router pool. When a chat uses Auto Router, Jev will pick the best model from all models with this flag enabled.'
+			)
 		}
 	};
 
@@ -78,6 +84,7 @@
 		status_updates?: boolean;
 		builtin_tools?: boolean;
 		privacy_enforce?: boolean;
+		smart_router?: boolean;
 	} = {};
 
 	// Hide file_context when file_upload is disabled

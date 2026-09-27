@@ -4,11 +4,16 @@ import httpx
 
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 JEV_MODEL = os.getenv("JEV_ROUTER_MODEL", "typesafe/jev-router")
+# Comma-separated list of candidate models for Jev (matches models with Smart Router capability ON).
+# If set, Jev picks from this list directly. If empty, falls back to random sample from OpenRouter pool.
+_CANDIDATE_MODELS = [m.strip() for m in os.getenv("JEV_CANDIDATE_MODELS", "").split(",") if m.strip()]
 
 _model_cache: list[str] = []
 
 
 async def _fetch_pool(client: httpx.AsyncClient) -> list[str]:
+    if _CANDIDATE_MODELS:
+        return _CANDIDATE_MODELS
     # ponytail: lazy-init cache, refreshed on process restart. Upgrade path: TTL refresh if needed.
     global _model_cache
     if _model_cache:
@@ -33,8 +38,9 @@ async def jev_rank(messages: list, client: httpx.AsyncClient) -> list[str]:
     """Return ranked list of models best->worst for OpenRouter fallback chain."""
     pool = await _fetch_pool(client)
     if not pool:
-        raise RuntimeError("OpenRouter model pool empty — check OPENROUTER_API_KEY")
-    shortlist = random.sample(pool, min(6, len(pool)))
+        raise RuntimeError("OpenRouter model pool empty — check OPENROUTER_API_KEY or JEV_CANDIDATE_MODELS")
+    # If using explicit candidate list, give all to Jev (no random sampling needed)
+    shortlist = pool if _CANDIDATE_MODELS else random.sample(pool, min(6, len(pool)))
     last = messages[-1] if messages else {}
     content = last.get("content", "")
     if isinstance(content, list):
