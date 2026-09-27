@@ -21,7 +21,11 @@ async def _fetch_pool(client: httpx.AsyncClient) -> list[str]:
         timeout=10.0,
     )
     data = r.json().get("data", [])
-    _model_cache = [m["id"] for m in data if m.get("id") and m["id"] != JEV_MODEL]
+    # filter :batch (async-only endpoints) — Jev kept picking these and OpenRouter rejects them for chat
+    _model_cache = [
+        m["id"] for m in data
+        if m.get("id") and m["id"] != JEV_MODEL and ":batch" not in m["id"]
+    ]
     return _model_cache
 
 

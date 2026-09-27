@@ -669,8 +669,8 @@ async def proxy(request: Request, path: str):
                 ranked = await jev_rank(body.get("messages", []), _http_client)
                 model = ranked[0]
                 body["model"] = model
-                # ponytail: OpenRouter reads body["models"] and auto-falls through on quota/error
-                body["models"] = ranked
+                # OpenRouter caps fallback chain at 3 (400: "'models' array must have 3 items or fewer.")
+                body["models"] = ranked[:3]
             _msgs = body.get("messages", [])
             _total_chars = sum(len(extract_text_content(m.get("content", ""))) for m in _msgs)
             log_context_size(len(_msgs), _total_chars)
