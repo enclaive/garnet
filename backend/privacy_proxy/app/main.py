@@ -194,7 +194,7 @@ def detect_internal_type(content: str) -> str:
 
 #
 async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, variants=None, t0=None):
-    yield orjson.dumps({
+    yield b"data: " + orjson.dumps({
         "type": "pseudonymized_prompt",
         "content": pseudonymized_prompt or "",
         "file_entity_count": file_entity_count,
