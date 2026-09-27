@@ -199,7 +199,8 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
         "content": pseudonymized_prompt or "",
         "file_entity_count": file_entity_count,
         "garnet_breakdown": garnet_breakdown or {},
-        "query_variants": variants or []
+        "query_variants": variants or [],
+        "picked_model": model,
     }) + b"\n\n"
 
     buffer = ""
@@ -713,6 +714,7 @@ async def proxy(request: Request, path: str):
             result["pseudonymized_prompt"] = pseudonymized_user_message or ""
             result["file_entity_count"] = file_entity_count
             result["query_variants"] = variants or []
+            result["picked_model"] = model
 
             log_to_user(len(session_mapping), 0.0, time.perf_counter() - t0)
             log_sep()
