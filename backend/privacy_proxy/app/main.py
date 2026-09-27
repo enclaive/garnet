@@ -664,9 +664,12 @@ async def proxy(request: Request, path: str):
 
         if body:
             if model in ("auto", "openrouter/auto"):
-                from app.router import jev_pick
-                model = await jev_pick(body.get("messages", []), _http_client)
+                from app.router import jev_rank
+                ranked = await jev_rank(body.get("messages", []), _http_client)
+                model = ranked[0]
                 body["model"] = model
+                # ponytail: OpenRouter reads body["models"] and auto-falls through on quota/error
+                body["models"] = ranked
             _msgs = body.get("messages", [])
             _total_chars = sum(len(extract_text_content(m.get("content", ""))) for m in _msgs)
             log_context_size(len(_msgs), _total_chars)
