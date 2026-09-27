@@ -434,6 +434,10 @@ async def proxy(request: Request, path: str):
 
         messages = body.get("messages", [])
         model = body.get("model", "unknown")
+        if model in ("auto", "openrouter/auto"):
+            from app.router import jev_pick
+            model = await jev_pick(messages, _http_client)
+            body["model"] = model
         first_msg = extract_text_content(messages[0].get("content", "")) if messages else ""
 
         session_id = (
