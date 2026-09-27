@@ -54,6 +54,10 @@ services:
       - OPENAI_API_URL=${OPENAI_API_URL}
       - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
       - REDIS_URL=${REDIS_URL}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - JEV_ROUTER_MODEL=${JEV_ROUTER_MODEL:-typesafe/jev-router}
+      - OPEN_WEBUI_URL=${OPEN_WEBUI_URL:-http://open-webui:8080}
+      - OPEN_WEBUI_API_KEY=${OPEN_WEBUI_API_KEY}
     depends_on:
       ollama:
         condition: service_healthy

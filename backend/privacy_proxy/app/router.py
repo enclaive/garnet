@@ -32,7 +32,7 @@ async def _fetch_smart_router_pool(client: httpx.AsyncClient) -> list[str]:
         models = r.json().get("data", [])
         _smart_router_cache = [
             m["id"] for m in models
-            if m.get("meta", {}).get("capabilities", {}).get("smart_router")
+            if (m.get("info") or {}).get("meta", {}).get("capabilities", {}).get("smart_router")
         ]
         _smart_router_cache_ts = now
     except Exception:
