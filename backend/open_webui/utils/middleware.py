@@ -3537,6 +3537,7 @@ async def streaming_chat_response_handler(response, ctx):
                     nonlocal file_entity_count
                     nonlocal garnet_breakdown
                     nonlocal query_variants
+                    nonlocal picked_model
 
                     response_tool_calls = []
 
