@@ -45,7 +45,10 @@
 	function onSpeedChange() {
 		localStorage.setItem('garnet_screening_speed', String(screeningSpeed));
 	}
-	export let models = [];
+	export let models: any[] = [];
+	$: smartRouterModels = (models || []).filter(
+		(m: any) => m?.info?.meta?.capabilities?.smart_router
+	);
 	export let chatFiles = [];
 	export let params = {};
 	export let embed = false;
@@ -230,11 +233,11 @@
 									   focus:outline-none"
 							/>
 						</div>
-						{#if models && models.filter((m) => m?.info?.meta?.capabilities?.smart_router).length > 0}
+						{#if smartRouterModels.length > 0}
 							<div class="py-0.5 w-full mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
 								<div class="text-xs mb-1">Smart Router Pool</div>
 								<div class="flex flex-col gap-0.5 max-h-32 overflow-y-auto">
-									{#each models.filter((m) => m?.info?.meta?.capabilities?.smart_router) as m}
+									{#each smartRouterModels as m (m.id)}
 										<div class="text-[10px] text-gray-500 dark:text-gray-400 truncate">• {m.name || m.id}</div>
 									{/each}
 								</div>
