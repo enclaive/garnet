@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import random
 import sys
@@ -10,6 +11,7 @@ from aiocache import cached
 from fastapi import HTTPException, Request, status
 from open_webui.env import BYPASS_MODEL_ACCESS_CONTROL, GLOBAL_LOG_LEVEL
 from open_webui.functions import generate_function_chat_completion
+from open_webui.models.functions import Functions
 from open_webui.models.models import Models
 from open_webui.models.users import UserModel
 from open_webui.routers.ollama import (
@@ -28,10 +30,9 @@ from open_webui.socket.main import (
     sio,
 )
 from open_webui.utils.filter import (
-    get_filter_functions,
+    get_sorted_filter_ids,
     process_filter_functions,
 )
-from open_webui.utils.json_codec import JSONCodec
 from open_webui.utils.models import check_model_access, get_all_models
 from open_webui.utils.payload import convert_payload_openai_to_ollama
 from open_webui.utils.response import (
@@ -108,7 +109,7 @@ async def generate_direct_chat_completion(
                             if 'done' in data and data['done']:
                                 break  # Stop streaming when 'done' is received
 
-                            yield f'data: {JSONCodec.dumps(data)}\n\n'
+                            yield f'data: {json.dumps(data)}\n\n'
                         elif isinstance(data, str):
                             if 'data:' in data:
                                 yield f'{data}\n\n'
@@ -181,7 +182,7 @@ async def generate_chat_completion(
         # dict(...items()) is one HGETALL on a Redis-backed pool; ``{**pool}``
         # would issue HKEYS plus one HGET per model.
         models = {
-            **dict(request.app.state.MODELS.items()),
+            **request.app.state.MODELS,
             request.state.model['id']: request.state.model,
         }
         log.debug('direct connection to model: %s', request.state.model['id'])
@@ -257,7 +258,7 @@ async def generate_chat_completion(
             if form_data.get('stream') == True:
 
                 async def stream_wrapper(stream):
-                    yield f'data: {JSONCodec.dumps({"selected_model_id": selected_model_id})}\n\n'
+                    yield f'data: {json.dumps({"selected_model_id": selected_model_id})}\n\n'
                     async for chunk in stream:
                         yield chunk
 
@@ -325,7 +326,7 @@ async def chat_completed(request: Request, form_data: dict, user: Any):
 
     if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
         models = {
-            **dict(request.app.state.MODELS.items()),
+            **request.app.state.MODELS,
             request.state.model['id']: request.state.model,
         }
     else:
@@ -370,7 +371,8 @@ async def chat_completed(request: Request, form_data: dict, user: Any):
     }
 
     try:
-        filter_functions = await get_filter_functions(request, model, metadata.get('filter_ids', []))
+        filter_ids = await get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
+        filter_functions = await Functions.get_functions_by_ids(filter_ids)
 
         result, _ = await process_filter_functions(
             request=request,
