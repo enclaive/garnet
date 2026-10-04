@@ -1363,6 +1363,8 @@ async def generate_chat_completion(
                             garnet_breakdown = parsed.get("garnet_breakdown", {})
                             query_variants = parsed.get("query_variants", [])
                             picked_model = parsed.get("picked_model", "")
+                            if picked_model:
+                                yield f'data: {json.dumps({"picked_model": picked_model})}\n\n'.encode('utf-8')
                             continue
                     except Exception:
                         pass
