@@ -199,7 +199,7 @@ async def generate_chat_completion(
     if model_id in ("auto", "openrouter/auto"):
         pool = [
             m["id"] for m in models.values()
-            if m.get("info", {}).get("meta", {}).get("capabilities", {}).get("smart_router")
+            if m and (((m.get("info") or {}).get("meta") or {}).get("capabilities") or {}).get("smart_router")
         ]
         if pool:
             form_data["router_pool"] = pool
