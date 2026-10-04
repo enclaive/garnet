@@ -6,11 +6,6 @@ on:
     tags:
       - enclaivev*
     branches:
-      - deploy/staging
-      - deploy/prod
-      - garnet-privacy-proxy
-      - demo1
-      - demo1upgrade
       - feat/**
   pull_request:
     branches:
@@ -21,63 +16,32 @@ jobs:
   get-meta:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.get_version.outputs.version }}
-      tag: ${{ steps.get_tag.outputs.name }}
-      revision: ${{ steps.get_revision.outputs.revision }}
-      proxy_changed: ${{ steps.changes.outputs.proxy }}
-      webui_changed: ${{ steps.changes.outputs.webui }}
+      version:  ${{ steps.get_meta.outputs.version }}
+      tag:      ${{ steps.get_meta.outputs.tag }}
+      revision: ${{ steps.get_meta.outputs.revision }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
-      - name: Get version
-        id: get_version
+      - name: get meta
+        id: get_meta
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/enclaivev* ]]; then
-            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-          else
-            echo "version=$(cat version/VERSION).nightly" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get revision
-        id: get_revision
-        run: echo "revision=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Get tag
-        id: get_tag
-        run: |
+          echo "version=$(cat version/VERSION)" >> $GITHUB_OUTPUT
+          echo "revision=$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_OUTPUT
           case "${GITHUB_REF}" in
-            refs/heads/deploy/staging) NAME=staging ;;
-            refs/heads/deploy/prod)    NAME=prod    ;;
-            refs/tags/enclaivev*)      NAME=latest  ;;
-            *)                         NAME="${FALLBACK}" ;;
+            refs/heads/deploy/staging) TAG=staging ;;
+            refs/heads/deploy/prod)    TAG=prod    ;;
+            refs/tags/enclaivev*)      TAG=${GITHUB_REF_NAME} ;;
+            *)                         TAG=$(echo '${{ github.sha }}' | cut -c1-7) ;;
           esac
-          echo "name=${NAME}" >> $GITHUB_OUTPUT
-        env:
-          FALLBACK: ${{ steps.get_revision.outputs.revision }}
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      - name: Check changed files
-        id: changes
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "proxy=true" >> $GITHUB_OUTPUT
-            echo "webui=true" >> $GITHUB_OUTPUT
-          else
-            git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^backend/privacy_proxy/' \
-              && echo "proxy=true" >> $GITHUB_OUTPUT \
-              || echo "proxy=false" >> $GITHUB_OUTPUT
-            git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '^src/|^backend/open_webui/' \
-              && echo "webui=true" >> $GITHUB_OUTPUT \
-              || echo "webui=false" >> $GITHUB_OUTPUT
-          fi
 
   build-proxy:
     needs: get-meta
-    if: needs.get-meta.outputs.proxy_changed == 'true'
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: read
     steps:
@@ -111,9 +75,6 @@ jobs:
             --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/privacy-proxy:cache \
             --cache-to   type=inline \
             --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.tag }} \
-            --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.version }} \
-            --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.revision }} \
-            --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:gh-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.run_number }} \
             --push \
             --metadata-file /tmp/proxy-meta.json \
             backend/privacy_proxy/ && \
@@ -183,7 +144,6 @@ jobs:
 
   python-checks:
     needs: [get-meta, build-proxy]
-    if: needs.get-meta.outputs.proxy_changed == 'true'
     uses: ./.github/workflows/pythoncheck.yml
     with:
       image_tag: ${{ needs.get-meta.outputs.revision }}
@@ -193,7 +153,6 @@ jobs:
 
   build-webui:
     needs: get-meta
-    if: needs.get-meta.outputs.webui_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -225,7 +184,7 @@ jobs:
             --build-arg PRODUCT_VERSION=${{ needs.get-meta.outputs.version }} \
             --build-arg PRODUCT_REVISION=${{ needs.get-meta.outputs.revision }} \
             --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/garnet-webui:cache \
-            --cache-to   type=registry,ref=harbor.enclaive.cloud/garnetdemo/garnet-webui:cache,mode=max \
+            --cache-to   type=registry,ref=harbor.enclaive.cloud/garnetdemo/garnet-webui:cache,mode=min \
             --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.tag }} \
             --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.version }} \
             --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.revision }} \
