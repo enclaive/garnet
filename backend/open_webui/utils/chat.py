@@ -197,10 +197,14 @@ async def generate_chat_completion(
         raise Exception('Model not found')
 
     if model_id in ("auto", "openrouter/auto"):
-        pool = [
-            m["id"] for m in models.values()
-            if m and (((m.get("info") or {}).get("meta") or {}).get("capabilities") or {}).get("smart_router")
-        ]
+        pool = []
+        for m in models.values():
+            if not m:
+                continue
+            caps = (((m.get("info") or {}).get("meta") or {}).get("capabilities") or {})
+            if caps.get("smart_router"):
+                pool.append(m.get("id"))
+        log.info('[SMART ROUTER] total_models=%d smart_router_pool=%d pool=%s', len(models), len(pool), pool)
         if pool:
             form_data["router_pool"] = pool
 
