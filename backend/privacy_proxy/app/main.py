@@ -193,13 +193,14 @@ def detect_internal_type(content: str) -> str:
 #         return []
 
 #
-async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, variants=None, t0=None):
+async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, session_id, url, model, file_entity_count=0, garnet_breakdown=None, variants=None, t0=None, laya_selected_model=None):
     yield orjson.dumps({
         "type": "pseudonymized_prompt",
         "content": pseudonymized_prompt or "",
         "file_entity_count": file_entity_count,
         "garnet_breakdown": garnet_breakdown or {},
-        "query_variants": variants or []
+        "query_variants": variants or [],
+        **({"picked_model": laya_selected_model} if laya_selected_model else {}),
     }) + b"\n\n"
 
     buffer = ""
@@ -434,6 +435,13 @@ async def proxy(request: Request, path: str):
 
         messages = body.get("messages", [])
         model = body.get("model", "unknown")
+        laya_selected_model = None
+        if model in ("auto", "openrouter/auto"):
+            from app.router import laya_pick
+            router_pool = body.pop("router_pool", None)
+            model = await laya_pick(messages, _http_client, pool=router_pool)
+            laya_selected_model = model
+            body["model"] = model
         first_msg = extract_text_content(messages[0].get("content", "")) if messages else ""
 
         session_id = (
@@ -812,7 +820,7 @@ async def proxy(request: Request, path: str):
             stream_with_depseudo(
                 src, session_mapping, pseudonymized_user_message,
                 session_id, url, model, file_entity_count, garnet_breakdown,
-                variants=variants, t0=t0
+                variants=variants, t0=t0, laya_selected_model=laya_selected_model
             ),
             media_type="text/event-stream"
         )
