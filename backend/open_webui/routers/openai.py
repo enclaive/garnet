@@ -1349,6 +1349,7 @@ async def generate_chat_completion(
                 file_entity_count = 0
                 garnet_breakdown = {}
                 query_variants = []
+                picked_model = ""
                 async for chunk in stream_wrapper(r, content_handler=stream_chunks_handler):
                     try:
                         chunk_str = chunk.decode('utf-8', errors='replace') if isinstance(chunk, bytes) else chunk
@@ -1361,12 +1362,16 @@ async def generate_chat_completion(
                             file_entity_count = parsed.get("file_entity_count", 0)
                             garnet_breakdown = parsed.get("garnet_breakdown", {})
                             query_variants = parsed.get("query_variants", [])
+                            picked_model = parsed.get("picked_model", "")
                             continue
                     except Exception:
                         pass
                     yield chunk
-                if pseudo_prompt or file_entity_count or query_variants:
-                    synthetic = f'data: {json.dumps({"pseudonymized_prompt": pseudo_prompt, "file_entity_count": file_entity_count, "garnet_breakdown": garnet_breakdown, "query_variants": query_variants})}\n\n'
+                if pseudo_prompt or file_entity_count or query_variants or picked_model:
+                    payload = {"pseudonymized_prompt": pseudo_prompt, "file_entity_count": file_entity_count, "garnet_breakdown": garnet_breakdown, "query_variants": query_variants}
+                    if picked_model:
+                        payload["picked_model"] = picked_model
+                    synthetic = f'data: {json.dumps(payload)}\n\n'
                     yield synthetic.encode('utf-8')
 
             return StreamingResponse(
