@@ -9,7 +9,7 @@
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
-	import { user, settings } from '$lib/stores';
+	import { user, settings, models as allModels } from '$lib/stores';
 	import { onMount } from 'svelte';
 
 	const ENTITY_TYPES = [
@@ -46,7 +46,7 @@
 		localStorage.setItem('garnet_screening_speed', String(screeningSpeed));
 	}
 	export let models: any[] = [];
-	$: smartRouterModels = (models || []).filter(
+	$: smartRouterModels = ($allModels || []).filter(
 		(m: any) => m?.info?.meta?.capabilities?.smart_router
 	);
 	export let chatFiles = [];
