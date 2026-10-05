@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { onDestroy, getContext } from 'svelte';
 
-	import { toast } from 'svelte-sonner';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { WEBUI_BASE_URL } from '$lib/constants';
 	import PanzoomContainer from '$lib/components/common/PanzoomContainer.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 
@@ -73,7 +71,6 @@
 
 			<div>
 				<button
-					aria-label={$i18n.t('Download')}
 					class=" p-5 z-999"
 					on:click={() => {
 						if (src.startsWith('data:image/')) {
@@ -122,21 +119,8 @@
 							src.startsWith('https://')
 						) {
 							// Handle remote URLs
-							const backendOrigin = new URL(WEBUI_BASE_URL || '/', window.location.origin).origin;
-							const isBackendUrl = new URL(src, window.location.origin).origin === backendOrigin;
-
-							fetch(
-								src,
-								isBackendUrl && localStorage.token
-									? { headers: { Authorization: `Bearer ${localStorage.token}` } }
-									: undefined
-							)
-								.then((response) => {
-									if (!response.ok) {
-										throw new Error(`Failed to download image: ${response.status}`);
-									}
-									return response.blob();
-								})
+							fetch(src)
+								.then((response) => response.blob())
 								.then((blob) => {
 									// detect the MIME type from the blob
 									const mimeType = blob.type || 'image/png';
@@ -155,7 +139,6 @@
 								})
 								.catch((error) => {
 									console.error('Error downloading remote image:', error);
-									toast.error($i18n.t('Failed to download image'));
 								});
 							return;
 						}

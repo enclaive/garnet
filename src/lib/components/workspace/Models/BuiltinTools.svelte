@@ -1,21 +1,15 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
-	import type { Writable } from 'svelte/store';
-	import type { i18n as i18nType } from 'i18next';
 	import Checkbox from '$lib/components/common/Checkbox.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { marked } from 'marked';
 
-	const i18n: Writable<i18nType> = getContext('i18n');
+	const i18n = getContext('i18n');
 
 	const toolLabels = {
 		time: {
 			label: $i18n.t('Time & Calculation'),
 			description: $i18n.t('Get current time and perform date/time calculations')
-		},
-		user_input: {
-			label: $i18n.t('Ask User'),
-			description: $i18n.t('Pause a response to ask the user a clarifying question')
 		},
 		memory: {
 			label: $i18n.t('Memory'),
@@ -33,17 +27,9 @@
 			label: $i18n.t('Knowledge Base'),
 			description: $i18n.t('Browse and query knowledge bases')
 		},
-		files: {
-			label: $i18n.t('Files'),
-			description: $i18n.t('List, search, and read files attached to the current chat')
-		},
 		channels: {
 			label: $i18n.t('Channels'),
 			description: $i18n.t('Search channels and channel messages')
-		},
-		notifications: {
-			label: $i18n.t('Notifications'),
-			description: $i18n.t('Send notifications to configured webhook targets')
 		},
 		web_search: {
 			label: $i18n.t('Web Search'),
@@ -68,52 +54,38 @@
 		calendar: {
 			label: $i18n.t('Calendar'),
 			description: $i18n.t('List calendars, search, create, update, and delete calendar events')
-		},
-		subagents: {
-			label: $i18n.t('Sub-agents'),
-			description: $i18n.t('Delegate focused work to parallel sub-agents')
 		}
 	};
 
-	const allTools = Object.keys(toolLabels) as Array<keyof typeof toolLabels>;
+	const allTools = Object.keys(toolLabels);
 
 	export let builtinTools: Record<string, boolean> = {};
-
-	const setBuiltinTool = (tool: keyof typeof toolLabels, checked: boolean) => {
-		if (checked) {
-			delete builtinTools[tool];
-		} else {
-			builtinTools[tool] = false;
-		}
-		builtinTools = builtinTools;
-	};
 </script>
 
 <div>
-	<div class="mb-1.5 text-xs text-gray-400 dark:text-gray-600">{$i18n.t('Builtin Tools')}</div>
-	<div class="grid grid-cols-1 gap-x-5 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+	<div class="flex w-full justify-between mb-1">
+		<div class="self-center text-xs font-medium text-gray-500">{$i18n.t('Builtin Tools')}</div>
+	</div>
+	<div class="flex items-center mt-2 flex-wrap">
 		{#each allTools as tool}
-			<div class="flex min-h-6 items-center gap-2.5">
+			<div class="flex items-center gap-2 mr-3">
 				<Checkbox
-					ariaLabel={$i18n.t(toolLabels[tool].label)}
 					state={builtinTools[tool] !== false ? 'checked' : 'unchecked'}
 					on:change={(e) => {
-						setBuiltinTool(tool, e.detail === 'checked');
+						if (e.detail === 'checked') {
+							delete builtinTools[tool];
+						} else {
+							builtinTools[tool] = false;
+						}
+						builtinTools = builtinTools;
 					}}
 				/>
-				<button
-					type="button"
-					class="min-w-0 cursor-pointer text-left text-xs text-gray-600 dark:text-gray-400"
-					on:click={() => setBuiltinTool(tool, builtinTools[tool] === false)}
-				>
-					<Tooltip
-						as="span"
-						className="block min-w-0"
-						content={marked.parse(toolLabels[tool].description)}
-					>
-						<span class="block truncate">{$i18n.t(toolLabels[tool].label)}</span>
+
+				<div class="py-0.5 text-sm">
+					<Tooltip content={marked.parse(toolLabels[tool].description)}>
+						{$i18n.t(toolLabels[tool].label)}
 					</Tooltip>
-				</button>
+				</div>
 			</div>
 		{/each}
 	</div>

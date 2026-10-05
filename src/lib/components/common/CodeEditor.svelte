@@ -26,7 +26,6 @@
 
 	export let boilerplate = '';
 	export let value = '';
-	export let className = 'text-sm';
 
 	export let onSave = () => {};
 	export let onChange = () => {};
@@ -79,7 +78,6 @@
 	export let lang = '';
 
 	let codeEditor: EditorView | null = null;
-	let codeEditorContainerElement: HTMLDivElement | undefined = undefined;
 
 	export const focus = () => {
 		codeEditor?.focus();
@@ -250,7 +248,7 @@ print("${endTag}")
 				doc: _value,
 				extensions: extensions
 			}),
-			parent: codeEditorContainerElement
+			parent: document.getElementById(`code-textarea-${id}`)
 		});
 
 		if (isDarkMode) {
@@ -320,8 +318,4 @@ print("${endTag}")
 	});
 </script>
 
-<div
-	bind:this={codeEditorContainerElement}
-	id="code-textarea-{id}"
-	class="{className} h-full w-full min-w-0 overflow-hidden"
-/>
+<div id="code-textarea-{id}" class="h-full w-full text-sm" />

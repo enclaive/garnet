@@ -11,11 +11,8 @@
 </script>
 
 <svelte:head>
-	<!-- LICENSE covers this Open WebUI browser-title identifier.
-	Do not alter, remove, obscure, or replace it except as LICENSE permits:
-	https://docs.openwebui.com/license. -->
 	<title>
-		{$i18n.t('Home')} / {$WEBUI_NAME}
+		{$i18n.t('Home')} • {$WEBUI_NAME}
 	</title>
 </svelte:head>
 
@@ -40,7 +37,7 @@
 							}}
 						>
 							<div class=" self-center p-1.5">
-								<Sidebar className="size-4" />
+								<Sidebar />
 							</div>
 						</button>
 					</Tooltip>
@@ -49,7 +46,7 @@
 
 			<div class=" flex w-full">
 				<div
-					class="flex gap-0.5 md:gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-normal rounded-full bg-transparent pt-1"
+					class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
 				>
 					<a
 						class="min-w-fit p-1.5 {$page.url.pathname.includes('/home/notes')

@@ -9,7 +9,6 @@
 	import Switch from './Switch.svelte';
 	import SensitiveInput from './SensitiveInput.svelte';
 	import NativeSelect from './NativeSelect.svelte';
-	import MultiSelect from './MultiSelect.svelte';
 	import MapSelector from './Valves/MapSelector.svelte';
 
 	export let valvesSpec = null;
@@ -20,7 +19,7 @@
 	{#each Object.keys(valvesSpec.properties) as property}
 		<div class=" py-0.5 w-full justify-between">
 			<div class="flex w-full justify-between">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{valvesSpec.properties[property].title}
 
 					{#if (valvesSpec?.required ?? []).includes(property)}
@@ -29,7 +28,7 @@
 				</div>
 
 				<button
-					class="px-2 py-1 text-xs flex rounded-lg transition hover:bg-gray-50/70 dark:hover:bg-gray-850/50"
+					class="p-1 px-3 text-xs flex rounded-sm transition"
 					type="button"
 					on:click={() => {
 						const propertySpec = valvesSpec.properties[property] ?? {};
@@ -38,11 +37,7 @@
 							// Initialize to custom value
 							if ((propertySpec?.type ?? null) === 'array') {
 								const defaultArray = propertySpec?.default ?? [];
-								if (propertySpec?.input?.type === 'multiselect') {
-									valves[property] = Array.isArray(defaultArray) ? [...defaultArray] : [];
-								} else {
-									valves[property] = Array.isArray(defaultArray) ? defaultArray.join(', ') : '';
-								}
+								valves[property] = Array.isArray(defaultArray) ? defaultArray.join(', ') : '';
 							} else {
 								valves[property] = propertySpec?.default ?? '';
 							}
@@ -70,7 +65,7 @@
 			{#if (valves[property] ?? null) !== null}
 				<!-- {valves[property]} -->
 				<div class="flex mt-0.5 mb-0.5 space-x-2">
-					<div class=" flex-1 min-w-0">
+					<div class=" flex-1">
 						{#if valvesSpec.properties[property]?.enum ?? null}
 							<select
 								class="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-hidden border border-gray-100/30 dark:border-gray-850/30"
@@ -100,16 +95,6 @@
 									/>
 								</div>
 							</div>
-						{:else if valvesSpec.properties[property]?.input?.type === 'multiselect' && valvesSpec.properties[property]?.input?.options}
-							<MultiSelect
-								className="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-hidden border border-gray-100/30 dark:border-gray-850/30"
-								bind:value={valves[property]}
-								options={valvesSpec.properties[property].input.options}
-								placeholder={$i18n.t('Select options')}
-								on:change={() => {
-									dispatch('change');
-								}}
-							/>
 						{:else if (valvesSpec.properties[property]?.type ?? null) !== 'string'}
 							<input
 								class="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-hidden border border-gray-100/30 dark:border-gray-850/30"

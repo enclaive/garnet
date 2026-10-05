@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { getLogoutRedirectUrl, updateUserPassword, userSignOut } from '$lib/apis/auths';
+	import { updateUserPassword } from '$lib/apis/auths';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 
 	const i18n = getContext('i18n');
@@ -10,8 +10,6 @@
 	let currentPassword = '';
 	let newPassword = '';
 	let newPasswordConfirm = '';
-	const actionButtonClass =
-		'text-xs text-gray-500 transition-colors hover:text-gray-900 dark:text-gray-500 dark:hover:text-white';
 
 	const updatePasswordHandler = async () => {
 		if (newPassword === newPasswordConfirm) {
@@ -23,16 +21,7 @@
 			);
 
 			if (res) {
-				// This session is no longer trusted once the password it was issued under changes
-				toast.success($i18n.t('Password updated. Please sign in again.'));
-
-				const signOutRes = await userSignOut().catch((error) => {
-					console.error(error);
-					return null;
-				});
-
-				localStorage.removeItem('token');
-				location.href = getLogoutRedirectUrl(signOutRes?.redirect_url);
+				toast.success($i18n.t('Successfully updated.'));
 			}
 
 			currentPassword = '';
@@ -54,30 +43,25 @@
 		updatePasswordHandler();
 	}}
 >
-	<div class="flex items-center justify-between gap-2.5">
-		<div class="text-xs text-gray-600 dark:text-gray-400">{$i18n.t('Change Password')}</div>
+	<div class="flex justify-between items-center text-sm">
+		<div class="  font-medium">{$i18n.t('Change Password')}</div>
 		<button
-			class={actionButtonClass}
+			class=" text-xs font-medium text-gray-500"
 			type="button"
 			on:click={() => {
 				show = !show;
 			}}>{show ? $i18n.t('Hide') : $i18n.t('Show')}</button
 		>
 	</div>
-	<p class="mt-0.5 text-[0.6875rem] text-gray-400 dark:text-gray-600">
-		{$i18n.t('Update the password used for email and password sign-in.')}
-	</p>
 
 	{#if show}
-		<div class="py-2.5 space-y-2.5">
+		<div class=" py-2.5 space-y-1.5">
 			<div class="flex flex-col w-full">
-				<div class="mb-1 text-xs text-gray-600 dark:text-gray-400">
-					{$i18n.t('Current Password')}
-				</div>
+				<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Current Password')}</div>
 
 				<div class="flex-1">
 					<SensitiveInput
-						variant="settings"
+						class="w-full bg-transparent text-sm dark:text-gray-300 outline-hidden placeholder:opacity-30"
 						type="password"
 						bind:value={currentPassword}
 						placeholder={$i18n.t('Enter your current password')}
@@ -88,13 +72,11 @@
 			</div>
 
 			<div class="flex flex-col w-full">
-				<div class="mb-1 text-xs text-gray-600 dark:text-gray-400">
-					{$i18n.t('New Password')}
-				</div>
+				<div class=" mb-1 text-xs text-gray-500">{$i18n.t('New Password')}</div>
 
 				<div class="flex-1">
 					<SensitiveInput
-						variant="settings"
+						class="w-full bg-transparent text-sm dark:text-gray-300 outline-hidden placeholder:opacity-30"
 						type="password"
 						bind:value={newPassword}
 						placeholder={$i18n.t('Enter your new password')}
@@ -105,13 +87,11 @@
 			</div>
 
 			<div class="flex flex-col w-full">
-				<div class="mb-1 text-xs text-gray-600 dark:text-gray-400">
-					{$i18n.t('Confirm Password')}
-				</div>
+				<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Confirm Password')}</div>
 
 				<div class="flex-1">
 					<SensitiveInput
-						variant="settings"
+						class="w-full bg-transparent text-sm dark:text-gray-300 outline-hidden placeholder:opacity-30"
 						type="password"
 						bind:value={newPasswordConfirm}
 						placeholder={$i18n.t('Confirm your new password')}
@@ -122,8 +102,10 @@
 			</div>
 		</div>
 
-		<div class="flex justify-end">
-			<button class={actionButtonClass}>
+		<div class="mt-3 flex justify-end">
+			<button
+				class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			>
 				{$i18n.t('Update password')}
 			</button>
 		</div>

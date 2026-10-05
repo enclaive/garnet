@@ -29,12 +29,10 @@ export const DEFAULT_PERMISSIONS = {
 		public_notes: false,
 		folders: false,
 		public_chats: false,
-		open_chats: false,
 		public_calendars: false
 	},
 	access_grants: {
-		allow_users: true,
-		allow_groups: true
+		allow_users: true
 	},
 	chat: {
 		controls: true,

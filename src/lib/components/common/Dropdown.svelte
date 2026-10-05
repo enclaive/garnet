@@ -26,37 +26,14 @@
 	/** Side offset in px */
 	export let sideOffset = 4;
 
-	/** Position against the visual viewport, e.g. when the mobile keyboard is open */
-	export let visualViewportAware = false;
+	let triggerEl;
+	let contentEl;
 
-	let triggerEl: HTMLElement | null = null;
-	let contentEl: HTMLElement | null = null;
-	let previouslyFocused: HTMLElement | null = null;
-	let shouldFocusContent = false;
-	let positionFrame: number | undefined;
-	let settleTimers: number[] = [];
-	let resolvedMaxHeight = maxHeight;
-	let lastContentHeight = 0;
-
-	/** Svelte action: moves the node to document.body and keeps it positioned as it resizes */
-	function portal(node: HTMLElement) {
+	/** Svelte action: moves the node to document.body */
+	function portal(node) {
 		document.body.appendChild(node);
-
-		// Content can grow after the dropdown is positioned - a submenu is opened, or an
-		// async list finishes loading - which would otherwise leave it overflowing the
-		// viewport. Compare scrollHeight (the natural content height) so that clamping
-		// max-height here cannot feed back into another reposition.
-		const resizeObserver = new ResizeObserver(() => {
-			if (node.scrollHeight === lastContentHeight) return;
-			lastContentHeight = node.scrollHeight;
-			schedulePositionUpdate();
-		});
-		resizeObserver.observe(node);
-
 		return {
 			destroy() {
-				resizeObserver.disconnect();
-				lastContentHeight = 0;
 				if (node.parentNode) {
 					node.parentNode.removeChild(node);
 				}
@@ -65,13 +42,13 @@
 	}
 
 	/** Svelte action: captures the first child element as the trigger reference */
-	function trigger(node: HTMLElement) {
-		triggerEl = (node.firstElementChild as HTMLElement | null) || node;
-		function handleClick(e: MouseEvent) {
+	function trigger(node) {
+		triggerEl = node.firstElementChild || node;
+		function handleClick(e) {
 			e.preventDefault();
 			toggleOpen();
 		}
-		function handleKeydown(e: KeyboardEvent) {
+		function handleKeydown(e) {
 			if (e.key === 'Enter' || e.key === ' ') {
 				e.preventDefault();
 				toggleOpen();
@@ -87,36 +64,14 @@
 		};
 	}
 
-	/**
-	 * Height the content wants, independent of any max-height already applied here.
-	 * Measuring offsetHeight alone would feed the previous clamp back into the next
-	 * calculation, so the dropdown could flip between clamped and unclamped on every
-	 * repositioning pass.
-	 */
-	function naturalContentHeight() {
-		if (!contentEl) return 0;
-		return Math.max(contentEl.scrollHeight || 0, contentEl.offsetHeight || 0);
-	}
-
-	function visualViewportRect() {
-		const viewport = window.visualViewport;
-		return {
-			left: viewport?.offsetLeft ?? 0,
-			top: viewport?.offsetTop ?? 0,
-			width: viewport?.width ?? window.innerWidth,
-			height: viewport?.height ?? window.innerHeight
-		};
-	}
-
-	function positionContentDefault() {
+	function positionContent() {
 		if (!triggerEl || !contentEl) return;
 		const rect = triggerEl.getBoundingClientRect();
-		resolvedMaxHeight = maxHeight;
 
 		contentEl.style.position = 'fixed';
 		contentEl.style.zIndex = '9999';
 
-		const contentHeight = naturalContentHeight();
+		const contentHeight = contentEl.offsetHeight || 0;
 		const spaceBelow = window.innerHeight - rect.bottom - sideOffset;
 		const spaceAbove = rect.top - sideOffset;
 
@@ -157,169 +112,56 @@
 		}
 	}
 
-	function positionContentVisualViewport() {
-		if (!triggerEl || !contentEl) return;
-		const rect = triggerEl.getBoundingClientRect();
-		const viewport = visualViewportRect();
-		const viewportRight = viewport.left + viewport.width;
-		const viewportBottom = viewport.top + viewport.height;
-		const pad = 8;
-
-		contentEl.style.position = 'fixed';
-		contentEl.style.zIndex = '9999';
-
-		const contentHeight = naturalContentHeight();
-		const spaceBelow = viewportBottom - rect.bottom - sideOffset - pad;
-		const spaceAbove = rect.top - viewport.top - sideOffset - pad;
-
-		// Auto-flip: prefer the requested side, but flip if not enough space
-		let openAbove = side === 'top';
-		if (side === 'bottom' && spaceBelow < contentHeight && spaceAbove > spaceBelow) {
-			openAbove = true;
-		} else if (side === 'top' && spaceAbove < contentHeight && spaceBelow > spaceAbove) {
-			openAbove = false;
-		}
-
-		const availableHeight = Math.max(0, openAbove ? spaceAbove : spaceBelow);
-		const constrainedHeight = contentHeight
-			? Math.min(contentHeight, availableHeight)
-			: contentHeight;
-		const preferredTop = openAbove
-			? rect.top - constrainedHeight - sideOffset
-			: rect.bottom + sideOffset;
-		const contentWidth = contentEl.offsetWidth || 0;
-		const preferredLeft = align === 'end' && contentWidth ? rect.right - contentWidth : rect.left;
-		const maxLeft = contentWidth ? viewportRight - contentWidth - pad : preferredLeft;
-
-		contentEl.style.top = `${Math.max(
-			viewport.top + pad,
-			Math.min(preferredTop, viewportBottom - pad - constrainedHeight)
-		)}px`;
-		contentEl.style.bottom = 'auto';
-		contentEl.style.left = `${Math.max(viewport.left + pad, Math.min(preferredLeft, maxLeft))}px`;
-		contentEl.style.right = 'auto';
-		resolvedMaxHeight =
-			contentHeight > availableHeight ? `min(${maxHeight}, ${availableHeight}px)` : maxHeight;
-		contentEl.style.maxHeight = resolvedMaxHeight;
-	}
-
-	function positionContent() {
-		if (visualViewportAware) {
-			positionContentVisualViewport();
-		} else {
-			positionContentDefault();
-		}
-	}
-
-	function schedulePositionUpdate() {
-		if (positionFrame != null) cancelAnimationFrame(positionFrame);
-		positionFrame = requestAnimationFrame(() => {
-			positionFrame = undefined;
-			positionContent();
-		});
-	}
-
-	function scheduleSettledPositionUpdates() {
-		for (const timer of settleTimers) window.clearTimeout(timer);
-		settleTimers = [];
-		schedulePositionUpdate();
-		for (const delay of [50, 150, 300]) {
-			settleTimers.push(window.setTimeout(schedulePositionUpdate, delay));
-		}
-	}
-
-	async function afterOpen() {
-		await tick();
-		positionContent();
-
-		// Re-check after transition renders real dimensions
-		if (visualViewportAware) {
-			scheduleSettledPositionUpdates();
-		} else {
-			setTimeout(positionContent, 50);
-		}
-
-		if (shouldFocusContent) {
-			shouldFocusContent = false;
-			contentEl?.focus();
-		}
-	}
-
-	function openDropdown(focusContent = false) {
-		if (show) return;
-		if (focusContent) {
-			previouslyFocused =
-				document.activeElement instanceof HTMLElement ? document.activeElement : null;
-			shouldFocusContent = true;
-		}
-		show = true;
-		onOpenChange(true);
-	}
-
-	function closeDropdown(restoreFocus = !!contentEl?.contains(document.activeElement)) {
-		if (!show) return;
-		show = false;
-		onOpenChange(false);
-		shouldFocusContent = false;
-
-		if (restoreFocus && previouslyFocused?.isConnected) {
-			previouslyFocused.focus();
-		}
-		previouslyFocused = null;
-	}
-
-	function toggleOpen() {
+	async function toggleOpen() {
+		show = !show;
+		onOpenChange(show);
 		if (show) {
-			closeDropdown();
-		} else {
-			openDropdown(true);
+			await tick();
+			positionContent();
+			// Re-check after transition renders real dimensions
+			setTimeout(positionContent, 50);
 		}
 	}
 
 	// React to external show changes (e.g. bind:show toggled by parent component)
 	$: if (show) {
-		afterOpen();
+		tick().then(() => {
+			positionContent();
+			setTimeout(positionContent, 50);
+		});
 	}
 
-	function handleWindowPointerDown(event: PointerEvent) {
+	function handleWindowPointerDown(event) {
 		if (!show || !closeOnOutsideClick) return;
-		if (!(event.target instanceof Node)) return;
 		if (triggerEl?.contains(event.target)) return;
 		if (contentEl?.contains(event.target)) return;
-		closeDropdown(false);
+		show = false;
+		onOpenChange(false);
 	}
 
-	function handleKeydown(event: KeyboardEvent) {
+	function handleKeydown(event) {
 		if (event.key === 'Escape' && show) {
-			closeDropdown();
+			show = false;
+			onOpenChange(false);
 		}
 	}
 
 	/** Close the dropdown programmatically */
 	export function close() {
-		closeDropdown();
+		show = false;
+		onOpenChange(false);
 	}
 
 	import { onMount, onDestroy } from 'svelte';
 
-	let onPointerDown: ((e: PointerEvent) => void) | undefined;
+	let onPointerDown;
 	onMount(() => {
 		onPointerDown = (e) => handleWindowPointerDown(e);
 		document.addEventListener('pointerdown', onPointerDown, true);
-		if (visualViewportAware) {
-			window.visualViewport?.addEventListener('resize', scheduleSettledPositionUpdates);
-			window.visualViewport?.addEventListener('scroll', schedulePositionUpdate);
-		}
 	});
 	onDestroy(() => {
-		if (positionFrame != null) cancelAnimationFrame(positionFrame);
-		for (const timer of settleTimers) window.clearTimeout(timer);
 		if (onPointerDown) {
 			document.removeEventListener('pointerdown', onPointerDown, true);
-		}
-		if (visualViewportAware) {
-			window.visualViewport?.removeEventListener('resize', scheduleSettledPositionUpdates);
-			window.visualViewport?.removeEventListener('scroll', schedulePositionUpdate);
 		}
 	});
 </script>
@@ -342,13 +184,13 @@
 
 {#if show}
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
+	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
 		use:portal
 		bind:this={contentEl}
 		class={contentClass}
 		role="menu"
-		tabindex="-1"
-		style:max-height={resolvedMaxHeight}
+		style:max-height={maxHeight}
 		style:overflow-y="auto"
 		transition:flyAndScale
 		on:click={(e) => e.stopPropagation()}

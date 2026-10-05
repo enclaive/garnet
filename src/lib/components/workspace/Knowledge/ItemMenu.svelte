@@ -3,7 +3,6 @@
 	const dispatch = createEventDispatcher();
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
-	import DropdownMenu from '$lib/components/common/DropdownMenu.svelte';
 	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Download from '$lib/components/icons/Download.svelte';
@@ -15,11 +14,6 @@
 	export let onClose: Function = () => {};
 
 	let show = false;
-
-	const closeMenu = () => {
-		show = false;
-		onClose();
-	};
 </script>
 
 <Dropdown
@@ -34,45 +28,44 @@
 	<Tooltip content={$i18n.t('More')}>
 		<slot
 			><button
-				class="flex size-6 items-center justify-center rounded-lg text-gray-400 transition dark:text-gray-500"
+				class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 				type="button"
 				aria-label={$i18n.t('More Options')}
 				on:click={(e) => {
-					e.preventDefault();
 					e.stopPropagation();
-					show = !show;
+					show = true;
 				}}
 			>
-				<EllipsisHorizontal className="size-4" />
+				<EllipsisHorizontal className="size-5" />
 			</button>
 		</slot>
 	</Tooltip>
 
 	<div slot="content">
-		<DropdownMenu className="min-w-[10.625rem]">
+		<div
+			class="min-w-[170px] rounded-2xl px-1 py-1 border border-gray-100 dark:border-gray-800 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+		>
 			{#if onExport}
 				<button
-					class="select-none flex h-[1.6875rem] w-full cursor-pointer items-center gap-2 rounded-xl bg-transparent px-2 text-[0.8125rem] hover:text-gray-900 dark:hover:text-gray-100"
+					class="select-none flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl w-full"
 					on:click={() => {
 						onExport();
-						closeMenu();
 					}}
 				>
-					<Download className="size-3.5" />
+					<Download />
 					<div class="flex items-center">{$i18n.t('Export')}</div>
 				</button>
 			{/if}
 
 			<button
-				class="select-none flex h-[1.6875rem] w-full cursor-pointer items-center gap-2 rounded-xl bg-transparent px-2 text-[0.8125rem] hover:text-gray-900 dark:hover:text-gray-100"
+				class="select-none flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl w-full"
 				on:click={() => {
 					dispatch('delete');
-					closeMenu();
 				}}
 			>
-				<GarbageBin className="size-3.5" />
+				<GarbageBin />
 				<div class="flex items-center">{$i18n.t('Delete')}</div>
 			</button>
-		</DropdownMenu>
+		</div>
 	</div>
 </Dropdown>

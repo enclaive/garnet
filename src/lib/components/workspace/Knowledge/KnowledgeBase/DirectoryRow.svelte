@@ -11,7 +11,6 @@
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
-	import DropdownMenu from '$lib/components/common/DropdownMenu.svelte';
 	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
 	import Pencil from '$lib/components/icons/Pencil.svelte';
 	import Folder from '$lib/components/icons/Folder.svelte';
@@ -129,7 +128,7 @@
 					<input
 						bind:this={editInput}
 						bind:value={editName}
-						class="text-xs w-full bg-transparent border-none outline-hidden"
+						class="text-sm w-full bg-transparent border-none outline-hidden"
 						on:keydown={(e) => {
 							if (e.key === 'Enter') submitRename();
 							if (e.key === 'Escape') cancelRename();
@@ -143,7 +142,7 @@
 						autofocus
 					/>
 				{:else}
-					<div class="line-clamp-1 text-xs">
+					<div class="line-clamp-1 text-sm">
 						{directory.name}
 					</div>
 				{/if}
@@ -172,10 +171,12 @@
 				</button>
 
 				<div slot="content">
-					<DropdownMenu className="min-w-[8.75rem] z-[9999999]">
+					<div
+						class="min-w-[140px] rounded-2xl p-1 z-[9999999] bg-white dark:bg-gray-850 dark:text-white shadow-lg border border-gray-100 dark:border-gray-800"
+					>
 						<button
 							type="button"
-							class="select-none flex h-[1.6875rem] w-full cursor-pointer items-center gap-2 rounded-xl bg-transparent px-2 text-xs transition hover:text-gray-900 dark:hover:text-gray-100"
+							class="select-none flex rounded-xl py-1.5 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition items-center gap-2 text-sm"
 							on:click={() => startRename()}
 						>
 							<Pencil className="size-3.5" />
@@ -183,13 +184,13 @@
 						</button>
 						<button
 							type="button"
-							class="select-none flex h-[1.6875rem] w-full cursor-pointer items-center gap-2 rounded-xl bg-transparent px-2 text-xs transition hover:text-gray-900 dark:hover:text-gray-100"
+							class="select-none flex rounded-xl py-1.5 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition items-center gap-2 text-sm"
 							on:click={() => onDelete(directory.id)}
 						>
 							<GarbageBin className="size-3.5" />
 							{$i18n.t('Delete')}
 						</button>
-					</DropdownMenu>
+					</div>
 				</div>
 			</Dropdown>
 		</div>

@@ -6,7 +6,6 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 
 	import { DEFAULT_PERMISSIONS } from '$lib/constants/permissions';
-	import { config } from '$lib/stores';
 
 	export let permissions = {};
 	export let defaultPermissions = {};
@@ -41,14 +40,14 @@
 	{$i18n.t('No model IDs')} -->
 
 	<div>
-		<div class=" mb-2 text-sm font-normal">{$i18n.t('Workspace Permissions')}</div>
+		<div class=" mb-2 text-sm font-medium">{$i18n.t('Workspace Permissions')}</div>
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Models Access')}
 				</div>
-				<Switch bind:state={permissions.workspace.models} ariaLabel={$i18n.t('Models Access')} />
+				<Switch bind:state={permissions.workspace.models} />
 			</div>
 
 			{#if permissions.workspace.models}
@@ -57,19 +56,13 @@
 						<div class="self-center text-xs">
 							{$i18n.t('Import Models')}
 						</div>
-						<Switch
-							bind:state={permissions.workspace.models_import}
-							ariaLabel={$i18n.t('Import Models')}
-						/>
+						<Switch bind:state={permissions.workspace.models_import} />
 					</div>
 					<div class="flex w-full justify-between">
 						<div class="self-center text-xs">
 							{$i18n.t('Export Models')}
 						</div>
-						<Switch
-							bind:state={permissions.workspace.models_export}
-							ariaLabel={$i18n.t('Export Models')}
-						/>
+						<Switch bind:state={permissions.workspace.models_export} />
 					</div>
 				</div>
 			{:else if defaultPermissions?.workspace?.models}
@@ -83,13 +76,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Knowledge Access')}
 				</div>
-				<Switch
-					bind:state={permissions.workspace.knowledge}
-					ariaLabel={$i18n.t('Knowledge Access')}
-				/>
+				<Switch bind:state={permissions.workspace.knowledge} />
 			</div>
 			{#if defaultPermissions?.workspace?.knowledge && !permissions.workspace.knowledge}
 				<div>
@@ -102,10 +92,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Prompts Access')}
 				</div>
-				<Switch bind:state={permissions.workspace.prompts} ariaLabel={$i18n.t('Prompts Access')} />
+				<Switch bind:state={permissions.workspace.prompts} />
 			</div>
 
 			{#if permissions.workspace.prompts}
@@ -114,19 +104,13 @@
 						<div class="self-center text-xs">
 							{$i18n.t('Import Prompts')}
 						</div>
-						<Switch
-							bind:state={permissions.workspace.prompts_import}
-							ariaLabel={$i18n.t('Import Prompts')}
-						/>
+						<Switch bind:state={permissions.workspace.prompts_import} />
 					</div>
 					<div class="flex w-full justify-between">
 						<div class="self-center text-xs">
 							{$i18n.t('Export Prompts')}
 						</div>
-						<Switch
-							bind:state={permissions.workspace.prompts_export}
-							ariaLabel={$i18n.t('Export Prompts')}
-						/>
+						<Switch bind:state={permissions.workspace.prompts_export} />
 					</div>
 				</div>
 			{:else if defaultPermissions?.workspace?.prompts}
@@ -138,52 +122,6 @@
 			{/if}
 		</div>
 
-		{#if $config?.features?.enable_plugins}
-			<div class="flex flex-col w-full">
-				<Tooltip
-					className="flex w-full justify-between my-1"
-					content={$i18n.t(
-						'Warning: Enabling this will allow users to upload arbitrary code on the server.'
-					)}
-					placement="top-start"
-				>
-					<div class=" self-center text-xs font-normal">
-						{$i18n.t('Tools Access')}
-					</div>
-					<Switch bind:state={permissions.workspace.tools} ariaLabel={$i18n.t('Tools Access')} />
-				</Tooltip>
-
-				{#if permissions.workspace.tools}
-					<div class="ml-2 flex flex-col gap-2 pt-0.5 pb-1">
-						<div class="flex w-full justify-between">
-							<div class="self-center text-xs">
-								{$i18n.t('Import Tools')}
-							</div>
-							<Switch
-								bind:state={permissions.workspace.tools_import}
-								ariaLabel={$i18n.t('Import Tools')}
-							/>
-						</div>
-						<div class="flex w-full justify-between">
-							<div class="self-center text-xs">
-								{$i18n.t('Export Tools')}
-							</div>
-							<Switch
-								bind:state={permissions.workspace.tools_export}
-								ariaLabel={$i18n.t('Export Tools')}
-							/>
-						</div>
-					</div>
-				{:else if defaultPermissions?.workspace?.tools}
-					<div class="pb-0.5">
-						<div class="text-xs text-gray-500">
-							{$i18n.t('This is a default user permission and will remain enabled.')}
-						</div>
-					</div>
-				{/if}
-			</div>
-		{/if}
-
 		<div class="flex flex-col w-full">
 			<Tooltip
 				className="flex w-full justify-between my-1"
@@ -192,31 +130,25 @@
 				)}
 				placement="top-start"
 			>
-				<div class=" self-center text-xs font-normal">
-					{$i18n.t('Skills Access')}
+				<div class=" self-center text-xs font-medium">
+					{$i18n.t('Tools Access')}
 				</div>
-				<Switch bind:state={permissions.workspace.skills} ariaLabel={$i18n.t('Skills Access')} />
+				<Switch bind:state={permissions.workspace.tools} />
 			</Tooltip>
 
-			{#if permissions.workspace.skills}
+			{#if permissions.workspace.tools}
 				<div class="ml-2 flex flex-col gap-2 pt-0.5 pb-1">
 					<div class="flex w-full justify-between">
 						<div class="self-center text-xs">
-							{$i18n.t('Import Skills')}
+							{$i18n.t('Import Tools')}
 						</div>
-						<Switch
-							bind:state={permissions.workspace.skills_import}
-							ariaLabel={$i18n.t('Import Skills')}
-						/>
+						<Switch bind:state={permissions.workspace.tools_import} />
 					</div>
 					<div class="flex w-full justify-between">
 						<div class="self-center text-xs">
-							{$i18n.t('Export Skills')}
+							{$i18n.t('Export Tools')}
 						</div>
-						<Switch
-							bind:state={permissions.workspace.skills_export}
-							ariaLabel={$i18n.t('Export Skills')}
-						/>
+						<Switch bind:state={permissions.workspace.tools_export} />
 					</div>
 				</div>
 			{:else if defaultPermissions?.workspace?.tools}
@@ -270,14 +202,14 @@
 	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
 
 	<div>
-		<div class=" mb-2 text-sm font-normal">{$i18n.t('Sharing Permissions')}</div>
+		<div class=" mb-2 text-sm font-medium">{$i18n.t('Sharing Permissions')}</div>
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Models Sharing')}
 				</div>
-				<Switch bind:state={permissions.sharing.models} ariaLabel={$i18n.t('Models Sharing')} />
+				<Switch bind:state={permissions.sharing.models} />
 			</div>
 			{#if defaultPermissions?.sharing?.models && !permissions.sharing.models}
 				<div>
@@ -291,13 +223,10 @@
 		{#if permissions.sharing.models}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Models Public Sharing')}
 					</div>
-					<Switch
-						bind:state={permissions.sharing.public_models}
-						ariaLabel={$i18n.t('Models Public Sharing')}
-					/>
+					<Switch bind:state={permissions.sharing.public_models} />
 				</div>
 				{#if defaultPermissions?.sharing?.public_models && !permissions.sharing.public_models}
 					<div>
@@ -311,13 +240,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Knowledge Sharing')}
 				</div>
-				<Switch
-					bind:state={permissions.sharing.knowledge}
-					ariaLabel={$i18n.t('Knowledge Sharing')}
-				/>
+				<Switch bind:state={permissions.sharing.knowledge} />
 			</div>
 			{#if defaultPermissions?.sharing?.knowledge && !permissions.sharing.knowledge}
 				<div>
@@ -331,13 +257,10 @@
 		{#if permissions.sharing.knowledge}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Knowledge Public Sharing')}
 					</div>
-					<Switch
-						bind:state={permissions.sharing.public_knowledge}
-						ariaLabel={$i18n.t('Knowledge Public Sharing')}
-					/>
+					<Switch bind:state={permissions.sharing.public_knowledge} />
 				</div>
 				{#if defaultPermissions?.sharing?.public_knowledge && !permissions.sharing.public_knowledge}
 					<div>
@@ -351,10 +274,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Prompts Sharing')}
 				</div>
-				<Switch bind:state={permissions.sharing.prompts} ariaLabel={$i18n.t('Prompts Sharing')} />
+				<Switch bind:state={permissions.sharing.prompts} />
 			</div>
 			{#if defaultPermissions?.sharing?.prompts && !permissions.sharing.prompts}
 				<div>
@@ -368,13 +291,10 @@
 		{#if permissions.sharing.prompts}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Prompts Public Sharing')}
 					</div>
-					<Switch
-						bind:state={permissions.sharing.public_prompts}
-						ariaLabel={$i18n.t('Prompts Public Sharing')}
-					/>
+					<Switch bind:state={permissions.sharing.public_prompts} />
 				</div>
 				{#if defaultPermissions?.sharing?.public_prompts && !permissions.sharing.public_prompts}
 					<div>
@@ -388,10 +308,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Tools Sharing')}
 				</div>
-				<Switch bind:state={permissions.sharing.tools} ariaLabel={$i18n.t('Tools Sharing')} />
+				<Switch bind:state={permissions.sharing.tools} />
 			</div>
 			{#if defaultPermissions?.sharing?.tools && !permissions.sharing.tools}
 				<div>
@@ -405,13 +325,10 @@
 		{#if permissions.sharing.tools}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Tools Public Sharing')}
 					</div>
-					<Switch
-						bind:state={permissions.sharing.public_tools}
-						ariaLabel={$i18n.t('Tools Public Sharing')}
-					/>
+					<Switch bind:state={permissions.sharing.public_tools} />
 				</div>
 				{#if defaultPermissions?.sharing?.public_tools && !permissions.sharing.public_tools}
 					<div>
@@ -425,10 +342,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Skills Sharing')}
 				</div>
-				<Switch bind:state={permissions.sharing.skills} ariaLabel={$i18n.t('Skills Sharing')} />
+				<Switch bind:state={permissions.sharing.skills} />
 			</div>
 			{#if defaultPermissions?.sharing?.skills && !permissions.sharing.skills}
 				<div>
@@ -442,13 +359,10 @@
 		{#if permissions.sharing.skills}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Skills Public Sharing')}
 					</div>
-					<Switch
-						bind:state={permissions.sharing.public_skills}
-						ariaLabel={$i18n.t('Skills Public Sharing')}
-					/>
+					<Switch bind:state={permissions.sharing.public_skills} />
 				</div>
 				{#if defaultPermissions?.sharing?.public_skills && !permissions.sharing.public_skills}
 					<div>
@@ -462,10 +376,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Notes Sharing')}
 				</div>
-				<Switch bind:state={permissions.sharing.notes} ariaLabel={$i18n.t('Notes Sharing')} />
+				<Switch bind:state={permissions.sharing.notes} />
 			</div>
 			{#if defaultPermissions?.sharing?.notes && !permissions.sharing.notes}
 				<div>
@@ -479,13 +393,10 @@
 		{#if permissions.sharing.notes}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Notes Public Sharing')}
 					</div>
-					<Switch
-						bind:state={permissions.sharing.public_notes}
-						ariaLabel={$i18n.t('Notes Public Sharing')}
-					/>
+					<Switch bind:state={permissions.sharing.public_notes} />
 				</div>
 				{#if defaultPermissions?.sharing?.public_notes && !permissions.sharing.public_notes}
 					<div>
@@ -499,10 +410,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Folders Sharing')}
 				</div>
-				<Switch bind:state={permissions.sharing.folders} ariaLabel={$i18n.t('Folders Sharing')} />
+				<Switch bind:state={permissions.sharing.folders} />
 			</div>
 			{#if defaultPermissions?.sharing?.folders && !permissions.sharing.folders}
 				<div>
@@ -516,34 +427,12 @@
 		{#if permissions.chat.share}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Chats Public Sharing')}
 					</div>
-					<Switch
-						bind:state={permissions.sharing.public_chats}
-						ariaLabel={$i18n.t('Chats Public Sharing')}
-					/>
+					<Switch bind:state={permissions.sharing.public_chats} />
 				</div>
 				{#if defaultPermissions?.sharing?.public_chats && !permissions.sharing.public_chats}
-					<div>
-						<div class="text-xs text-gray-500">
-							{$i18n.t('This is a default user permission and will remain enabled.')}
-						</div>
-					</div>
-				{/if}
-			</div>
-
-			<div class="flex flex-col w-full">
-				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
-						{$i18n.t('Chats Open Sharing')}
-					</div>
-					<Switch
-						bind:state={permissions.sharing.open_chats}
-						ariaLabel={$i18n.t('Chats Open Sharing')}
-					/>
-				</div>
-				{#if defaultPermissions?.sharing?.open_chats && !permissions.sharing.open_chats}
 					<div>
 						<div class="text-xs text-gray-500">
 							{$i18n.t('This is a default user permission and will remain enabled.')}
@@ -556,13 +445,10 @@
 		{#if permissions.features.calendar}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Calendars Public Sharing')}
 					</div>
-					<Switch
-						bind:state={permissions.sharing.public_calendars}
-						ariaLabel={$i18n.t('Calendars Public Sharing')}
-					/>
+					<Switch bind:state={permissions.sharing.public_calendars} />
 				</div>
 				{#if defaultPermissions?.sharing?.public_calendars && !permissions.sharing.public_calendars}
 					<div>
@@ -578,38 +464,16 @@
 	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
 
 	<div>
-		<div class=" mb-2 text-sm font-normal">{$i18n.t('Access Grants')}</div>
+		<div class=" mb-2 text-sm font-medium">{$i18n.t('Access Grants')}</div>
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Sharing With Users')}
 				</div>
-				<Switch
-					bind:state={permissions.access_grants.allow_users}
-					ariaLabel={$i18n.t('Allow Sharing With Users')}
-				/>
+				<Switch bind:state={permissions.access_grants.allow_users} />
 			</div>
 			{#if defaultPermissions?.access_grants?.allow_users && !permissions.access_grants.allow_users}
-				<div>
-					<div class="text-xs text-gray-500">
-						{$i18n.t('This is a default user permission and will remain enabled.')}
-					</div>
-				</div>
-			{/if}
-		</div>
-
-		<div class="flex flex-col w-full">
-			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
-					{$i18n.t('Allow Sharing With Groups')}
-				</div>
-				<Switch
-					bind:state={permissions.access_grants.allow_groups}
-					ariaLabel={$i18n.t('Allow Sharing With Groups')}
-				/>
-			</div>
-			{#if defaultPermissions?.access_grants?.allow_groups && !permissions.access_grants.allow_groups}
 				<div>
 					<div class="text-xs text-gray-500">
 						{$i18n.t('This is a default user permission and will remain enabled.')}
@@ -622,17 +486,14 @@
 	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
 
 	<div>
-		<div class=" mb-2 text-sm font-normal">{$i18n.t('Chat Permissions')}</div>
+		<div class=" mb-2 text-sm font-medium">{$i18n.t('Chat Permissions')}</div>
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow File Upload')}
 				</div>
-				<Switch
-					bind:state={permissions.chat.file_upload}
-					ariaLabel={$i18n.t('Allow File Upload')}
-				/>
+				<Switch bind:state={permissions.chat.file_upload} />
 			</div>
 			{#if defaultPermissions?.chat?.file_upload && !permissions.chat.file_upload}
 				<div>
@@ -645,10 +506,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Web Upload')}
 				</div>
-				<Switch bind:state={permissions.chat.web_upload} ariaLabel={$i18n.t('Allow Web Upload')} />
+				<Switch bind:state={permissions.chat.web_upload} />
 			</div>
 			{#if defaultPermissions?.chat?.web_upload && !permissions.chat.web_upload}
 				<div>
@@ -661,10 +522,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Chat Controls')}
 				</div>
-				<Switch bind:state={permissions.chat.controls} ariaLabel={$i18n.t('Allow Chat Controls')} />
+				<Switch bind:state={permissions.chat.controls} />
 			</div>
 			{#if defaultPermissions?.chat?.controls && !permissions.chat.controls}
 				<div>
@@ -678,10 +539,10 @@
 		{#if permissions.chat.controls}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Allow Chat Valves')}
 					</div>
-					<Switch bind:state={permissions.chat.valves} ariaLabel={$i18n.t('Allow Chat Valves')} />
+					<Switch bind:state={permissions.chat.valves} />
 				</div>
 				{#if defaultPermissions?.chat?.valves && !permissions.chat.valves}
 					<div>
@@ -694,13 +555,10 @@
 
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Allow Chat System Prompt')}
 					</div>
-					<Switch
-						bind:state={permissions.chat.system_prompt}
-						ariaLabel={$i18n.t('Allow Chat System Prompt')}
-					/>
+					<Switch bind:state={permissions.chat.system_prompt} />
 				</div>
 				{#if defaultPermissions?.chat?.system_prompt && !permissions.chat.system_prompt}
 					<div>
@@ -713,10 +571,10 @@
 
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Allow Chat Params')}
 					</div>
-					<Switch bind:state={permissions.chat.params} ariaLabel={$i18n.t('Allow Chat Params')} />
+					<Switch bind:state={permissions.chat.params} />
 				</div>
 				{#if defaultPermissions?.chat?.params && !permissions.chat.params}
 					<div>
@@ -730,10 +588,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Chat Edit')}
 				</div>
-				<Switch bind:state={permissions.chat.edit} ariaLabel={$i18n.t('Allow Chat Edit')} />
+				<Switch bind:state={permissions.chat.edit} />
 			</div>
 			{#if defaultPermissions?.chat?.edit && !permissions.chat.edit}
 				<div>
@@ -746,10 +604,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Chat Delete')}
 				</div>
-				<Switch bind:state={permissions.chat.delete} ariaLabel={$i18n.t('Allow Chat Delete')} />
+				<Switch bind:state={permissions.chat.delete} />
 			</div>
 			{#if defaultPermissions?.chat?.delete && !permissions.chat.delete}
 				<div>
@@ -762,13 +620,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Delete Messages')}
 				</div>
-				<Switch
-					bind:state={permissions.chat.delete_message}
-					ariaLabel={$i18n.t('Allow Delete Messages')}
-				/>
+				<Switch bind:state={permissions.chat.delete_message} />
 			</div>
 			{#if defaultPermissions?.chat?.delete_message && !permissions.chat.delete_message}
 				<div>
@@ -781,13 +636,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Continue Response')}
 				</div>
-				<Switch
-					bind:state={permissions.chat.continue_response}
-					ariaLabel={$i18n.t('Allow Continue Response')}
-				/>
+				<Switch bind:state={permissions.chat.continue_response} />
 			</div>
 			{#if defaultPermissions?.chat?.continue_response && !permissions.chat.continue_response}
 				<div>
@@ -800,13 +652,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Regenerate Response')}
 				</div>
-				<Switch
-					bind:state={permissions.chat.regenerate_response}
-					ariaLabel={$i18n.t('Allow Regenerate Response')}
-				/>
+				<Switch bind:state={permissions.chat.regenerate_response} />
 			</div>
 			{#if defaultPermissions?.chat?.regenerate_response && !permissions.chat.regenerate_response}
 				<div>
@@ -819,13 +668,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Rate Response')}
 				</div>
-				<Switch
-					bind:state={permissions.chat.rate_response}
-					ariaLabel={$i18n.t('Allow Rate Response')}
-				/>
+				<Switch bind:state={permissions.chat.rate_response} />
 			</div>
 			{#if defaultPermissions?.chat?.rate_response && !permissions.chat.rate_response}
 				<div>
@@ -838,10 +684,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Chat Share')}
 				</div>
-				<Switch bind:state={permissions.chat.share} ariaLabel={$i18n.t('Allow Chat Share')} />
+				<Switch bind:state={permissions.chat.share} />
 			</div>
 			{#if defaultPermissions?.chat?.share && !permissions.chat.share}
 				<div>
@@ -854,10 +700,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Chat Export')}
 				</div>
-				<Switch bind:state={permissions.chat.export} ariaLabel={$i18n.t('Allow Chat Export')} />
+				<Switch bind:state={permissions.chat.export} />
 			</div>
 			{#if defaultPermissions?.chat?.export && !permissions.chat.export}
 				<div>
@@ -870,10 +716,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Chat Import')}
 				</div>
-				<Switch bind:state={permissions.chat['import']} ariaLabel={$i18n.t('Allow Chat Import')} />
+				<Switch bind:state={permissions.chat['import']} />
 			</div>
 			{#if defaultPermissions?.chat?.import && !permissions.chat['import']}
 				<div>
@@ -886,10 +732,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Speech to Text')}
 				</div>
-				<Switch bind:state={permissions.chat.stt} ariaLabel={$i18n.t('Allow Speech to Text')} />
+				<Switch bind:state={permissions.chat.stt} />
 			</div>
 			{#if defaultPermissions?.chat?.stt && !permissions.chat.stt}
 				<div>
@@ -902,10 +748,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Text to Speech')}
 				</div>
-				<Switch bind:state={permissions.chat.tts} ariaLabel={$i18n.t('Allow Text to Speech')} />
+				<Switch bind:state={permissions.chat.tts} />
 			</div>
 			{#if defaultPermissions?.chat?.tts && !permissions.chat.tts}
 				<div>
@@ -918,10 +764,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Call')}
 				</div>
-				<Switch bind:state={permissions.chat.call} ariaLabel={$i18n.t('Allow Call')} />
+				<Switch bind:state={permissions.chat.call} />
 			</div>
 			{#if defaultPermissions?.chat?.call && !permissions.chat.call}
 				<div>
@@ -934,13 +780,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Multiple Models in Chat')}
 				</div>
-				<Switch
-					bind:state={permissions.chat.multiple_models}
-					ariaLabel={$i18n.t('Allow Multiple Models in Chat')}
-				/>
+				<Switch bind:state={permissions.chat.multiple_models} />
 			</div>
 			{#if defaultPermissions?.chat?.multiple_models && !permissions.chat.multiple_models}
 				<div>
@@ -953,13 +796,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Allow Temporary Chat')}
 				</div>
-				<Switch
-					bind:state={permissions.chat.temporary}
-					ariaLabel={$i18n.t('Allow Temporary Chat')}
-				/>
+				<Switch bind:state={permissions.chat.temporary} />
 			</div>
 			{#if defaultPermissions?.chat?.temporary && !permissions.chat.temporary}
 				<div>
@@ -973,13 +813,10 @@
 		{#if permissions.chat.temporary}
 			<div class="flex flex-col w-full">
 				<div class="flex w-full justify-between my-1">
-					<div class=" self-center text-xs font-normal">
+					<div class=" self-center text-xs font-medium">
 						{$i18n.t('Enforce Temporary Chat')}
 					</div>
-					<Switch
-						bind:state={permissions.chat.temporary_enforced}
-						ariaLabel={$i18n.t('Enforce Temporary Chat')}
-					/>
+					<Switch bind:state={permissions.chat.temporary_enforced} />
 				</div>
 				{#if defaultPermissions?.chat?.temporary_enforced && !permissions.chat.temporary_enforced}
 					<div>
@@ -995,14 +832,14 @@
 	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
 
 	<div>
-		<div class=" mb-2 text-sm font-normal">{$i18n.t('Features Permissions')}</div>
+		<div class=" mb-2 text-sm font-medium">{$i18n.t('Features Permissions')}</div>
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('API Keys')}
 				</div>
-				<Switch bind:state={permissions.features.api_keys} ariaLabel={$i18n.t('API Keys')} />
+				<Switch bind:state={permissions.features.api_keys} />
 			</div>
 			{#if defaultPermissions?.features?.api_keys && !permissions.features.api_keys}
 				<div>
@@ -1015,10 +852,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Notes')}
 				</div>
-				<Switch bind:state={permissions.features.notes} ariaLabel={$i18n.t('Notes')} />
+				<Switch bind:state={permissions.features.notes} />
 			</div>
 			{#if defaultPermissions?.features?.notes && !permissions.features.notes}
 				<div>
@@ -1031,10 +868,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Channels')}
 				</div>
-				<Switch bind:state={permissions.features.channels} ariaLabel={$i18n.t('Channels')} />
+				<Switch bind:state={permissions.features.channels} />
 			</div>
 			{#if defaultPermissions?.features?.channels && !permissions.features.channels}
 				<div>
@@ -1047,10 +884,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Folders')}
 				</div>
-				<Switch bind:state={permissions.features.folders} ariaLabel={$i18n.t('Folders')} />
+				<Switch bind:state={permissions.features.folders} />
 			</div>
 			{#if defaultPermissions?.features?.folders && !permissions.features.folders}
 				<div>
@@ -1063,13 +900,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Direct Tool Servers')}
 				</div>
-				<Switch
-					bind:state={permissions.features.direct_tool_servers}
-					ariaLabel={$i18n.t('Direct Tool Servers')}
-				/>
+				<Switch bind:state={permissions.features.direct_tool_servers} />
 			</div>
 			{#if defaultPermissions?.features?.direct_tool_servers && !permissions.features.direct_tool_servers}
 				<div>
@@ -1082,10 +916,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Web Search')}
 				</div>
-				<Switch bind:state={permissions.features.web_search} ariaLabel={$i18n.t('Web Search')} />
+				<Switch bind:state={permissions.features.web_search} />
 			</div>
 			{#if defaultPermissions?.features?.web_search && !permissions.features.web_search}
 				<div>
@@ -1098,13 +932,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Image Generation')}
 				</div>
-				<Switch
-					bind:state={permissions.features.image_generation}
-					ariaLabel={$i18n.t('Image Generation')}
-				/>
+				<Switch bind:state={permissions.features.image_generation} />
 			</div>
 			{#if defaultPermissions?.features?.image_generation && !permissions.features.image_generation}
 				<div>
@@ -1117,13 +948,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Code Interpreter')}
 				</div>
-				<Switch
-					bind:state={permissions.features.code_interpreter}
-					ariaLabel={$i18n.t('Code Interpreter')}
-				/>
+				<Switch bind:state={permissions.features.code_interpreter} />
 			</div>
 			{#if defaultPermissions?.features?.code_interpreter && !permissions.features.code_interpreter}
 				<div>
@@ -1136,10 +964,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Memories')}
 				</div>
-				<Switch bind:state={permissions.features.memories} ariaLabel={$i18n.t('Memories')} />
+				<Switch bind:state={permissions.features.memories} />
 			</div>
 			{#if defaultPermissions?.features?.memories && !permissions.features.memories}
 				<div>
@@ -1158,10 +986,10 @@
 				)}
 				placement="top-start"
 			>
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Automations')}
 				</div>
-				<Switch bind:state={permissions.features.automations} ariaLabel={$i18n.t('Automations')} />
+				<Switch bind:state={permissions.features.automations} />
 			</Tooltip>
 			{#if defaultPermissions?.features?.automations && !permissions.features.automations}
 				<div>
@@ -1174,10 +1002,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Calendar')}
 				</div>
-				<Switch bind:state={permissions.features.calendar} ariaLabel={$i18n.t('Calendar')} />
+				<Switch bind:state={permissions.features.calendar} />
 			</div>
 			{#if defaultPermissions?.features?.calendar && !permissions.features.calendar}
 				<div>
@@ -1190,10 +1018,10 @@
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('User Webhooks')}
 				</div>
-				<Switch bind:state={permissions.features.webhooks} ariaLabel={$i18n.t('User Webhooks')} />
+				<Switch bind:state={permissions.features.webhooks} />
 			</div>
 			{#if defaultPermissions?.features?.webhooks && !permissions.features.webhooks}
 				<div>
@@ -1208,17 +1036,14 @@
 	<hr class=" border-gray-100/30 dark:border-gray-850/30" />
 
 	<div>
-		<div class=" mb-2 text-sm font-normal">{$i18n.t('Settings Permissions')}</div>
+		<div class=" mb-2 text-sm font-medium">{$i18n.t('Settings Permissions')}</div>
 
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
-				<div class=" self-center text-xs font-normal">
+				<div class=" self-center text-xs font-medium">
 					{$i18n.t('Interface Settings Access')}
 				</div>
-				<Switch
-					bind:state={permissions.settings.interface}
-					ariaLabel={$i18n.t('Interface Settings Access')}
-				/>
+				<Switch bind:state={permissions.settings.interface} />
 			</div>
 			{#if defaultPermissions?.settings?.interface && !permissions.settings.interface}
 				<div>

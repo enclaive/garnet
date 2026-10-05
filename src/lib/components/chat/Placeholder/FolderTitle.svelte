@@ -77,9 +77,8 @@
 				return null;
 			});
 
-			const updatedFolder = { ...folder, ..._folder };
-			await selectedFolder.set(updatedFolder);
-			onUpdate(updatedFolder);
+			await selectedFolder.set(_folder);
+			onUpdate(_folder);
 		}
 	};
 
@@ -103,9 +102,8 @@
 				return null;
 			});
 
-			const updatedFolder = { ...folder, ..._folder };
-			await selectedFolder.set(updatedFolder);
-			onUpdate(updatedFolder);
+			await selectedFolder.set(_folder);
+			onUpdate(_folder);
 		}
 	};
 
@@ -229,7 +227,7 @@
 				>
 					<button
 						aria-label={$i18n.t('Change folder icon')}
-						class="rounded-full bg-gray-50 dark:bg-gray-800 size-11 flex justify-center items-center outline-hidden focus:outline-hidden"
+						class=" rounded-full bg-gray-50 dark:bg-gray-800 size-11 flex justify-center items-center"
 					>
 						{#if folder?.meta?.icon}
 							<Emoji className="size-6" shortCode={folder.meta.icon} />

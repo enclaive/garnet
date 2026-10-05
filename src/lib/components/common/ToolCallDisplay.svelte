@@ -3,9 +3,7 @@
 	import { v4 as uuidv4 } from 'uuid';
 
 	import { getContext } from 'svelte';
-	import type { Writable } from 'svelte/store';
-	import type { i18n as i18nType } from 'i18next';
-	const i18n = getContext<Writable<i18nType>>('i18n');
+	const i18n = getContext('i18n');
 
 	import { slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
@@ -13,9 +11,9 @@
 	import ChevronUp from '../icons/ChevronUp.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import Spinner from './Spinner.svelte';
+	import Markdown from '../chat/Messages/Markdown.svelte';
 	import WrenchSolid from '../icons/WrenchSolid.svelte';
 	import CheckCircle from '../icons/CheckCircle.svelte';
-	import XMark from '../icons/XMark.svelte';
 	import Image from './Image.svelte';
 	import FullHeightIframe from './FullHeightIframe.svelte';
 	import { settings } from '$lib/stores';
@@ -30,22 +28,18 @@
 		files?: string;
 		embeds?: string;
 		done?: string;
-		status?: string;
 	} = {};
 
 	export let open = false;
 	export let grouped = false;
 	export let className = '';
-	export let resolvable = false;
-	export let resolving = false;
-	export let onResolve: (approved: boolean) => void = () => {};
 
 	const RESULT_PREVIEW_LIMIT = 10000;
 	let expandedResult = false;
 
 	$: if (!open) expandedResult = false;
 	export let buttonClassName =
-		'py-1 text-[0.9375rem] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition';
+		'w-fit text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition';
 
 	const componentId = id || uuidv4();
 
@@ -90,86 +84,18 @@
 		}
 	}
 
-	function isToolResultError(value: unknown): boolean {
-		if (typeof value === 'string') {
-			const text = value.trim().toLowerCase();
-			if (
-				text.startsWith('error:') ||
-				text.startsWith('exception:') ||
-				text.startsWith('traceback') ||
-				text.startsWith('http error!')
-			) {
-				return true;
-			}
-		}
-
-		let parsed = value;
-		while (typeof parsed === 'string') {
-			try {
-				parsed = JSON.parse(parsed);
-			} catch {
-				break;
-			}
-		}
-		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false;
-
-		const result = parsed as Record<string, unknown>;
-		const error = result.error;
-		if (
-			(typeof error === 'string' && error.trim().length > 0) ||
-			(typeof error === 'object' && error !== null)
-		) {
-			return true;
-		}
-
-		const status = typeof result.status === 'string' ? result.status.trim().toLowerCase() : '';
-		if (status === 'error' || status === 'failed') return true;
-
-		const message = result.message;
-		return (
-			(result.success === false || result.ok === false) &&
-			((typeof message === 'string' && message.trim().length > 0) ||
-				(typeof message === 'object' && message !== null))
-		);
-	}
-
 	export let resultContent: string = '';
 
 	$: result = resultContent || decode(attributes?.result ?? '');
 	$: files = parseJSONString(decode(attributes?.files ?? ''));
 	$: embeds = parseJSONString(decode(attributes?.embeds ?? ''));
-	$: isAskUser = attributes?.name === 'ask_user';
-	$: needsInput = isAskUser && attributes?.status === 'pending';
-	$: needsApproval = !isAskUser && attributes?.status === 'pending' && resolvable;
 	$: args =
-		open || needsApproval || needsInput || (Array.isArray(embeds) && embeds.length > 0)
-			? decode(attributes?.arguments ?? '')
-			: '';
-	$: isRejected = attributes?.status === 'rejected';
-	$: isDone =
-		attributes?.done === 'true' ||
-		attributes?.status === 'failed' ||
-		attributes?.status === 'incomplete';
-	$: isExecuting = !isDone && !isRejected && attributes?.status === 'completed';
-	$: isPreparing = !isDone && !isRejected && !needsApproval && !needsInput && !isExecuting;
-	$: isActive = isPreparing || isExecuting;
-	$: isError = attributes?.status === 'failed' || (isDone && isToolResultError(result));
+		open || (Array.isArray(embeds) && embeds.length > 0) ? decode(attributes?.arguments ?? '') : '';
+	$: isDone = attributes?.done === 'true';
+	$: isExecuting = attributes?.done && attributes?.done !== 'true';
 
 	$: parsedArgs = parseArguments(args);
 	$: parsedResult = parseJSONString(result);
-
-	const toggleOpen = () => {
-		open = !open;
-	};
-
-	const toggleOpenOnKeydown = (event: KeyboardEvent) => {
-		if (event.key !== 'Enter' && event.key !== ' ') {
-			return;
-		}
-
-		event.preventDefault();
-		toggleOpen();
-	};
 </script>
 
 <div {id} class={className}>
@@ -194,30 +120,22 @@
 		</div>
 	{:else}
 		<!-- Tool call display -->
+		<!-- svelte-ignore a11y-no-static-element-interactions -->
 		<div
-			class="{buttonClassName} w-full min-w-0 cursor-pointer"
-			role="button"
-			tabindex="0"
-			on:click={toggleOpen}
-			on:keydown={toggleOpenOnKeydown}
+			class="{buttonClassName} cursor-pointer"
+			on:pointerup={() => {
+				open = !open;
+			}}
 		>
 			<div
-				class="w-full min-w-0 max-w-full font-normal flex items-center gap-1.5 {isActive
+				class="w-full max-w-full font-medium flex items-center gap-1.5 {isExecuting
 					? 'shimmer'
 					: ''}"
 			>
 				<!-- Status icon -->
-				{#if isActive}
+				{#if isExecuting}
 					<div>
 						<Spinner className="size-4" />
-					</div>
-				{:else if isRejected}
-					<div class="text-red-400 dark:text-red-500">
-						<XMark className="size-4" strokeWidth="2.5" />
-					</div>
-				{:else if isError}
-					<div class="text-red-500 dark:text-red-400">
-						<XMark className="size-4" strokeWidth="2.5" />
 					</div>
 				{:else if isDone}
 					<div class="text-emerald-500 dark:text-emerald-400">
@@ -230,69 +148,48 @@
 				{/if}
 
 				<!-- Label -->
-				<div class="flex-1 min-w-0 line-clamp-1">
+				<div class="flex-1 line-clamp-1">
 					<!-- Short label (below md) -->
 					<span class="@md:hidden text-black dark:text-white">{attributes.name}</span>
 					<!-- Full label (md and above) -->
 					<span class="hidden @md:inline font-normal">
-						{#if isRejected}
-							{$i18n.t('Denied {{NAME}}', { NAME: attributes.name })}
-						{:else if isDone}
-							{$i18n.t('View Result from {{NAME}}', { NAME: attributes.name })}
-						{:else if needsInput}
-							{$i18n.t('Input needed')}
-						{:else if needsApproval}
-							{$i18n.t('Allow {{NAME}}?', { NAME: attributes.name })}
-						{:else if isPreparing}
-							{$i18n.t('Preparing {{NAME}}...', { NAME: attributes.name })}
+						{#if isDone}
+							<Markdown
+								id={`${componentId}-tool-call-title`}
+								content={$i18n.t('View Result from **{{NAME}}**', {
+									NAME: attributes.name
+								})}
+							/>
 						{:else}
-							{$i18n.t('Executing {{NAME}}...', { NAME: attributes.name })}
+							<Markdown
+								id={`${componentId}-tool-call-executing`}
+								content={$i18n.t('Executing **{{NAME}}**...', {
+									NAME: attributes.name
+								})}
+							/>
 						{/if}
 					</span>
 				</div>
 
-				{#if needsApproval && !isAskUser}
-					<span class="flex gap-1 shrink-0">
-						<button
-							type="button"
-							class="tool-call-allow-button text-[0.6875rem] px-2.5 py-0.5 rounded-md text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/8 hover:bg-gray-200 dark:hover:bg-white/12 transition-colors duration-100 disabled:opacity-50"
-							disabled={resolving}
-							on:click|stopPropagation={() => onResolve(true)}
-						>
-							{$i18n.t('Allow')}
-						</button>
-						<button
-							type="button"
-							class="tool-call-deny-button text-[0.6875rem] px-2 py-0.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100 disabled:opacity-50"
-							disabled={resolving}
-							on:click|stopPropagation={() => onResolve(false)}
-						>
-							{$i18n.t('Deny')}
-						</button>
-					</span>
-				{:else}
-					<!-- Chevron -->
-					<div class="flex shrink-0 self-center translate-y-[1px]">
-						{#if open}
-							<ChevronUp strokeWidth="3.5" className="size-3" />
-						{:else}
-							<ChevronDown strokeWidth="3.5" className="size-3" />
-						{/if}
-					</div>
-				{/if}
+				<!-- Chevron -->
+				<div class="flex shrink-0 self-center translate-y-[1px]">
+					{#if open}
+						<ChevronUp strokeWidth="3.5" className="size-3.5" />
+					{:else}
+						<ChevronDown strokeWidth="3.5" className="size-3.5" />
+					{/if}
+				</div>
 			</div>
 		</div>
 
 		{#if open}
 			<div transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}>
-				<div
-					class="border border-gray-50 dark:border-gray-850/30 rounded-2xl my-1.5 p-2.5 space-y-2"
-				>
+				<div class="border border-gray-50 dark:border-gray-850/30 rounded-2xl my-1.5 p-3 space-y-3">
+					<!-- Input -->
 					{#if args}
-						<!-- Input -->
 						<div>
 							<div
-								class="text-[0.625rem] uppercase tracking-wider font-normal text-gray-400 dark:text-gray-500 mb-1.5 px-1"
+								class="text-[10px] uppercase tracking-wider font-medium text-gray-400 dark:text-gray-500 mb-1.5 px-1"
 							>
 								{$i18n.t('Input')}
 							</div>
@@ -301,7 +198,7 @@
 								<div class="px-1 space-y-0.5">
 									{#each Object.entries(parsedArgs) as [key, value]}
 										<div class="flex gap-2 text-xs py-0.5">
-											<span class="font-normal text-gray-600 dark:text-gray-400 shrink-0"
+											<span class="font-medium text-gray-600 dark:text-gray-400 shrink-0"
 												>{key}</span
 											>
 											<span class="text-gray-800 dark:text-gray-200 break-all"
@@ -313,7 +210,7 @@
 							{:else}
 								<div class="tool-call-body w-full max-w-none!">
 									<pre
-										class="text-xs text-gray-600 dark:text-gray-300 whitespace-pre font-mono bg-gray-50 dark:bg-gray-900 rounded-lg p-2 overflow-x-auto">{formatJSONString(
+										class="text-xs text-gray-600 dark:text-gray-300 whitespace-pre font-mono bg-gray-50 dark:bg-gray-900 rounded-lg p-2.5 overflow-x-auto">{formatJSONString(
 											args
 										)}</pre>
 								</div>
@@ -325,14 +222,14 @@
 					{#if isDone && result}
 						<div>
 							<div
-								class="text-[0.625rem] uppercase tracking-wider font-normal text-gray-400 dark:text-gray-500 mb-1.5 px-1"
+								class="text-[10px] uppercase tracking-wider font-medium text-gray-400 dark:text-gray-500 mb-1.5 px-1"
 							>
 								{$i18n.t('Output')}
 							</div>
 							<div class="w-full max-w-none!">
 								{#if typeof parsedResult === 'object' && parsedResult !== null}
 									<pre
-										class="text-xs text-gray-600 dark:text-gray-300 whitespace-pre font-mono bg-gray-50 dark:bg-gray-900 rounded-lg p-2 overflow-x-auto">{JSON.stringify(
+										class="text-xs text-gray-600 dark:text-gray-300 whitespace-pre font-mono bg-gray-50 dark:bg-gray-900 rounded-lg p-2.5 overflow-x-auto">{JSON.stringify(
 											parsedResult,
 											null,
 											2

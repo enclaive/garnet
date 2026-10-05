@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { flyAndScale } from '$lib/utils/transitions';
-	import DropdownMenu from '$lib/components/common/DropdownMenu.svelte';
-	import { settings } from '$lib/stores';
 	import { tick } from 'svelte';
 
 	/** CSS classes for the sub-content container */
@@ -15,34 +13,8 @@
 	export let sideOffset = 8;
 
 	let open = false;
-	let triggerEl: HTMLElement | null = null;
-	let contentEl: HTMLElement | null = null;
-
-	function trigger(node: HTMLElement) {
-		triggerEl = (node.firstElementChild as HTMLElement | null) || node;
-
-		async function handleClick(event: MouseEvent) {
-			event.preventDefault();
-			await openSub(true);
-		}
-
-		async function handleKeydown(event: KeyboardEvent) {
-			if (!['Enter', ' ', 'ArrowRight'].includes(event.key)) return;
-
-			event.preventDefault();
-			await openSub(true);
-		}
-
-		node.addEventListener('click', handleClick);
-		node.addEventListener('keydown', handleKeydown);
-
-		return {
-			destroy() {
-				node.removeEventListener('click', handleClick);
-				node.removeEventListener('keydown', handleKeydown);
-			}
-		};
-	}
+	let triggerEl;
+	let contentEl;
 
 	function positionContent() {
 		if (!triggerEl || !contentEl) return;
@@ -56,7 +28,7 @@
 		contentEl.style.paddingRight = '0';
 
 		// Inherit min-width from parent dropdown container (apply to inner content)
-		const innerContent = contentEl.firstElementChild as HTMLElement | null;
+		const innerContent = contentEl.firstElementChild;
 		const parentContainer = triggerEl.closest('[class*="rounded"]')?.parentElement;
 		if (parentContainer && innerContent) {
 			const parentWidth = parentContainer.offsetWidth;
@@ -98,48 +70,28 @@
 		contentEl.style.top = `${top}px`;
 	}
 
-	async function openSub(focus = false) {
+	async function handleMouseEnter() {
 		open = true;
 		await tick();
 		positionContent();
 		// Re-position after transition starts rendering real dimensions
 		setTimeout(positionContent, 50);
-
-		if (focus) {
-			contentEl?.focus();
-		}
 	}
 
-	async function handleMouseEnter() {
-		await openSub();
-	}
-
-	function handleContentKeydown(event: KeyboardEvent) {
-		if (event.key !== 'Escape') return;
-
-		event.stopPropagation();
-		open = false;
-		triggerEl?.focus();
-	}
-
-	function handleMouseLeave(event: MouseEvent) {
-		const relatedTarget = event.relatedTarget as Node | null;
-
+	function handleMouseLeave(event) {
 		// Don't close if moving to the sub-content (including its bridge padding)
-		if (relatedTarget && contentEl?.contains(relatedTarget)) return;
-		if (relatedTarget && triggerEl?.contains(relatedTarget)) return;
+		if (contentEl?.contains(event.relatedTarget)) return;
+		if (triggerEl?.contains(event.relatedTarget)) return;
 		open = false;
 	}
 
-	function handleContentMouseLeave(event: MouseEvent) {
-		const relatedTarget = event.relatedTarget as Node | null;
-
-		if (relatedTarget && triggerEl?.contains(relatedTarget)) return;
-		if (relatedTarget && contentEl?.contains(relatedTarget)) return;
+	function handleContentMouseLeave(event) {
+		if (triggerEl?.contains(event.relatedTarget)) return;
+		if (contentEl?.contains(event.relatedTarget)) return;
 		open = false;
 	}
 
-	function portal(node: HTMLElement) {
+	function portal(node) {
 		document.body.appendChild(node);
 		return {
 			destroy() {
@@ -155,10 +107,8 @@
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
-	use:trigger
-	class="w-full {($settings?.highContrastMode ?? false)
-		? '[&>button:hover]:bg-gray-200! dark:[&>button:hover]:bg-gray-800!'
-		: '[&>button:hover]:bg-gray-50/60 dark:[&>button:hover]:bg-gray-800/60'}"
+	bind:this={triggerEl}
+	class="w-full"
 	on:mouseenter={handleMouseEnter}
 	on:mouseleave={handleMouseLeave}
 >
@@ -168,19 +118,10 @@
 {#if open}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<!-- Outer wrapper: positioned flush with trigger, invisible padding bridges the gap -->
-	<div
-		use:portal
-		bind:this={contentEl}
-		role="menu"
-		tabindex="-1"
-		on:mouseleave={handleContentMouseLeave}
-		on:keydown={handleContentKeydown}
-	>
+	<div use:portal bind:this={contentEl} on:mouseleave={handleContentMouseLeave}>
 		<!-- Inner content: visual styles and transition -->
-		<div transition:flyAndScale>
-			<DropdownMenu className={contentClass} style="max-width: {maxWidth}px;">
-				<slot />
-			</DropdownMenu>
+		<div class={contentClass} style="max-width: {maxWidth}px;" transition:flyAndScale>
+			<slot />
 		</div>
 	</div>
 {/if}

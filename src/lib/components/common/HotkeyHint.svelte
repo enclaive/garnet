@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatChord, isConfigurableShortcut, keybindings, shortcuts } from '$lib/shortcuts';
-	import type { Shortcut } from '$lib/shortcuts';
+	import { shortcuts } from '$lib/shortcuts';
 	import { settings } from '$lib/stores';
 
 	export let name: string;
@@ -9,11 +8,12 @@
 
 	let isMac = false;
 	let mounted = false;
-
-	$: isVisible = $settings?.keyboardShortcuts !== false;
+	let keys: string[] = [];
+	let isVisible = true;
 
 	onMount(() => {
 		isMac = /Mac/i.test(navigator.userAgent);
+		keys = shortcuts[name]?.keys ?? [];
 		mounted = true;
 	});
 
@@ -26,21 +26,12 @@
 
 		return key;
 	}
-
-	function displayKeys(): string {
-		const id = name as Shortcut;
-		if (isConfigurableShortcut(id)) {
-			return formatChord($keybindings[id]);
-		}
-		const keys = shortcuts[id]?.keys ?? [];
-		return keys.map(formatKey).join(isMac ? '' : '+');
-	}
 </script>
 
 {#if mounted && isVisible}
 	<div
 		class="hidden md:flex items-center self-center text-xs text-gray-400 dark:text-gray-600 {className}"
 	>
-		<span>{displayKeys()}</span>
+		<span>{keys.map(formatKey).join(isMac ? '' : '+')}</span>
 	</div>
 {/if}

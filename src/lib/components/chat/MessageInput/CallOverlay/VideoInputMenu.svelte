@@ -5,7 +5,6 @@
 	const dispatch = createEventDispatcher();
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
-	import DropdownMenu from '$lib/components/common/DropdownMenu.svelte';
 
 	export let onClose: Function = () => {};
 	export let devices: any;
@@ -26,10 +25,12 @@
 	<slot />
 
 	<div slot="content">
-		<DropdownMenu className="min-w-[11.25rem] z-[9999] dark:bg-gray-900 shadow-xs">
+		<div
+			class="min-w-[180px] rounded-lg p-1 border border-gray-100 dark:border-gray-800 z-[9999] bg-white dark:bg-gray-900 dark:text-white shadow-xs"
+		>
 			{#each devices as device}
 				<button
-					class="flex h-[1.6875rem] w-full items-center gap-2 rounded-xl px-2 text-[0.8125rem] cursor-pointer hover:bg-gray-50/40 dark:hover:bg-gray-800/40"
+					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md w-full"
 					on:click={() => {
 						dispatch('change', device.deviceId);
 					}}
@@ -41,6 +42,6 @@
 					</div>
 				</button>
 			{/each}
-		</DropdownMenu>
+		</div>
 	</div>
 </Dropdown>

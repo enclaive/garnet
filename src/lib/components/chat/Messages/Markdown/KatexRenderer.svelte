@@ -38,11 +38,7 @@
 		try {
 			renderedHTML = renderToString(content, { displayMode, throwOnError: false });
 		} catch {
-			// throwOnError only suppresses ParseError; RangeError on deep nesting escapes, so escape the fallback (never {@html} raw source)
-			renderedHTML = content
-				.replaceAll('&', '&amp;')
-				.replaceAll('<', '&lt;')
-				.replaceAll('>', '&gt;');
+			renderedHTML = content;
 		}
 	}
 </script>

@@ -5,7 +5,6 @@
 	const i18n = getContext('i18n');
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
-	import DropdownMenu from '$lib/components/common/DropdownMenu.svelte';
 	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 
@@ -18,17 +17,19 @@
 	</Tooltip>
 
 	<div slot="content">
-		<DropdownMenu className="min-w-[9.375rem]">
+		<div
+			class="min-w-[150px] rounded-xl p-1 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+		>
 			<button
-				class="select-none flex h-[1.6875rem] w-full items-center gap-2 rounded-xl px-2 text-[0.8125rem] cursor-pointer hover:bg-gray-50/40 dark:hover:bg-gray-800/40"
+				class="select-none flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md w-full"
 				on:click={() => {
 					dispatch('delete');
 					show = false;
 				}}
 			>
-				<GarbageBin className="size-3.5" strokeWidth="2" />
+				<GarbageBin strokeWidth="2" />
 				<div class="flex items-center">{$i18n.t('Delete')}</div>
 			</button>
-		</DropdownMenu>
+		</div>
 	</div>
 </Dropdown>

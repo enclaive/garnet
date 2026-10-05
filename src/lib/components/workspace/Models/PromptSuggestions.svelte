@@ -3,7 +3,6 @@
 	import { saveAs } from 'file-saver';
 	import { toast } from 'svelte-sonner';
 	import Plus from '$lib/components/icons/Plus.svelte';
-	import XMark from '$lib/components/icons/XMark.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	const i18n = getContext('i18n');
 
@@ -22,35 +21,18 @@
 		});
 	};
 
-	const autosize = (node: HTMLTextAreaElement) => {
-		const resize = () => {
-			node.style.height = 'auto';
-			node.style.height = `${node.scrollHeight}px`;
-		};
-
-		resize();
-		node.addEventListener('input', resize);
-
-		return {
-			update: resize,
-			destroy() {
-				node.removeEventListener('input', resize);
-			}
-		};
-	};
-
 	$: if (promptSuggestions) {
 		setPromptSuggestions();
 	}
 </script>
 
-<div class="space-y-2">
-	<div class="mb-1 flex h-6 w-full items-center justify-between">
-		<div class="min-w-0 flex-1 self-center text-xs text-gray-500 dark:text-gray-400">
+<div class=" space-y-3">
+	<div class="flex w-full justify-between mb-1.5">
+		<div class=" self-center text-xs flex-1 shrink-0 w-full">
 			{$i18n.t('Default Prompt Suggestions')}
 		</div>
 
-		<div class="flex shrink-0 items-center justify-end gap-1.5">
+		<div class="flex justify-end gap-2">
 			<input
 				id="prompt-suggestions-import-input"
 				type="file"
@@ -93,7 +75,7 @@
 			/>
 
 			<button
-				class="flex items-center rounded-xl bg-transparent px-1 py-0.5 text-xs text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+				class="flex text-xs items-center space-x-1 py-1 rounded-xl bg-transparent dark:text-gray-200 transition"
 				type="button"
 				on:click={() => {
 					const input = document.getElementById('prompt-suggestions-import-input');
@@ -102,14 +84,14 @@
 					}
 				}}
 			>
-				<div class="line-clamp-1 self-center font-normal">
+				<div class=" self-center font-medium line-clamp-1">
 					{$i18n.t('Import')}
 				</div>
 			</button>
 
 			{#if promptSuggestions.length}
 				<button
-					class="flex items-center rounded-xl bg-transparent px-1 py-0.5 text-xs text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+					class="flex text-xs items-center space-x-1 py-1 rounded-xl bg-transparent dark:text-gray-200 transition"
 					type="button"
 					on:click={async () => {
 						let blob = new Blob([JSON.stringify(promptSuggestions)], {
@@ -118,86 +100,89 @@
 						saveAs(blob, `prompt-suggestions-export-${Date.now()}.json`);
 					}}
 				>
-					<div class="line-clamp-1 self-center font-normal">
+					<div class=" self-center font-medium line-clamp-1">
 						{$i18n.t('Export')}
 					</div>
 				</button>
 			{/if}
 
 			<button
-				class="flex size-6 items-center justify-center text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+				class=" px-1.5 rounded-xl transition font-medium text-sm flex items-center"
 				type="button"
-				aria-label={$i18n.t('Add prompt suggestion')}
 				on:click={() => {
 					if (promptSuggestions.length === 0 || promptSuggestions.at(-1).content !== '') {
 						promptSuggestions = [...promptSuggestions, { content: '', title: ['', ''] }];
 					}
 				}}
 			>
-				<Plus className="size-3.5" strokeWidth="2.25" />
+				<Plus className="size-3" strokeWidth="2.5" />
 			</button>
 		</div>
 	</div>
 
 	{#if _promptSuggestions.length > 0}
-		<div class="flex flex-col gap-1.5">
+		<div class="flex flex-col gap-2">
 			{#each _promptSuggestions as prompt, promptIdx}
 				<div
-					class="flex gap-1 rounded-lg border border-gray-100/40 bg-transparent px-2 py-1 dark:border-gray-850/50"
+					class=" flex border rounded-2xl border-gray-100/30 dark:border-gray-850/30 bg-transparent p-2"
 				>
-					<div class="flex min-w-0 flex-1 flex-col gap-0.5">
-						<div class="grid min-w-0 gap-1 md:grid-cols-2 md:gap-1.5">
+					<div class="flex flex-col md:flex-row w-full gap-1 md:gap-2 px-2">
+						<div class="gap-0.5 min-w-60">
 							<Tooltip content={$i18n.t('e.g. Tell me a fun fact')} placement="top-start">
 								<input
-									class="w-full bg-transparent text-[0.8125rem] leading-5 text-gray-700 outline-hidden placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-700"
+									class="text-sm w-full bg-transparent outline-hidden"
 									placeholder={$i18n.t('Title')}
-									aria-label={$i18n.t('Title')}
 									bind:value={prompt.title[0]}
 								/>
 							</Tooltip>
 
 							<Tooltip content={$i18n.t('e.g. about the Roman Empire')} placement="top-start">
 								<input
-									class="w-full bg-transparent text-[0.8125rem] leading-5 text-gray-500 outline-hidden placeholder:text-gray-300 dark:text-gray-500 dark:placeholder:text-gray-700"
+									class="text-sm w-full bg-transparent outline-hidden text-gray-600 dark:text-gray-400"
 									placeholder={$i18n.t('Subtitle')}
-									aria-label={$i18n.t('Subtitle')}
 									bind:value={prompt.title[1]}
 								/>
 							</Tooltip>
 						</div>
 
 						<Tooltip
-							className="flex min-w-0"
+							className="w-full self-center items-center flex"
 							content={$i18n.t('e.g. Tell me a fun fact about the Roman Empire')}
 							placement="top-start"
 						>
 							<textarea
-								class="min-h-5 w-full resize-none overflow-hidden bg-transparent text-[0.8125rem] leading-5 text-gray-700 outline-hidden placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-700"
-								placeholder={$i18n.t('Content')}
-								aria-label={$i18n.t('Content')}
-								rows="1"
-								use:autosize={prompt.content}
+								class="text-sm w-full bg-transparent outline-hidden resize-none"
+								placeholder={$i18n.t('Prompt')}
+								rows="2"
 								bind:value={prompt.content}
 							/>
 						</Tooltip>
 					</div>
 
 					<button
-						class="flex size-6 shrink-0 items-center justify-center text-gray-400 opacity-70 transition hover:text-gray-700 hover:opacity-100 dark:text-gray-600 dark:hover:text-gray-300"
+						class="p-1 self-start"
 						type="button"
-						aria-label={$i18n.t('Remove prompt suggestion')}
 						on:click={() => {
 							promptSuggestions.splice(promptIdx, 1);
 							promptSuggestions = promptSuggestions;
 						}}
 					>
-						<XMark className="size-3.5" />
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 20 20"
+							fill="currentColor"
+							class="w-4 h-4"
+						>
+							<path
+								d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+							/>
+						</svg>
 					</button>
 				</div>
 			{/each}
 		</div>
 	{:else}
-		<div class="mb-1.5 w-full text-center text-xs text-gray-500 dark:text-gray-600">
+		<div class="text-xs text-center w-full text-gray-500 mb-1.5">
 			{$i18n.t('No suggestion prompts')}
 		</div>
 	{/if}
