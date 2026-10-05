@@ -6,13 +6,6 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers.update(set_security_headers())
-        return response
-
-
 def set_security_headers() -> Dict[str, str]:
     """
     Sets security headers based on environment variables.

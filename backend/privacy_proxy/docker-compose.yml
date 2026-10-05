@@ -105,6 +105,46 @@ services:
           memory: 4G
           cpus: '2'
 
+  laya:
+    image: python:3.11-slim
+    command: bash -c "pip install 'laya[serve]' -q && laya-serve"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - laya-cache:/root/.cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/systemone')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+
+  laya:
+    image: python:3.11-slim
+    command: bash -c "pip install 'laya[serve]' -q && laya-serve"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - laya-cache:/root/.cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/systemone')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+
   caddy:
     image: caddy:2
     ports:

@@ -17,12 +17,12 @@ def search_microsoft_web_iq(
     api_key: str,
     query: str,
     count: int,
-    filter_list: list[str | None] | None = None,
+    filter_list: list[str] | None = None,
     language: str = 'en',
     user=None,
 ) -> list[SearchResult]:
     try:
-        api_base_url = (api_base_url or DEFAULT_MICROSOFT_WEB_IQ_API_BASE_URL).rstrip('/')
+        api_base_url = api_base_url.rstrip('/')
         headers = {
             'host': urlparse(api_base_url).netloc or 'api.microsoft.ai',
             'x-apikey': api_key,

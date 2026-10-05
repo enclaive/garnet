@@ -13,7 +13,7 @@ from open_webui.events import EVENTS, publish_event
 from open_webui.models.config import Config
 from open_webui.models.oauth_sessions import OAuthSessions
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.headers import get_custom_headers
+from open_webui.utils.headers import bearer_auth_header, get_custom_headers
 from open_webui.utils.mcp.client import MCPClient
 from open_webui.utils.oauth import (
     OAuthClientInformationFull,
@@ -66,6 +66,15 @@ MODELS_CONFIG_KEYS = {
     'MODEL_ORDER_LIST': 'ui.model_order_list',
     'DEFAULT_MODEL_METADATA': 'models.default_metadata',
     'DEFAULT_MODEL_PARAMS': 'models.default_params',
+}
+SUBAGENTS_CONFIG_KEYS = {
+    'ENABLE_SUBAGENTS': 'subagents.enable',
+    'SUBAGENTS_BACKGROUND_ENABLED': 'subagents.background_enabled',
+    'SUBAGENTS_MAX_CONCURRENT': 'subagents.max_concurrent',
+    'SUBAGENTS_MAX_ASYNC': 'subagents.max_async',
+    'SUBAGENTS_MAX_ITERATIONS': 'subagents.max_iterations',
+    'SUBAGENTS_MAX_OUTPUT': 'subagents.max_output',
+    'SUBAGENTS_SYSTEM_PROMPT': 'subagents.system_prompt',
 }
 
 
@@ -193,10 +202,10 @@ async def register_oauth_client(
             'oauth_client_info': encrypt_data(oauth_client_info.model_dump(mode='json')),
         }
     except Exception as e:
-        log.debug(f'Failed to register OAuth client: {e}')
+        log.debug('Failed to register OAuth client: %s', e)
         raise HTTPException(
             status_code=400,
-            detail=f'Failed to register OAuth client',
+            detail=f'Failed to register OAuth client: {e}',
         )
 
 
@@ -270,7 +279,11 @@ async def set_tool_servers_config(
                         OAuthClientInformationFull(**oauth_client_info),
                     )
                 except Exception as e:
-                    log.debug(f'Failed to add OAuth client for MCP tool server: {e}')
+                    log.debug(
+                        'Failed to add OAuth client for MCP tool server %s: %s',
+                        server_id,
+                        f'{type(e).__name__}: {e}' if str(e) else type(e).__name__,
+                    )
                     continue
 
     await publish_event(
@@ -298,10 +311,8 @@ class TerminalServerConnection(BaseModel):
 
     config: dict | None = None
 
-    # Orchestrator policy fields
-    server_type: str | None = None  # "orchestrator", "terminal"
+    server_type: str | None = None
     policy_id: str | None = None
-    policy: dict | None = None  # cached policy data
 
     model_config = ConfigDict(extra='allow')
 
@@ -321,7 +332,9 @@ async def set_terminal_servers_config(
     form_data: TerminalServersConfigForm,
     user=Depends(get_admin_user),
 ):
-    connections = [connection.model_dump() for connection in form_data.TERMINAL_SERVER_CONNECTIONS]
+    connections = [
+        connection.model_dump(exclude={'policy', 'lifecycle'}) for connection in form_data.TERMINAL_SERVER_CONNECTIONS
+    ]
     await Config.upsert({'terminal_server.connections': connections})
 
     await set_terminal_servers(request)
@@ -381,7 +394,7 @@ async def verify_terminal_server_connection(
                 pass
 
     except Exception as e:
-        log.debug(f'Failed to connect to the terminal server: {e}')
+        log.debug('Failed to connect to the terminal server: %s', e)
 
     raise HTTPException(status_code=400, detail='Failed to connect to the terminal server')
 
@@ -391,7 +404,25 @@ class TerminalServerPolicyForm(BaseModel):
     key: str | None = ''
     auth_type: str | None = 'bearer'
     policy_id: str
-    policy_data: dict
+    policy_data: dict | None = None
+
+
+class TerminalServerLifecycleForm(BaseModel):
+    url: str
+    key: str | None = ''
+    auth_type: str | None = 'bearer'
+    policy_id: str
+    lifecycle_data: dict | None = None
+
+
+class TerminalServerRefreshForm(BaseModel):
+    url: str
+    key: str | None = ''
+    auth_type: str | None = 'bearer'
+    user_id: str | None = None
+    policy_id: str | None = None
+    only_idle: bool = True
+    reset: bool = False
 
 
 class TerminalServerLifecycleForm(BaseModel):
@@ -416,9 +447,7 @@ class TerminalServerRefreshForm(BaseModel):
 async def put_terminal_server_policy(
     request: Request, form_data: TerminalServerPolicyForm, user=Depends(get_admin_user)
 ):
-    """
-    Proxy a policy PUT to an orchestrator terminal server.
-    """
+    """Proxy a policy read or update to an orchestrator terminal server."""
     base_url = (form_data.url or '').rstrip('/')
     if not base_url:
         raise HTTPException(status_code=400, detail='Terminal server URL is required')
@@ -433,8 +462,12 @@ async def put_terminal_server_policy(
             timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
         ) as session:
             policy_url = f'{base_url}/api/v1/policies/{form_data.policy_id}'
-            async with session.put(
-                policy_url, headers=headers, json=form_data.policy_data, ssl=AIOHTTP_CLIENT_SESSION_SSL
+            async with session.request(
+                'GET' if form_data.policy_data is None else 'PUT',
+                policy_url,
+                headers=headers,
+                json=form_data.policy_data,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as resp:
                 if resp.ok:
                     return await resp.json()
@@ -443,8 +476,92 @@ async def put_terminal_server_policy(
     except HTTPException:
         raise
     except Exception as e:
-        log.debug(f'Failed to save policy to terminal server: {e}')
-        raise HTTPException(status_code=400, detail='Failed to save policy to terminal server')
+        log.debug('Failed to access policy on terminal server: %s', e)
+        raise HTTPException(status_code=400, detail='Failed to access policy on terminal server')
+
+
+@router.post('/terminal_servers/lifecycle')
+async def put_terminal_server_lifecycle(
+    request: Request, form_data: TerminalServerLifecycleForm, user=Depends(get_admin_user)
+):
+    """Proxy a lifecycle read or update to an orchestrator terminal server."""
+    base_url = (form_data.url or '').rstrip('/')
+    if not base_url:
+        raise HTTPException(status_code=400, detail='Terminal server URL is required')
+
+    headers = {'Content-Type': 'application/json'}
+    if form_data.auth_type == 'bearer' and form_data.key:
+        headers.update(bearer_auth_header(form_data.key))
+
+    try:
+        async with aiohttp.ClientSession(
+            trust_env=True,
+            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+        ) as session:
+            lifecycle_url = f'{base_url}/api/v1/policies/{form_data.policy_id}/lifecycle'
+            async with session.request(
+                'GET' if form_data.lifecycle_data is None else 'PUT',
+                lifecycle_url,
+                headers=headers,
+                json=form_data.lifecycle_data,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            ) as resp:
+                if resp.ok:
+                    return await resp.json()
+                detail = await resp.text()
+                raise HTTPException(status_code=resp.status, detail=detail)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.debug('Failed to access lifecycle on terminal server: %s', e)
+        raise HTTPException(status_code=400, detail='Failed to access lifecycle on terminal server')
+
+
+@router.post('/terminal_servers/refresh')
+async def refresh_terminal_server_terminals(
+    request: Request, form_data: TerminalServerRefreshForm, user=Depends(get_admin_user)
+):
+    """
+    Proxy a terminal refresh request to an orchestrator terminal server.
+    """
+    base_url = (form_data.url or '').rstrip('/')
+    if not base_url:
+        raise HTTPException(status_code=400, detail='Terminal server URL is required')
+
+    headers = {'Content-Type': 'application/json'}
+    if form_data.auth_type == 'bearer' and form_data.key:
+        headers.update(bearer_auth_header(form_data.key))
+
+    body = {
+        'only_idle': form_data.only_idle,
+        'reset': form_data.reset,
+    }
+    if form_data.user_id:
+        body['user_id'] = form_data.user_id
+    if form_data.policy_id:
+        body['policy_id'] = form_data.policy_id
+
+    try:
+        async with aiohttp.ClientSession(
+            trust_env=True,
+            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+        ) as session:
+            refresh_url = f'{base_url}/api/v1/terminals/refresh'
+            async with session.post(
+                refresh_url,
+                headers=headers,
+                json=body,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            ) as resp:
+                if resp.ok:
+                    return await resp.json()
+                detail = await resp.text()
+                raise HTTPException(status_code=resp.status, detail=detail)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.debug('Failed to refresh terminals: %s', e)
+        raise HTTPException(status_code=400, detail='Failed to refresh terminals')
 
 
 @router.post('/terminal_servers/lifecycle')
@@ -547,7 +664,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
                 )
                 discovery_urls = await get_discovery_urls(oauth_server_url)
                 for discovery_url in discovery_urls:
-                    log.debug(f'Trying to fetch OAuth 2.1 discovery document from {discovery_url}')
+                    log.debug('Trying to fetch OAuth 2.1 discovery document from %s', discovery_url)
                     async with aiohttp.ClientSession(
                         trust_env=True,
                         timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
@@ -565,7 +682,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
                                         'oauth_server_metadata': oauth_server_metadata.model_dump(mode='json'),
                                     }
                                 except Exception as e:
-                                    log.info(f'Failed to parse OAuth 2.1 discovery document: {e}')
+                                    log.info('Failed to parse OAuth 2.1 discovery document: %s', e)
                                     raise HTTPException(
                                         status_code=400,
                                         detail=f'Failed to parse OAuth 2.1 discovery document from {discovery_url}',
@@ -604,7 +721,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
                     if form_data.headers and isinstance(form_data.headers, dict):
                         if headers is None:
                             headers = {}
-                        custom_headers = get_custom_headers(form_data.headers, user)
+                        custom_headers = await get_custom_headers(form_data.headers, user)
                         headers.update(custom_headers)
 
                     await client.connect(form_data.url, headers=headers)
@@ -614,7 +731,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
                         'specs': specs,
                     }
                 except Exception as e:
-                    log.debug(f'Failed to create MCP client: {e}')
+                    log.debug('Failed to create MCP client: %s', e)
                     raise HTTPException(
                         status_code=400,
                         detail=f'Failed to create MCP client',
@@ -649,7 +766,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
             if form_data.headers and isinstance(form_data.headers, dict):
                 if headers is None:
                     headers = {}
-                custom_headers = get_custom_headers(form_data.headers, user)
+                custom_headers = await get_custom_headers(form_data.headers, user)
                 headers.update(custom_headers)
 
             url = get_tool_server_url(form_data.url, form_data.path)
@@ -657,7 +774,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
     except HTTPException as e:
         raise e
     except Exception as e:
-        log.debug(f'Failed to connect to the tool server: {e}')
+        log.debug('Failed to connect to the tool server: %s', e)
         raise HTTPException(
             status_code=400,
             detail=f'Failed to connect to the tool server',
@@ -718,7 +835,7 @@ async def set_code_execution_config(
 class ModelsConfigForm(BaseModel):
     DEFAULT_MODELS: str | None
     DEFAULT_PINNED_MODELS: str | None
-    MODEL_ORDER_LIST: list[str | None]
+    MODEL_ORDER_LIST: list[str] | None
     DEFAULT_MODEL_METADATA: dict | None = None
     DEFAULT_MODEL_PARAMS: dict | None = None
 
@@ -750,6 +867,40 @@ async def set_models_config(request: Request, form_data: ModelsConfigForm, user=
             'default_pinned_models': values.get('DEFAULT_PINNED_MODELS'),
             'model_order_count': len(values.get('MODEL_ORDER_LIST') or []),
         },
+    )
+    return values
+
+
+class SubagentsConfigForm(BaseModel):
+    ENABLE_SUBAGENTS: bool
+    SUBAGENTS_BACKGROUND_ENABLED: bool
+    SUBAGENTS_MAX_CONCURRENT: int
+    SUBAGENTS_MAX_ASYNC: int
+    SUBAGENTS_MAX_ITERATIONS: int
+    SUBAGENTS_MAX_OUTPUT: int
+    SUBAGENTS_SYSTEM_PROMPT: str
+
+
+@router.get('/subagents', response_model=SubagentsConfigForm)
+async def get_subagents_config(user=Depends(get_admin_user)):
+    return await get_config_values(SUBAGENTS_CONFIG_KEYS)
+
+
+@router.post('/subagents', response_model=SubagentsConfigForm)
+async def set_subagents_config(
+    request: Request,
+    form_data: SubagentsConfigForm,
+    user=Depends(get_admin_user),
+):
+    await Config.upsert(config_updates(form_data.model_dump(), SUBAGENTS_CONFIG_KEYS))
+    values = await get_config_values(SUBAGENTS_CONFIG_KEYS)
+    await publish_event(
+        request,
+        EVENTS.CONFIG_UPDATED,
+        actor=user,
+        subject_id='subagents',
+        subject_type='config',
+        data={'enabled': values.get('ENABLE_SUBAGENTS')},
     )
     return values
 

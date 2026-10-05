@@ -102,10 +102,7 @@ class JSONFormatter(logging.Formatter):
 
 
 LOG_FORMAT = os.getenv('LOG_FORMAT', '').lower()
-<<<<<<< HEAD
-=======
 LOGURU_DIAGNOSE = os.getenv('LOGURU_DIAGNOSE', 'False').lower() == 'true'
->>>>>>> v0.11.3
 
 GLOBAL_LOG_LEVEL = os.getenv('GLOBAL_LOG_LEVEL', '').upper()
 if GLOBAL_LOG_LEVEL in logging.getLevelNamesMapping():
@@ -152,14 +149,11 @@ DEPLOYMENT_ID = os.getenv('DEPLOYMENT_ID', '')
 INSTANCE_ID = os.getenv('INSTANCE_ID', str(uuid4()))
 
 ENABLE_DB_MIGRATIONS = os.getenv('ENABLE_DB_MIGRATIONS', 'True').lower() == 'true'
-<<<<<<< HEAD
-=======
 
 # Swap the JSON encoder/decoder used across the app (HTTP request bodies, JSONResponse
 # bodies, upstream provider responses, socket.io payloads) from the stdlib `json` module
 # to orjson. Faster, but stricter: see open_webui/utils/json_codec.py for the differences.
 ENABLE_ORJSON = os.getenv('ENABLE_ORJSON', 'False').lower() == 'true'
->>>>>>> v0.11.3
 
 
 # Function to parse each section
@@ -334,40 +328,6 @@ DATABASE_ENABLE_SQLITE_WAL = os.getenv('DATABASE_ENABLE_SQLITE_WAL', 'True').low
 # SQLite PRAGMA tuning — these defaults are optimised for WAL-mode web-server
 # workloads.  Each can be overridden via its environment variable.
 # Set any value to an empty string to skip that PRAGMA entirely.
-<<<<<<< HEAD
-
-# PRAGMA synchronous: NORMAL (1) is safe with WAL and avoids an fsync per
-# transaction.  Valid values: OFF (0), NORMAL (1), FULL (2), EXTRA (3).
-DATABASE_SQLITE_PRAGMA_SYNCHRONOUS = os.getenv('DATABASE_SQLITE_PRAGMA_SYNCHRONOUS', 'NORMAL')
-
-# PRAGMA busy_timeout (ms): how long a connection waits for a write lock
-# before raising SQLITE_BUSY.
-DATABASE_SQLITE_PRAGMA_BUSY_TIMEOUT = os.getenv('DATABASE_SQLITE_PRAGMA_BUSY_TIMEOUT', '5000')
-
-# PRAGMA cache_size: negative value = KiB.  -65536 ≈ 64 MB page cache.
-DATABASE_SQLITE_PRAGMA_CACHE_SIZE = os.getenv('DATABASE_SQLITE_PRAGMA_CACHE_SIZE', '-65536')
-
-# PRAGMA temp_store: MEMORY (2) keeps temp tables and indices in RAM.
-# Valid values: DEFAULT (0), FILE (1), MEMORY (2).
-DATABASE_SQLITE_PRAGMA_TEMP_STORE = os.getenv('DATABASE_SQLITE_PRAGMA_TEMP_STORE', 'MEMORY')
-
-# PRAGMA mmap_size (bytes): memory-mapped I/O size.  268435456 ≈ 256 MB.
-# Set to 0 to disable mmap.
-DATABASE_SQLITE_PRAGMA_MMAP_SIZE = os.getenv('DATABASE_SQLITE_PRAGMA_MMAP_SIZE', '268435456')
-
-# PRAGMA journal_size_limit (bytes): caps the WAL file size after checkpoint.
-# Without this the WAL grows unbounded during write bursts and is never
-# truncated.  67108864 ≈ 64 MB.  Set to -1 for no limit (SQLite default).
-DATABASE_SQLITE_PRAGMA_JOURNAL_SIZE_LIMIT = os.getenv('DATABASE_SQLITE_PRAGMA_JOURNAL_SIZE_LIMIT', '67108864')
-
-DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL = os.getenv('DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL', None)
-if DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL is not None:
-    try:
-        DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL = float(DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL)
-    except Exception:
-        DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL = 0.0
-
-=======
 
 # PRAGMA synchronous: NORMAL (1) is safe with WAL and avoids an fsync per
 # transaction.  Valid values: OFF (0), NORMAL (1), FULL (2), EXTRA (3).
@@ -399,16 +359,12 @@ try:
 except ValueError:
     DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL = 60.0
 
->>>>>>> v0.11.3
 DATABASE_ENABLE_SESSION_SHARING = os.getenv('DATABASE_ENABLE_SESSION_SHARING', 'False').lower() == 'true'
 ENABLE_PUBLIC_ACTIVE_USERS_COUNT = os.getenv('ENABLE_PUBLIC_ACTIVE_USERS_COUNT', 'True').lower() == 'true'
 RESET_CONFIG_ON_START = os.getenv('RESET_CONFIG_ON_START', 'False').lower() == 'true'
 ENABLE_REALTIME_CHAT_SAVE = os.getenv('ENABLE_REALTIME_CHAT_SAVE', 'False').lower() == 'true'
 ENABLE_QUERIES_CACHE = os.getenv('ENABLE_QUERIES_CACHE', 'False').lower() == 'true'
-<<<<<<< HEAD
-=======
 ENABLE_ADMIN_CHAT_ACCESS = os.getenv('ENABLE_ADMIN_CHAT_ACCESS', 'True').lower() == 'true'
->>>>>>> v0.11.3
 RAG_SYSTEM_CONTEXT = os.getenv('RAG_SYSTEM_CONTEXT', 'False').lower() == 'true'
 
 ####################################
@@ -420,14 +376,11 @@ REDIS_CLUSTER = os.getenv('REDIS_CLUSTER', 'False').lower() == 'true'
 
 REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'open-webui')
 
-<<<<<<< HEAD
-=======
 try:
     REDIS_RESPONSE_STREAM_TTL = int(os.getenv('REDIS_RESPONSE_STREAM_TTL', '3600'))
 except ValueError:
     REDIS_RESPONSE_STREAM_TTL = 3600
 
->>>>>>> v0.11.3
 REDIS_SENTINEL_HOSTS = os.getenv('REDIS_SENTINEL_HOSTS', '')
 REDIS_SENTINEL_PORT = os.getenv('REDIS_SENTINEL_PORT', '26379')
 
@@ -447,15 +400,12 @@ try:
 except ValueError:
     REDIS_SOCKET_CONNECT_TIMEOUT = None
 
-<<<<<<< HEAD
-=======
 REDIS_SOCKET_TIMEOUT = os.getenv('REDIS_SOCKET_TIMEOUT', '')
 try:
     REDIS_SOCKET_TIMEOUT = float(REDIS_SOCKET_TIMEOUT)
 except ValueError:
     REDIS_SOCKET_TIMEOUT = None
 
->>>>>>> v0.11.3
 # Whether to enable TCP SO_KEEPALIVE on Redis client sockets. Opt-in:
 # defaults to off so behavior is unchanged for existing deployments. When
 # enabled, the kernel sends TCP keepalive probes on idle connections so
@@ -497,12 +447,9 @@ try:
     UVICORN_WORKERS = max(int(os.getenv('UVICORN_WORKERS', '1')), 1)
 except (ValueError, TypeError):
     UVICORN_WORKERS = 1
-<<<<<<< HEAD
-=======
 
 # tiny delta-stream frames make per-frame websocket compression CPU-bound, allow opting out (true/false)
 UVICORN_WS_PER_MESSAGE_DEFLATE = os.getenv('UVICORN_WS_PER_MESSAGE_DEFLATE', 'True').lower() == 'true'
->>>>>>> v0.11.3
 
 ####################################
 # WEBSOCKET SUPPORT
@@ -560,8 +507,6 @@ try:
 except ValueError:
     WEBSOCKET_SERVER_PING_INTERVAL = 25
 
-<<<<<<< HEAD
-=======
 WEBSOCKET_HEARTBEAT_INTERVAL = os.getenv('WEBSOCKET_HEARTBEAT_INTERVAL', '')
 if WEBSOCKET_HEARTBEAT_INTERVAL == '':
     WEBSOCKET_HEARTBEAT_INTERVAL = None
@@ -571,7 +516,6 @@ else:
     except ValueError:
         WEBSOCKET_HEARTBEAT_INTERVAL = 30
 
->>>>>>> v0.11.3
 WEBSOCKET_EVENT_CALLER_TIMEOUT = os.getenv('WEBSOCKET_EVENT_CALLER_TIMEOUT', '')
 
 if WEBSOCKET_EVENT_CALLER_TIMEOUT == '':
@@ -644,19 +588,14 @@ def _parse_ssl_env(value: str) -> 'bool | _ssl.SSLContext':
 
 REQUESTS_VERIFY = os.getenv('REQUESTS_VERIFY', 'True').lower() == 'true'
 
-<<<<<<< HEAD
-=======
 TAVILY_API_BASE_URL = os.getenv('TAVILY_API_BASE_URL', 'https://api.tavily.com').rstrip('/')
 
->>>>>>> v0.11.3
 _aiohttp_timeout_raw = os.getenv('AIOHTTP_CLIENT_TIMEOUT', '')
 try:
     AIOHTTP_CLIENT_TIMEOUT = int(_aiohttp_timeout_raw) if _aiohttp_timeout_raw else None
 except (ValueError, TypeError):
     AIOHTTP_CLIENT_TIMEOUT = 300
 
-<<<<<<< HEAD
-=======
 # Optional between-chunks idle cap for streaming aiohttp requests.
 AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT = os.getenv('AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT', '')
 if AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT == '':
@@ -670,18 +609,12 @@ else:
 if AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT is not None and AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT <= 0:
     AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT = None
 
->>>>>>> v0.11.3
 
 # SSL verification for general outbound requests (OpenAI, OAuth, etc.).
 # Accepts "True", "False", or a path to a CA bundle file.
 # When "True", falls back to AIOHTTP_CLIENT_SSL_CERT_FILE if set.
 AIOHTTP_CLIENT_SESSION_SSL = _parse_ssl_env(os.getenv('AIOHTTP_CLIENT_SESSION_SSL', 'True'))
 
-<<<<<<< HEAD
-# When False (default), outbound HTTP requests do not follow 3xx redirects.
-AIOHTTP_CLIENT_ALLOW_REDIRECTS = os.getenv('AIOHTTP_CLIENT_ALLOW_REDIRECTS', 'False').lower() == 'true'
-
-=======
 SEARXNG_CLIENT_CERT_FILE = os.getenv('SEARXNG_CLIENT_CERT_FILE', '').strip()
 SEARXNG_CLIENT_KEY_FILE = os.getenv('SEARXNG_CLIENT_KEY_FILE', '').strip()
 
@@ -700,7 +633,6 @@ if not AIOHTTP_CLIENT_ASYNC_DNS_RESOLVER:
     aiohttp.resolver.DefaultResolver = aiohttp.resolver.ThreadedResolver
     aiohttp.connector.DefaultResolver = aiohttp.resolver.ThreadedResolver
 
->>>>>>> v0.11.3
 # Optional User-Agent override for outbound web-loader fetches.  When set,
 # SafeWebBaseLoader sends this value instead of the default python-requests UA
 # which is aggressively blocked by Cloudflare, Wikipedia, and similar services.
@@ -721,8 +653,6 @@ try:
 except (ValueError, TypeError):
     AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA = 10
 
-<<<<<<< HEAD
-=======
 AIOHTTP_FILE_STREAM_CHUNK_SIZE = os.getenv('AIOHTTP_FILE_STREAM_CHUNK_SIZE', str(1024 * 1024))
 try:
     AIOHTTP_FILE_STREAM_CHUNK_SIZE = int(AIOHTTP_FILE_STREAM_CHUNK_SIZE)
@@ -732,7 +662,6 @@ except Exception:
 if AIOHTTP_FILE_STREAM_CHUNK_SIZE <= 0:
     AIOHTTP_FILE_STREAM_CHUNK_SIZE = 1024 * 1024
 
->>>>>>> v0.11.3
 
 # SSL verification for tool server connections specifically.
 # Accepts "True", "False", or a path to a CA bundle file.
@@ -893,12 +822,6 @@ BYPASS_RETRIEVAL_ACCESS_CONTROL = os.getenv('BYPASS_RETRIEVAL_ACCESS_CONTROL', '
 # for non-admin users.  When False (default), unknown collection names are
 # denied — closing the legacy unscoped namespace.
 ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS = os.getenv('ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS', 'False').lower() == 'true'
-<<<<<<< HEAD
-MINERU_MAX_MARKDOWN_BYTES = (
-    int(os.getenv('MINERU_MAX_MARKDOWN_BYTES')) if os.getenv('MINERU_MAX_MARKDOWN_BYTES') else None
-)
-
-=======
 
 # Falls back to the upload size limit, because a document cannot legitimately carry more metadata
 # than the file itself is allowed to be. Left unbounded, a small archive that expands enormously
@@ -913,7 +836,6 @@ MINERU_MAX_MARKDOWN_BYTES = (
     int(os.getenv('MINERU_MAX_MARKDOWN_BYTES')) if os.getenv('MINERU_MAX_MARKDOWN_BYTES') else None
 )
 
->>>>>>> v0.11.3
 # When enabled, skips pydub-based preprocessing (format conversion, compression,
 # and chunked splitting) before sending files to processing engines. Useful when
 # the upstream provider handles these steps or when ffmpeg is unavailable.
@@ -944,8 +866,6 @@ OAUTH_MAX_SESSIONS_PER_USER = int(os.getenv('OAUTH_MAX_SESSIONS_PER_USER', '10')
 # Token Exchange Configuration
 # Allows external apps to exchange OAuth tokens for OpenWebUI tokens
 ENABLE_OAUTH_TOKEN_EXCHANGE = os.getenv('ENABLE_OAUTH_TOKEN_EXCHANGE', 'False').lower() == 'true'
-<<<<<<< HEAD
-=======
 _oauth_token_exchange_rate_limit = (os.getenv('OAUTH_TOKEN_EXCHANGE_RATE_LIMIT') or '').strip()
 OAUTH_TOKEN_EXCHANGE_RATE_LIMIT = (
     int(_oauth_token_exchange_rate_limit)
@@ -958,7 +878,6 @@ OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS = [
     for client_id in os.getenv('OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS', '').split(',')
     if client_id.strip()
 ]
->>>>>>> v0.11.3
 
 # Back-Channel Logout Configuration
 # When enabled, exposes POST /oauth/backchannel-logout for IdP-initiated logout
@@ -1010,10 +929,6 @@ if LICENSE_PUBLIC_KEY:
 # WEBUI Identity
 ####################################
 
-<<<<<<< HEAD
-WEBUI_NAME = os.getenv('WEBUI_NAME', 'Garnet')
-
-=======
 # LICENSE covers this Open WebUI branding surface, including name, logo,
 # visual, textual, symbolic identifiers, metadata, and surrounding UI.
 # Do not alter, remove, obscure, or replace it except as LICENSE permits:
@@ -1026,7 +941,6 @@ if WEBUI_NAME != 'Open WebUI':
 # and any visual, textual, or symbolic identifiers it preserves.
 # Do not alter, remove, obscure, or replace it except as LICENSE permits:
 # https://docs.openwebui.com/license.
->>>>>>> v0.11.3
 WEBUI_FAVICON_URL = 'https://openwebui.com/favicon.png'
 WEBUI_BUILD_HASH = os.getenv('WEBUI_BUILD_HASH', 'dev-build')
 TRUSTED_SIGNATURE_KEY = os.getenv('TRUSTED_SIGNATURE_KEY', '')
@@ -1083,13 +997,10 @@ except ValueError:
 # Progressive Web App
 ####################################
 
-<<<<<<< HEAD
-=======
 # LICENSE covers this install-time Open WebUI branding surface, including
 # names, logos, manifests, metadata, and surrounding UI.
 # Do not alter, remove, obscure, or replace it except as LICENSE permits:
 # https://docs.openwebui.com/license.
->>>>>>> v0.11.3
 EXTERNAL_PWA_MANIFEST_URL = os.getenv('EXTERNAL_PWA_MANIFEST_URL', None)
 
 ####################################
@@ -1164,11 +1075,8 @@ else:
 # -1 means unlimited (no cap).
 if CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS == -1:
     CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS = None
-<<<<<<< HEAD
 
 CHAT_RESPONSE_MAX_TOOL_CALL_RETRIES = CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS
-=======
->>>>>>> v0.11.3
 
 
 # WARNING: Experimental. Only enable if your upstream Responses API endpoint
@@ -1231,11 +1139,6 @@ SENTENCE_TRANSFORMERS_CROSS_ENCODER_SIGMOID_ACTIVATION_FUNCTION = (
 )
 
 ####################################
-<<<<<<< HEAD
-# TOOLS/FUNCTIONS PIP OPTIONS
-####################################
-
-=======
 # KNOWLEDGE TOOLS
 ####################################
 
@@ -1263,7 +1166,6 @@ VIEW_FILE_DEFAULT_MAX_CHARS = _int_env('VIEW_FILE_DEFAULT_MAX_CHARS', 10_000)
 
 ENABLE_PLUGINS = os.getenv('ENABLE_PLUGINS', 'True').lower() == 'true'
 
->>>>>>> v0.11.3
 ENABLE_PIP_INSTALL_FRONTMATTER_REQUIREMENTS = (
     os.getenv('ENABLE_PIP_INSTALL_FRONTMATTER_REQUIREMENTS', 'True').lower() == 'true'
 )

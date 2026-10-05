@@ -49,6 +49,7 @@ from open_webui.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
+    AIOHTTP_FILE_STREAM_CHUNK_SIZE,
     BYPASS_PYDUB_PREPROCESSING,
     DEVICE_TYPE,
     ENABLE_FORWARD_USER_INFO_HEADERS,
@@ -59,8 +60,15 @@ from open_webui.models.config import Config
 from open_webui.utils.access_control import has_permission
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import include_user_info_headers
+from open_webui.utils.json_codec import JSONCodec
 from open_webui.utils.misc import strict_match_mime_type
 from open_webui.utils.session_pool import get_session
+from pydantic import BaseModel
+
+# pydub needs stdlib audioop (gone in 3.13); keep requires-python capped < 3.13
+from pydub import AudioSegment
+from pydub.silence import split_on_silence
+from pydub.utils import mediainfo
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -157,7 +165,7 @@ def convert_audio_to_mp3(file_path):
         output_path = os.path.splitext(file_path)[0] + '.mp3'
         audio = AudioSegment.from_file(file_path)
         audio.export(output_path, format='mp3')
-        log.info(f'Converted {file_path} to {output_path}')
+        log.info('Converted %s to %s', file_path, output_path)
         return output_path
     except Exception as e:
         log.error(f'Error converting audio file: {e}')
@@ -208,7 +216,7 @@ def transcode_audio_to_mp3(audio_data: bytes, content_type_header: str, output_p
         audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
 
     audio_segment.export(str(output_path), format='mp3')
-    log.info(f'Transcoded {mime_type} audio to MP3: {output_path}')
+    log.info('Transcoded %s audio to MP3: %s', mime_type, output_path)
     return True
 
 
@@ -329,6 +337,9 @@ def load_speech_pipeline(request):
 async def _raise_tts_error(exc: Exception, r=None) -> None:
     """Raise a standardised HTTPException from a TTS provider failure."""
     code = r.status if r is not None else 500
+    # LICENSE covers this Open WebUI error identifier.
+    # Do not alter, remove, obscure, or replace it except as LICENSE permits:
+    # https://docs.openwebui.com/license.
     detail = 'Open WebUI: Server Connection Error'
     if r is not None:
         try:
@@ -353,7 +364,7 @@ async def _write_tts_cache(
     async with aiofiles.open(file_path, 'wb') as f:
         await f.write(audio)
     async with aiofiles.open(body_path, 'w') as f:
-        await f.write(json.dumps(payload))
+        await f.write(JSONCodec.dumps(payload))
 
 
 async def _tts_openai(request, payload, file_path, file_body_path, user):
@@ -391,7 +402,7 @@ async def _tts_openai(request, payload, file_path, file_body_path, user):
                 await f.write(audio_data)
 
         async with aiofiles.open(file_body_path, 'w') as f:
-            await f.write(json.dumps(payload))
+            await f.write(JSONCodec.dumps(payload))
 
         return FileResponse(file_path)
     except Exception as exc:
@@ -483,7 +494,7 @@ async def _tts_transformers(request, payload, file_path, file_body_path, user):
     try:
         idx = embeddings['filename'].index(model_name)
     except (ValueError, KeyError):
-        log.debug(f'Speaker embedding not found for {model_name}, using default index {idx}')
+        log.debug('Speaker embedding not found for %s, using default index %s', model_name, idx)
 
     def _run_pipeline():
         speaker_embedding = torch.tensor(embeddings[idx]['xvector']).unsqueeze(0)
@@ -499,7 +510,7 @@ async def _tts_transformers(request, payload, file_path, file_body_path, user):
 
     # Audio file already written by sf.write; just persist the request metadata.
     async with aiofiles.open(file_body_path, 'w') as f:
-        await f.write(json.dumps(payload))
+        await f.write(JSONCodec.dumps(payload))
     return FileResponse(file_path)
 
 
@@ -587,7 +598,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
         return FileResponse(file_path)
 
     try:
-        payload = json.loads(body)
+        payload = JSONCodec.loads(body)
     except Exception as exc:
         log.exception(exc)
         raise HTTPException(status_code=400, detail='Invalid JSON payload')
@@ -628,14 +639,14 @@ async def _transcribe_whisper(request, file_path, languages, file_dir, id):
             language=languages[0],
             multilingual=WHISPER_MULTILINGUAL,
         )
-        log.info("Detected language '%s' with probability %f" % (info.language, info.language_probability))
+        log.info("Detected language '%s' with probability %f", info.language, info.language_probability)
         return ''.join([segment.text for segment in list(segments)])
 
     transcript = await asyncio.to_thread(_run)
     data = {'text': transcript.strip()}
 
     async with aiofiles.open(os.path.join(file_dir, f'{id}.json'), 'w') as f:
-        await f.write(json.dumps(data))
+        await f.write(JSONCodec.dumps(data))
 
     log.debug(data)
     return data
@@ -678,15 +689,19 @@ async def _transcribe_openai(request, file_path, filename, languages, file_dir, 
                 for key, value in payload.items():
                     form_data.add_field(key, str(value))
 
-                with open(file_path, 'rb') as audio_file:
-                    form_data.add_field('file', audio_file, filename=filename)
+                async def audio_chunks():
+                    async with aiofiles.open(file_path, 'rb') as audio_file:
+                        while chunk := await audio_file.read(AIOHTTP_FILE_STREAM_CHUNK_SIZE):
+                            yield chunk
 
-                    r = await session.post(
-                        url=f'{api_base_url}/audio/transcriptions',
-                        headers=headers,
-                        data=form_data,
-                        ssl=AIOHTTP_CLIENT_SESSION_SSL,
-                    )
+                form_data.add_field('file', audio_chunks(), filename=filename)
+
+                r = await session.post(
+                    url=f'{api_base_url}/audio/transcriptions',
+                    headers=headers,
+                    data=form_data,
+                    ssl=AIOHTTP_CLIENT_SESSION_SSL,
+                )
             if r.status == 200:
                 break
 
@@ -694,7 +709,7 @@ async def _transcribe_openai(request, file_path, filename, languages, file_dir, 
         data = await r.json()
 
         async with aiofiles.open(os.path.join(file_dir, f'{id}.json'), 'w') as f:
-            await f.write(json.dumps(data))
+            await f.write(JSONCodec.dumps(data))
         return data
     except Exception as e:
         log.exception(e)
@@ -706,6 +721,9 @@ async def _transcribe_openai(request, file_path, filename, languages, file_dir, 
                     detail = f'External: {res["error"].get("message", "")}'
             except Exception:
                 detail = f'External: {e}'
+        # LICENSE covers this Open WebUI error identifier.
+        # Do not alter, remove, obscure, or replace it except as LICENSE permits:
+        # https://docs.openwebui.com/license.
         raise Exception(detail if detail else 'Open WebUI: Server Connection Error')
 
 
@@ -751,11 +769,14 @@ async def _transcribe_deepgram(request, file_path, languages, file_dir, id):
 
         data = {'text': transcript}
         async with aiofiles.open(os.path.join(file_dir, f'{id}.json'), 'w') as f:
-            await f.write(json.dumps(data))
+            await f.write(JSONCodec.dumps(data))
         return data
 
     except Exception as e:
         log.exception(e)
+        # LICENSE covers this Open WebUI error identifier.
+        # Do not alter, remove, obscure, or replace it except as LICENSE permits:
+        # https://docs.openwebui.com/license.
         detail = 'Open WebUI: Server Connection Error'
         if r is not None:
             try:
@@ -1076,25 +1097,307 @@ async def transcribe(request: Request, file_path: str, metadata: Optional[dict] 
                 detail=ERROR_MESSAGES.DEFAULT(e, 'Error processing audio file'),
             )
 
-    results = []
+    if not api_key or not region:
+        raise HTTPException(status_code=400, detail='Azure API key and region are required for Azure STT')
+
+    # Build the transcription definition payload
+    definition = JSONCodec.dumps(
+        {'locales': locale_str.split(','), 'diarization': {'maxSpeakers': max_speakers, 'enabled': True}}
+        if locale_str
+        else {}
+    )
+    endpoint = (
+        base_url or f'https://{region}.api.cognitive.microsoft.com'
+    ) + '/speechtotext/transcriptions:transcribe?api-version=2024-11-15'
+
+    r = None
+    try:
+        session = await get_session()
+        form_data = aiohttp.FormData()
+        form_data.add_field('definition', definition)
+
+        async def audio_chunks():
+            async with aiofiles.open(file_path, 'rb') as audio_file:
+                while chunk := await audio_file.read(AIOHTTP_FILE_STREAM_CHUNK_SIZE):
+                    yield chunk
+
+        form_data.add_field('audio', audio_chunks(), filename=filename)
+        r = await session.post(
+            url=endpoint,
+            data=form_data,
+            headers={'Ocp-Apim-Subscription-Key': api_key},
+            ssl=AIOHTTP_CLIENT_SESSION_SSL,
+        )
+        r.raise_for_status()
+        response = await r.json()
+
+        if not response.get('combinedPhrases'):
+            raise ValueError('No transcription found in response')
+
+        transcript = response['combinedPhrases'][0].get('text', '').strip()
+        if not transcript:
+            raise ValueError('Empty transcript in response')
+
+        data = {'text': transcript}
+
+        async with aiofiles.open(os.path.join(file_dir, f'{id}.json'), 'w') as f:
+            await f.write(JSONCodec.dumps(data))
+
+        log.debug(data)
+        return data
+
+    except (KeyError, IndexError, ValueError) as e:
+        log.exception('Error parsing Azure response')
+        raise HTTPException(status_code=500, detail=f'Failed to parse Azure response: {str(e)}')
+    except aiohttp.ClientResponseError as e:
+        log.exception(e)
+        detail = None
+        try:
+            if r is not None and r.status != 200:
+                res = await r.json()
+                if 'code' in res and 'message' in res:
+                    azure_code = res.get('innerError', {}).get('code', res['code'])
+                    user_facing_codes = {
+                        'EmptyAudioFile',
+                        'AudioLengthLimitExceeded',
+                        'NoLanguageIdentified',
+                        'MultipleLanguagesIdentified',
+                    }
+                    if azure_code in user_facing_codes:
+                        detail = res['message']
+                    else:
+                        log.error(f'Azure STT error [{azure_code}]: {res["message"]}')
+                        detail = 'An error occurred during transcription.'
+                elif 'error' in res:
+                    detail = f'External: {res["error"].get("message", "")}'
+        except Exception:
+            detail = f'External: {e}'
+        # LICENSE covers this Open WebUI error identifier.
+        # Do not alter, remove, obscure, or replace it except as LICENSE permits:
+        # https://docs.openwebui.com/license.
+        raise HTTPException(
+            status_code=e.status if e.status else 500,
+            detail=detail if detail else 'Open WebUI: Server Connection Error',
+        )
+
+
+async def transcription_handler(request, file_path, metadata, user=None):
+    filename = os.path.basename(file_path)
+    file_dir = os.path.dirname(file_path)
+    id = filename.split('.')[0]
+
+    metadata = metadata or {}
+
+    languages = [
+        metadata.get('language', None) if not WHISPER_LANGUAGE else WHISPER_LANGUAGE,
+        None,  # Always fallback to None in case transcription fails
+    ]
+
+    if await Config.get('audio.stt.engine') == '':
+        return await _transcribe_whisper(request, file_path, languages, file_dir, id)
+    elif await Config.get('audio.stt.engine') == 'openai':
+        return await _transcribe_openai(request, file_path, filename, languages, file_dir, id, user)
+    elif await Config.get('audio.stt.engine') == 'deepgram':
+        return await _transcribe_deepgram(request, file_path, languages, file_dir, id)
+    elif await Config.get('audio.stt.engine') == 'azure':
+        return await _transcribe_azure(request, file_path, filename, file_dir, id)
+
+    elif await Config.get('audio.stt.engine') == 'mistral':
+        return await _transcribe_mistral(request, file_path, filename, metadata, file_dir, id)
+
+
+async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, id):
+    """Transcribe audio via the Mistral STT API."""
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=400, detail='Audio file not found')
+
+    file_size = os.path.getsize(file_path)
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f'File size exceeds limit of {MAX_FILE_SIZE_MB}MB')
+
+    api_key = await Config.get('audio.stt.mistral.api_key')
+    api_base_url = await Config.get('audio.stt.mistral.api_base_url') or 'https://api.mistral.ai/v1'
+    use_chat_completions = await Config.get('audio.stt.mistral.use_chat_completions')
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail='Mistral API key is required for Mistral STT')
+
+    r = None
+    try:
+        model = await Config.get('audio.stt.model') or 'voxtral-mini-latest'
+        log.info(
+            'Mistral STT - model: %s, method: %s',
+            model,
+            'chat_completions' if use_chat_completions else 'transcriptions',
+        )
+
+        session = await get_session()
+        if use_chat_completions:
+            audio_file_to_use = file_path
+            if is_audio_conversion_required(file_path):
+                log.debug('Converting audio to mp3 for chat completions API')
+                converted_path = await asyncio.to_thread(convert_audio_to_mp3, file_path)
+                if converted_path:
+                    audio_file_to_use = converted_path
+                else:
+                    log.error('Audio conversion failed')
+                    raise HTTPException(
+                        status_code=500,
+                        detail='Audio conversion failed. Chat completions API requires mp3 or wav format.',
+                    )
+
+            async with aiofiles.open(audio_file_to_use, 'rb') as audio_file:
+                raw = await audio_file.read()
+                audio_base64 = {
+                    'data': base64.b64encode(raw).decode('utf-8'),
+                    'format': mimetypes.guess_extension(mimetypes.guess_type(audio_file_to_use)[0]).lstrip('.'),
+                }
+
+            language = metadata.get('language', None) if metadata else None
+            text_instruction = (
+                f'Transcribe this audio exactly as spoken in {language}. Do not translate it.'
+                if language
+                else 'Transcribe this audio exactly as spoken in its original language. Do not translate it to another language.'
+            )
+
+            payload = {
+                'model': model,
+                'messages': [
+                    {
+                        'role': 'user',
+                        'content': [
+                            {'type': 'input_audio', 'input_audio': audio_base64},
+                            {'type': 'text', 'text': text_instruction},
+                        ],
+                    }
+                ],
+            }
+
+            r = await session.post(
+                url=f'{api_base_url}/chat/completions',
+                json=payload,
+                headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            )
+            r.raise_for_status()
+            response = await r.json()
+
+            transcript = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            if not transcript:
+                raise ValueError('Empty transcript in response')
+            data = {'text': transcript}
+
+        else:
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if not mime_type:
+                mime_type = 'audio/webm'
+
+            form_data = aiohttp.FormData()
+            form_data.add_field('model', model)
+
+            language = metadata.get('language', None) if metadata else None
+            if language:
+                form_data.add_field('language', language)
+
+            async def audio_chunks():
+                async with aiofiles.open(file_path, 'rb') as audio_file:
+                    while chunk := await audio_file.read(AIOHTTP_FILE_STREAM_CHUNK_SIZE):
+                        yield chunk
+
+            form_data.add_field('file', audio_chunks(), filename=filename, content_type=mime_type)
+
+            r = await session.post(
+                url=f'{api_base_url}/audio/transcriptions',
+                data=form_data,
+                headers={'Authorization': f'Bearer {api_key}'},
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            )
+            r.raise_for_status()
+            response = await r.json()
+
+            transcript = response.get('text', '').strip()
+            if not transcript:
+                raise ValueError('Empty transcript in response')
+            data = {'text': transcript}
+
+        async with aiofiles.open(os.path.join(file_dir, f'{id}.json'), 'w') as f:
+            await f.write(JSONCodec.dumps(data))
+
+        log.debug(data)
+        return data
+
+    except ValueError as e:
+        log.exception('Error parsing Mistral response')
+        raise HTTPException(status_code=500, detail=f'Failed to parse Mistral response: {str(e)}')
+    except aiohttp.ClientResponseError as e:
+        log.exception(e)
+        detail = None
+        try:
+            if r is not None and r.status != 200:
+                res = await r.json()
+                if 'error' in res:
+                    detail = f'External: {res["error"].get("message", "")}'
+                else:
+                    detail = f'External: {await r.text()}'
+        except Exception:
+            detail = f'External: {e}'
+        # LICENSE covers this Open WebUI error identifier.
+        # Do not alter, remove, obscure, or replace it except as LICENSE permits:
+        # https://docs.openwebui.com/license.
+        raise HTTPException(
+            status_code=e.status if e.status else 500,
+            detail=detail if detail else 'Open WebUI: Server Connection Error',
+        )
+
+
+async def transcribe(request: Request, file_path: str, metadata: Optional[dict] = None, user=None):
+    log.info('transcribe: %s %s', file_path, metadata)
+
+    if BYPASS_PYDUB_PREPROCESSING:
+        log.info('Bypassing pydub preprocessing (BYPASS_PYDUB_PREPROCESSING=true)')
+        chunk_paths = [file_path]
+    else:
+        if is_audio_conversion_required(file_path):
+            file_path = await asyncio.to_thread(convert_audio_to_mp3, file_path)
+            if not file_path:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Audio conversion failed. The audio file may be corrupted or empty.',
+                )
+
+        try:
+            file_path = await asyncio.to_thread(compress_audio, file_path)
+        except Exception as e:
+            log.exception(e)
+
+        # Always produce a list of chunk paths (could be one entry if small)
+        try:
+            chunk_paths = await asyncio.to_thread(split_audio, file_path, MAX_FILE_SIZE)
+            print(f'Chunk paths: {chunk_paths}')
+        except Exception as e:
+            log.exception(e)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT(e, 'Error processing audio file'),
+            )
+
     try:
         tasks = [transcription_handler(request, chunk_path, metadata, user) for chunk_path in chunk_paths]
-        for coro in asyncio.as_completed(tasks):
-            try:
-                results.append(await coro)
-            except HTTPException:
-                raise
-            except Exception as transcribe_exc:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f'Error transcribing chunk: {transcribe_exc}',
-                )
+        # gather keeps results in chunk order, unlike as_completed
+        results = await asyncio.gather(*tasks)
+    except HTTPException:
+        raise
+    except Exception as transcribe_exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Error transcribing chunk: {transcribe_exc}',
+        )
     finally:
         # Clean up only the temporary chunks, never the original file
         for chunk_path in chunk_paths:
             if chunk_path != file_path and os.path.isfile(chunk_path):
                 try:
-                    os.remove(chunk_path)
+                    await asyncio.to_thread(os.remove, chunk_path)
                 except Exception:
                     pass
 
@@ -1175,7 +1478,7 @@ async def transcription(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
-    log.info(f'file.content_type: {file.content_type}')
+    log.info('file.content_type: %s', file.content_type)
     stt_supported_content_types = await Config.get('audio.stt.supported_content_types', [])
 
     if not strict_match_mime_type(stt_supported_content_types, file.content_type):
@@ -1208,12 +1511,8 @@ async def transcription(
         if not os.path.realpath(file_path).startswith(os.path.realpath(file_dir)):
             raise ValueError('Invalid file path detected')
 
-        def _write_upload():
-            with open(file_path, 'wb') as f:
-                f.write(contents)
-
-        # Audio uploads can be large; write to disk off the event loop.
-        await asyncio.to_thread(_write_upload)
+        async with aiofiles.open(file_path, 'wb') as f:
+            await f.write(contents)
 
         try:
             metadata = None
@@ -1280,7 +1579,7 @@ async def get_available_models(request: Request) -> list[dict]:
                     data = await resp.json()
                     available_models = data.get('models', [])
             except Exception as e:
-                log.debug(f'/audio/models not available, trying /models fallback: {e}')
+                log.debug('/audio/models not available, trying /models fallback: %s', e)
                 try:
                     async with session.get(
                         f'{base_url}/models',

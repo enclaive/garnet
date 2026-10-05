@@ -27,7 +27,7 @@ class MicrosoftWebIQLoader(BaseLoader):
         continue_on_failure: bool = True,
     ) -> None:
         self.urls = urls if isinstance(urls, list) else [urls]
-        self.api_base_url = (api_base_url or DEFAULT_MICROSOFT_WEB_IQ_API_BASE_URL).rstrip('/')
+        self.api_base_url = api_base_url.rstrip('/')
         self.api_key = api_key
         self.language = language
         self.verify_ssl = verify_ssl
