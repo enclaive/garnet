@@ -56,6 +56,12 @@
 			description: $i18n.t(
 				'Automatically inject system tools in native function calling mode (e.g., timestamps, memory, chat history, notes, etc.)'
 			)
+		},
+		smart_router: {
+			label: $i18n.t('Smart Router'),
+			description: $i18n.t(
+				'Include this model in the Laya Smart Router pool. When a chat uses Smart Router, Laya will pick the best model from all models with this flag enabled.'
+			)
 		}
 	};
 
@@ -71,6 +77,7 @@
 		citations?: boolean;
 		status_updates?: boolean;
 		builtin_tools?: boolean;
+		smart_router?: boolean;
 	} = {};
 
 	// Hide file_context when file_upload is disabled

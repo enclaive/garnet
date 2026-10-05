@@ -9,7 +9,7 @@
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
-	import { user, settings } from '$lib/stores';
+	import { user, settings, models as allModels } from '$lib/stores';
 	import { onMount } from 'svelte';
 
 	const ENTITY_TYPES = [
@@ -23,6 +23,7 @@
 	];
 
 	let entityToggles: Record<string, boolean> = {};
+	let screeningSpeed: number = 0;
 
 	onMount(() => {
 		const saved = localStorage.getItem('garnet_entity_toggles');
@@ -32,6 +33,7 @@
 			ENTITY_TYPES.forEach(e => (entityToggles[e.key] = true));
 			localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
 		}
+		screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '2000');
 	});
 
 	function onEntityChange(key: string, value: string) {
@@ -39,7 +41,14 @@
 		localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
 		entityToggles = { ...entityToggles };
 	}
-	export let models = [];
+
+	function onSpeedChange() {
+		localStorage.setItem('garnet_screening_speed', String(screeningSpeed));
+	}
+	export let models: any[] = [];
+	$: smartRouterModels = ($allModels || []).filter(
+		(m: any) => m?.info?.meta?.capabilities?.smart_router
+	);
 	export let chatFiles = [];
 	export let params = {};
 	export let embed = false;
@@ -197,7 +206,31 @@
 								</div>
 							</div>
 						{/each}
+						<div class="py-0.5 flex w-full justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+							<div class="self-center text-xs">Screening Speed</div>
+							<input
+								type="number"
+								min="0"
+								step="500"
+								bind:value={screeningSpeed}
+								on:change={onSpeedChange}
+								class="p-1 px-2 text-xs w-24 rounded-sm
+									   dark:bg-gray-850 dark:text-gray-200 dark:border-gray-700
+									   bg-white text-gray-700 border border-gray-200
+									   focus:outline-none"
+							/>
+						</div>
 					</div>
+					{#if smartRouterModels.length > 0}
+						<div class="py-0.5 w-full mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+							<div class="text-xs mb-1">Smart Router Pool</div>
+							<div class="flex flex-col gap-0.5 max-h-32 overflow-y-auto">
+								{#each smartRouterModels as m (m.id)}
+									<div class="text-[10px] text-gray-500 dark:text-gray-400 truncate">• {m.name || m.id}</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
 				</div>
 			</Collapsible>
 		</div>

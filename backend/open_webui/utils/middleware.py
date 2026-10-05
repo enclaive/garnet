@@ -3616,6 +3616,13 @@ async def streaming_chat_response_handler(response, ctx):
                                             'data': data,
                                         }
                                     )
+                                elif 'picked_model' in data:
+                                    await event_emitter(
+                                        {
+                                            'type': 'chat:completion',
+                                            'data': data,
+                                        }
+                                    )
                                 # Check for Responses API events (type field starts with "response.")
                                 elif data.get('type', '').startswith('response.'):
                                     output, response_metadata = handle_responses_streaming_event(data, output)

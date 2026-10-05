@@ -1613,7 +1613,12 @@
 
 	const chatCompletionEventHandler = async (data, message, chatId) => {
 		console.warn('[GARNET ENTRY]', data);
-		const { id, done, choices, content, output, sources, selected_model_id, error, usage, pseudonymized_prompt, file_entity_count, garnet_breakdown, query_variants } = data;
+		const { id, done, choices, content, output, sources, selected_model_id, error, usage, pseudonymized_prompt, file_entity_count, garnet_breakdown, query_variants, picked_model } = data;
+		if (picked_model) {
+			message.picked_model = picked_model;
+			message.model = picked_model;
+			history = history;
+		}
 		const queryVariants = query_variants || [];
 
 		// Store raw OR-aligned output items from backend
