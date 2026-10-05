@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Garnet — Image Generation Handling</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; padding: 2rem; line-height: 1.6; }
+  h1 { font-size: 1.2rem; color: #94a3b8; margin-bottom: 2rem; letter-spacing: .05em; text-transform: uppercase; }
+  h2 { font-size: .85rem; color: #64748b; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; }
+
+  .section { margin-bottom: 2.5rem; }
+
+  /* Flow diagram */
+  .flow { display: flex; align-items: center; gap: 0; flex-wrap: wrap; margin-bottom: 1rem; }
+  .node {
+    border: 1px solid #334155; border-radius: 8px;
+    padding: .65rem 1rem; min-width: 140px; text-align: center;
+  }
+  .node .label { font-size: .6rem; color: #64748b; text-transform: uppercase; letter-spacing: .08em; margin-bottom: .2rem; }
+  .node .name  { font-size: .85rem; font-weight: 600; }
+  .node .sub   { font-size: .65rem; color: #94a3b8; margin-top: .15rem; }
+
+  .n-owu    { background: #1e3a5f; }
+  .n-proxy  { background: #1e3a2f; border-color: #22c55e; }
+  .n-openai { background: #1c2a1c; border-color: #4ade80; }
+  .n-warn   { background: #2a1c00; border-color: #f59e0b; }
+  .n-ok     { background: #0f2a1a; border-color: #22c55e; }
+  .n-bad    { background: #2a0f0f; border-color: #ef4444; }
+
+  .arrow {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 0 .5rem; min-width: 70px; color: #475569;
+  }
+  .arrow .line { width: 100%; height: 1px; background: #334155; }
+  .arrow .lbl  { font-size: .58rem; color: #64748b; text-align: center; margin-top: .15rem; white-space: nowrap; }
+
+  /* Two-path split */
+  .paths { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .path-box {
+    border: 1px solid #334155; border-radius: 8px; padding: 1rem;
+  }
+  .path-box h3 { font-size: .72rem; font-weight: 700; margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+  .path-a { border-color: #22c55e; background: #0a1a10; }
+  .path-b { border-color: #3b82f6; background: #0a1020; }
+
+  .step {
+    display: flex; gap: .6rem; margin-bottom: .5rem; align-items: flex-start;
+  }
+  .step-num {
+    min-width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .6rem; font-weight: 700; flex-shrink: 0; margin-top: .1rem;
+  }
+  .step-num-a { background: #14532d; color: #4ade80; }
+  .step-num-b { background: #1e3a8a; color: #60a5fa; }
+  .step-text  { font-size: .72rem; color: #94a3b8; }
+
+  /* Bug / Fix cards */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .card { border-radius: 8px; padding: 1rem; font-size: .72rem; line-height: 1.7; }
+  .card-bug  { background: #1a0a0a; border: 1px solid #7f1d1d; }
+  .card-fix  { background: #0a1a0a; border: 1px solid #14532d; }
+  .card h3   { font-size: .65rem; font-weight: 700; text-transform: uppercase;
+               letter-spacing: .08em; margin-bottom: .5rem; }
+  .card-bug h3 { color: #f87171; }
+  .card-fix h3 { color: #4ade80; }
+  .card p    { color: #94a3b8; margin-bottom: .4rem; }
+
+  code { background: #0f172a; border-radius: 3px; padding: .05rem .3rem;
+         font-size: .68rem; color: #7dd3fc; font-family: monospace; }
+
+  pre {
+    background: #0f172a; border: 1px solid #1e293b; border-radius: 6px;
+    padding: .75rem 1rem; font-size: .68rem; color: #7dd3fc;
+    font-family: monospace; overflow-x: auto; margin: .5rem 0; line-height: 1.5;
+  }
+
+  .badge { display: inline-block; font-size: .55rem; padding: .1rem .4rem;
+           border-radius: 3px; margin-left: .3rem; font-weight: 600; }
+  .b-green  { background: #14532d; color: #4ade80; }
+  .b-red    { background: #450a0a; color: #f87171; }
+  .b-yellow { background: #422006; color: #fbbf24; }
+  .b-blue   { background: #1e3a8a; color: #60a5fa; }
+
+  .guard-box {
+    background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+    padding: 1rem; margin: 1rem 0; font-size: .72rem;
+  }
+  .guard-box .title { font-size: .65rem; color: #64748b; text-transform: uppercase;
+                      letter-spacing: .08em; margin-bottom: .5rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .72rem; }
+  th { background: #1e293b; color: #94a3b8; padding: .5rem .75rem; text-align: left;
+       font-size: .62rem; text-transform: uppercase; letter-spacing: .07em; }
+  td { padding: .45rem .75rem; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+  tr:last-child td { border-bottom: none; }
+
+  .divider { border: none; border-top: 1px solid #1e293b; margin: 2rem 0; }
+
+  .commit-row { display: flex; gap: .75rem; align-items: center; margin-bottom: .4rem; }
+  .commit-sha { font-family: monospace; font-size: .65rem; color: #7dd3fc;
+                background: #0f172a; padding: .1rem .4rem; border-radius: 3px; }
+  .commit-msg { font-size: .72rem; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — Image Generation Handling</h1>
+
+<!-- ═══════════════════════════════════════════ TWO PATHS ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Two image paths</h2>
+  <div class="paths">
+
+    <div class="path-box path-a">
+      <h3>Path A — Chat with image model <span class="badge b-green">via proxy</span></h3>
+      <div class="step"><div class="step-num step-num-a">1</div><div class="step-text">User types a prompt in OWU chat with an image model selected (<code>gpt-image-1</code>, <code>dall-e-3</code>, <code>dall-e-2</code>).</div></div>
+      <div class="step"><div class="step-num step-num-a">2</div><div class="step-text">OWU sends <code>POST /openai/chat/completions</code> to the proxy with the messages array.</div></div>
+      <div class="step"><div class="step-num step-num-a">3</div><div class="step-text">Proxy detects <code>model in IMAGE_MODELS</code> <strong>and</strong> path is not <code>images/generations</code> → intercepts.</div></div>
+      <div class="step"><div class="step-num step-num-a">4</div><div class="step-text">Proxy extracts the last user message as <code>prompt</code>, calls <code>POST /v1/images/generations</code> on OpenAI.</div></div>
+      <div class="step"><div class="step-num step-num-a">5</div><div class="step-text">Proxy gets back URL or b64_json, wraps result as SSE chat stream, returns to OWU.</div></div>
+      <div class="step"><div class="step-num step-num-a">6</div><div class="step-text">OWU renders <code>![image](...)</code> markdown → image appears in chat bubble.</div></div>
+    </div>
+
+    <div class="path-box path-b">
+      <h3>Path B — OWU Image Generation panel <span class="badge b-blue">direct</span></h3>
+      <div class="step"><div class="step-num step-num-b">1</div><div class="step-text">User opens OWU's built-in image generation panel (not the chat).</div></div>
+      <div class="step"><div class="step-num step-num-b">2</div><div class="step-text">OWU calls <code>POST /openai/v1/images/generations</code> directly (expects a JSON response, not SSE).</div></div>
+      <div class="step"><div class="step-num step-num-b">3</div><div class="step-text">Proxy receives the call. <code>actual_path = "v1/images/generations"</code>.</div></div>
+      <div class="step"><div class="step-num step-num-b">4</div><div class="step-text">Path A guard fires: <code>"images/generations" in actual_path</code> → skips image intercept.</div></div>
+      <div class="step"><div class="step-num step-num-b">5</div><div class="step-text">Proxy forwards request as-is to OpenAI and returns raw JSON to OWU.</div></div>
+      <div class="step"><div class="step-num step-num-b">6</div><div class="step-text">OWU's panel displays the image using its own rendering logic.</div></div>
+    </div>
+
+  </div>
+</div>
+
+<hr class="divider"/>
+
+<!-- ═══════════════════════════════════════════ MODEL DETECTION ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Model detection — IMAGE_MODELS constant</h2>
+  <pre>IMAGE_MODELS = ["dall-e-3", "dall-e-2", "gpt-image-1"]</pre>
+  <p style="font-size:.72rem; color:#94a3b8; margin-top:.5rem;">
+    Any model in this list triggers Path A interception <em>only when</em> the request path is not <code>images/generations</code>.
+    Adding a new image model: append to this list in <code>backend/privacy_proxy/app/main.py</code>.
+  </p>
+</div>
+
+<hr class="divider"/>
+
+<!-- ═══════════════════════════════════════════ PATH A GUARD ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Path A guard (the key condition)</h2>
+  <div class="guard-box">
+    <div class="title">proxy/main.py — intercept condition</div>
+<pre>if body and body.get("model") in IMAGE_MODELS and "images/generations" not in actual_path:</pre>
+    <p style="font-size:.72rem; color:#94a3b8; margin-top:.6rem;">
+      <strong style="color:#e2e8f0">Why both conditions?</strong><br/>
+      Without the <code>actual_path</code> guard, Path A would also intercept OWU's own
+      <code>/v1/images/generations</code> call (Path B), returning SSE where OWU expected JSON.
+      OWU would receive a streaming response it cannot parse → broken image panel + 400 errors.
+    </p>
+  </div>
+</div>
+
+<hr class="divider"/>
+
+<!-- ═══════════════════════════════════════════ RESPONSE FORMATS ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Image response formats by model</h2>
+  <table>
+    <tr><th>Model</th><th>Default format</th><th>Supports URL?</th><th>Typical size</th><th>SSE risk</th></tr>
+    <tr><td><code>dall-e-3</code></td><td>URL</td><td>Yes</td><td>~200 bytes</td><td><span class="badge b-green">safe</span></td></tr>
+    <tr><td><code>dall-e-2</code></td><td>URL</td><td>Yes</td><td>~200 bytes</td><td><span class="badge b-green">safe</span></td></tr>
+    <tr><td><code>gpt-image-1</code></td><td>b64_json</td><td>No</td><td>1–3 MB base64</td><td><span class="badge b-red">exceeds 131 KB line limit</span></td></tr>
+  </table>
+</div>
+
+<hr class="divider"/>
+
+<!-- ═══════════════════════════════════════════ BUGS & FIXES ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Bugs fixed &amp; why</h2>
+  <div class="cards">
+
+    <div class="card card-bug">
+      <h3>Bug 1 — Text flash before image</h3>
+      <p>OWU received multiple SSE delta events. The first delta contained <code>role: assistant</code> only (no content), causing OWU to flash an empty text bubble. Subsequent deltas with the image markdown arrived late.</p>
+      <p><strong style="color:#e2e8f0">Root cause:</strong> proxy was sending two separate delta events — one for role, one for content.</p>
+    </div>
+
+    <div class="card card-fix">
+      <h3>Fix 1 — Single delta event</h3>
+      <p>Merged <code>role</code> and <code>content</code> into a single SSE delta so OWU renders the image immediately on first event with no flash.</p>
+      <pre>delta = {"role": "assistant", "content": "![image](url)"}</pre>
+    </div>
+
+    <div class="card card-bug">
+      <h3>Bug 2 — Path A intercepting Path B</h3>
+      <p>OWU's image generation panel calls <code>POST /v1/images/generations</code> directly and expects a JSON response. Without a guard, Path A would intercept this call too, wrapping the result as SSE. OWU tried to parse SSE as JSON → 400 error / broken panel.</p>
+      <p><strong style="color:#e2e8f0">Symptom:</strong> image panel worked, chat worked, but both at the same time caused double-processing.</p>
+    </div>
+
+    <div class="card card-fix">
+      <h3>Fix 2 — actual_path guard</h3>
+      <p>Added <code>"images/generations" not in actual_path</code> to the intercept condition. Path B now passes through the proxy as a transparent forward, returning raw JSON to OWU's panel.</p>
+      <pre>if model in IMAGE_MODELS and\n   "images/generations" not in actual_path:</pre>
+    </div>
+
+    <div class="card card-bug">
+      <h3>Bug 3 — 131072-byte SSE line limit</h3>
+      <p>OWU uses <code>aiohttp</code> to stream from the proxy. aiohttp reads SSE line-by-line with a hard 131072-byte limit.</p>
+      <p><code>gpt-image-1</code> returns b64_json — a 1024×1024 image is ~1.5 MB of base64. Embedding this in one <code>data: …\n\n</code> line caused aiohttp to crash with:</p>
+      <pre>Got more than 131072 bytes when reading</pre>
+    </div>
+
+    <div class="card card-fix">
+      <h3>Fix 3 — 50 KB SSE chunks</h3>
+      <p>Content is now split into 50 KB chunks, each sent as a separate SSE delta event. OWU concatenates the deltas client-side and renders the complete image when the stream finishes.</p>
+      <pre>def _image_sse_chunks(text, chunk=50_000):
+    yield first_delta(text[:chunk])
+    for i in range(chunk, len(text), chunk):
+        yield delta(text[i:i+chunk])
+    yield b"data: [DONE]\n\n"</pre>
+    </div>
+
+  </div>
+</div>
+
+<hr class="divider"/>
+
+<!-- ═══════════════════════════════════════════ FULL FLOW CODE PATH ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Path A — full code path in proxy/main.py</h2>
+  <pre><span style="color:#64748b"># 1. Catch-all route receives the request</span>
+@app.api_route("/{path:path}", ...)
+async def proxy(request, path):
+    is_openai = path.startswith("openai/")
+    actual_path = path[len("openai/"):] if is_openai else path
+
+    <span style="color:#64748b"># 2. Path A guard — image model + not a direct /images/generations call</span>
+    if body and body.get("model") in IMAGE_MODELS and "images/generations" not in actual_path:
+
+        <span style="color:#64748b"># 3. Extract prompt from last user message</span>
+        url = f"{openai_url}/images/generations"
+        prompt = last_user_text(body["messages"])
+
+        <span style="color:#64748b"># 4. Call OpenAI image API</span>
+        response = await client.post(url, json={"model": model, "prompt": prompt, "n": 1, "size": "1024x1024"})
+        data = response.json()["data"][0]
+
+        <span style="color:#64748b"># 5. Get URL or fall back to b64</span>
+        img_url = data.get("url") or f"data:image/png;base64,{data['b64_json']}"
+        content  = f"![image]({img_url})"
+
+        <span style="color:#64748b"># 6. Stream as 50 KB SSE chunks (safe for aiohttp line limit)</span>
+        return StreamingResponse(_image_sse_chunks(content), media_type="text/event-stream")</pre>
+</div>
+
+<hr class="divider"/>
+
+<!-- ═══════════════════════════════════════════ COMMIT LOG ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Commits on this feature</h2>
+  <div class="commit-row">
+    <span class="commit-sha">065a02a</span>
+    <span class="commit-msg">fix(image-gen): send image SSE as single event to avoid text flash in OWU</span>
+  </div>
+  <div class="commit-row">
+    <span class="commit-sha">59edc6e</span>
+    <span class="commit-msg">fix(proxy): route RESPONSES_API_MODELS through /v1/responses with body conversion and SSE adapter</span>
+  </div>
+  <div class="commit-row">
+    <span class="commit-sha">ce3cf58</span>
+    <span class="commit-msg">fix(image): chunk b64 SSE output to avoid 131072-byte aiohttp line limit</span>
+  </div>
+</div>
+
+</body>
+</html>

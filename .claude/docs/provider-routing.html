@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Garnet — Provider Routing Map</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; padding: 2rem; }
+  h1 { font-size: 1.2rem; color: #94a3b8; margin-bottom: 2rem; letter-spacing: .05em; text-transform: uppercase; }
+
+  .flow { display: flex; align-items: flex-start; gap: 0; }
+
+  .node {
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    min-width: 160px;
+    text-align: center;
+  }
+  .node .label { font-size: .65rem; color: #64748b; text-transform: uppercase; letter-spacing: .08em; margin-bottom: .25rem; }
+  .node .name { font-size: .9rem; font-weight: 600; }
+  .node .sub { font-size: .7rem; color: #94a3b8; margin-top: .2rem; }
+
+  .browser { background: #1e293b; }
+  .owu     { background: #1e3a5f; }
+  .proxy   { background: #1e3a2f; border-color: #22c55e; }
+  .llm-openai    { background: #1c2a1c; border-color: #4ade80; }
+  .llm-anthropic { background: #2a1c2a; border-color: #c084fc; }
+  .llm-gemini    { background: #2a221c; border-color: #fb923c; }
+  .llm-groq      { background: #1c1c2a; border-color: #60a5fa; }
+  .llm-openrouter{ background: #2a1c1c; border-color: #f87171; }
+  .llm-ollama    { background: #1c2a2a; border-color: #22d3ee; }
+  .llm-responses { background: #2a2a1c; border-color: #facc15; }
+
+  .arrow {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 0 .5rem; min-width: 80px; color: #475569;
+  }
+  .arrow .line { width: 100%; height: 1px; background: #334155; margin: .2rem 0; }
+  .arrow .path { font-size: .6rem; color: #64748b; text-align: center; white-space: nowrap; }
+
+  .providers { display: flex; flex-direction: column; gap: .5rem; }
+
+  .provider-row { display: flex; align-items: center; }
+  .provider-arrow { display: flex; flex-direction: column; min-width: 220px; padding: 0 .5rem; color: #475569; }
+  .provider-arrow .line { width: 100%; height: 1px; background: #334155; margin: .15rem 0; }
+  .provider-arrow .info { font-size: .6rem; color: #64748b; }
+  .provider-arrow .detect { font-size: .58rem; color: #475569; font-style: italic; }
+
+  .badge { display: inline-block; font-size: .55rem; padding: .1rem .35rem; border-radius: 3px; margin-top: .25rem; }
+  .badge-green  { background: #14532d; color: #4ade80; }
+  .badge-purple { background: #3b0764; color: #c084fc; }
+  .badge-yellow { background: #422006; color: #fbbf24; }
+  .badge-red    { background: #450a0a; color: #f87171; }
+
+  .section-title { font-size: .65rem; color: #475569; text-transform: uppercase; letter-spacing: .1em; margin-bottom: .5rem; }
+
+  .notes { margin-top: 2.5rem; border-top: 1px solid #1e293b; padding-top: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .note { background: #1e293b; border-radius: 6px; padding: .75rem 1rem; font-size: .72rem; line-height: 1.6; color: #94a3b8; }
+  .note strong { color: #e2e8f0; display: block; margin-bottom: .25rem; }
+  code { background: #0f172a; border-radius: 3px; padding: .05rem .3rem; font-size: .68rem; color: #7dd3fc; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — Provider Routing Map</h1>
+
+<div class="flow">
+
+  <!-- Browser -->
+  <div class="node browser">
+    <div class="label">Client</div>
+    <div class="name">Browser</div>
+    <div class="sub">HTTPS</div>
+  </div>
+
+  <!-- → OWU -->
+  <div class="arrow">
+    <div class="line"></div>
+    <div class="path">Caddy TLS</div>
+  </div>
+
+  <!-- OWU -->
+  <div class="node owu">
+    <div class="label">Frontend</div>
+    <div class="name">Open WebUI</div>
+    <div class="sub">middleware.py</div>
+  </div>
+
+  <!-- → Proxy -->
+  <div class="arrow">
+    <div class="line"></div>
+    <div class="path">POST /openai/<br>chat/completions</div>
+  </div>
+
+  <!-- Proxy -->
+  <div class="node proxy">
+    <div class="label">Privacy Layer</div>
+    <div class="name">Garnet Proxy</div>
+    <div class="sub">pseudonymize → forward → depseudo</div>
+  </div>
+
+  <!-- → Providers -->
+  <div style="display:flex; flex-direction:column; justify-content:center; padding: 0 .5rem; color:#475569;">
+    <div style="font-size:.6rem; color:#64748b; margin-bottom:.3rem;">detects provider<br>from auth / model</div>
+    <div style="width:1px; background:#334155; height:100%; align-self:center;"></div>
+  </div>
+
+  <!-- Provider list -->
+  <div class="providers">
+
+    <div class="provider-row">
+      <div class="provider-arrow">
+        <div class="detect">default / <code>sk-...</code></div>
+        <div class="line"></div>
+        <div class="info">POST api.openai.com/v1/chat/completions</div>
+        <div class="info">Authorization: Bearer sk-... forwarded</div>
+      </div>
+      <div class="node llm-openai">
+        <div class="label">Cloud</div>
+        <div class="name">OpenAI</div>
+        <div class="sub">GPT-4o, o3…</div>
+        <span class="badge badge-green">streaming</span>
+      </div>
+    </div>
+
+    <div class="provider-row">
+      <div class="provider-arrow">
+        <div class="detect"><code>sk-ant-</code> in auth</div>
+        <div class="line"></div>
+        <div class="info">POST api.anthropic.com/v1/chat/completions</div>
+        <div class="info">Bearer → x-api-key + anthropic-version: 2023-06-01</div>
+      </div>
+      <div class="node llm-anthropic">
+        <div class="label">Cloud</div>
+        <div class="name">Anthropic</div>
+        <div class="sub">Claude 3/4…</div>
+        <span class="badge badge-purple">streaming</span>
+      </div>
+    </div>
+
+    <div class="provider-row">
+      <div class="provider-arrow">
+        <div class="detect"><code>AIza</code> in auth or <code>gemini</code> in model</div>
+        <div class="line"></div>
+        <div class="info">POST generativelanguage.googleapis.com/v1beta/openai/chat/completions</div>
+        <div class="info">Authorization: Bearer AIza... forwarded</div>
+      </div>
+      <div class="node llm-gemini">
+        <div class="label">Cloud</div>
+        <div class="name">Gemini</div>
+        <div class="sub">gemini-2.0…</div>
+        <span class="badge badge-yellow">streaming</span>
+      </div>
+    </div>
+
+    <div class="provider-row">
+      <div class="provider-arrow">
+        <div class="detect"><code>gsk-</code> in auth or <code>groq</code> in model</div>
+        <div class="line"></div>
+        <div class="info">POST api.groq.com/openai/v1/chat/completions</div>
+        <div class="info">Authorization: Bearer gsk-... forwarded</div>
+      </div>
+      <div class="node llm-groq">
+        <div class="label">Cloud</div>
+        <div class="name">Groq</div>
+        <div class="sub">llama-3.3, mixtral…</div>
+        <span class="badge badge-green">streaming</span>
+      </div>
+    </div>
+
+    <div class="provider-row">
+      <div class="provider-arrow">
+        <div class="detect"><code>sk-or-</code> in auth</div>
+        <div class="line"></div>
+        <div class="info">POST openrouter.ai/api/v1/chat/completions</div>
+        <div class="info">Authorization: Bearer sk-or-... forwarded</div>
+      </div>
+      <div class="node llm-openrouter">
+        <div class="label">Cloud</div>
+        <div class="name">OpenRouter</div>
+        <div class="sub">any model</div>
+        <span class="badge badge-red">streaming</span>
+      </div>
+    </div>
+
+    <div class="provider-row">
+      <div class="provider-arrow">
+        <div class="detect">path prefix <code>ollama/</code> (not <code>openai/</code>)</div>
+        <div class="line"></div>
+        <div class="info">POST ollama:11434/api/chat</div>
+        <div class="info">stream forced False — full response, then depseudo</div>
+      </div>
+      <div class="node llm-ollama">
+        <div class="label">Local</div>
+        <div class="name">Ollama</div>
+        <div class="sub">llama3.2, mistral…</div>
+        <span class="badge badge-yellow">non-stream</span>
+      </div>
+    </div>
+
+    <div class="provider-row">
+      <div class="provider-arrow">
+        <div class="detect">model in RESPONSES_API_MODELS (e.g. o3)</div>
+        <div class="line"></div>
+        <div class="info">POST api.openai.com/v1/responses</div>
+        <div class="info">messages → input[] + instructions conversion</div>
+      </div>
+      <div class="node llm-responses">
+        <div class="label">Cloud</div>
+        <div class="name">OpenAI Responses</div>
+        <div class="sub">o3, o4-mini…</div>
+        <span class="badge badge-yellow">streaming</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="notes">
+  <div class="note">
+    <strong>Privacy applies to ALL providers</strong>
+    Pseudonymization and depseudonymization run in the proxy before any request is forwarded — regardless of which provider is selected.
+  </div>
+  <div class="note">
+    <strong>Anthropic auth conversion</strong>
+    <code>Authorization: Bearer sk-ant-xxx</code> is rewritten to <code>x-api-key: sk-ant-xxx</code> + <code>anthropic-version: 2023-06-01</code> before forwarding.
+  </div>
+  <div class="note">
+    <strong>Ollama — no streaming</strong>
+    Ollama path uses a separate non-streaming handler. Response is received in full, depseudonymized, then returned. Streaming is intentionally disabled.
+  </div>
+  <div class="note">
+    <strong>Web search — requires legacy FC</strong>
+    For models where OWU defaults to <code>native</code> function calling (e.g. Mistral), set <code>Function Calling → legacy</code> in Admin → Models to enable OWU-injected web search.
+  </div>
+  <div class="note">
+    <strong>Known minor gap — query expansion</strong>
+    Query expansion variants (RAG only) are sent to OWU's embedding model unpseudonymized. They do not reach the main LLM. Only relevant when query expansion is enabled.
+  </div>
+  <div class="note">
+    <strong>Session isolation</strong>
+    Each <code>chat_id</code> gets its own mapping table. No cross-chat data leakage. Sessions expire after 1 hour of inactivity (Redis TTL).
+  </div>
+</div>
+
+</body>
+</html>

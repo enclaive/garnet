@@ -1,0 +1,31 @@
+{
+  "schema_version": "vendor-minipackage-manifest/1.0.0",
+  "created_at": "2026-08-05",
+  "scope": "Seven locally reverified synthetic cases; proxy self-report evidence only",
+  "manifest_self_hash_excluded": true,
+  "files": [
+    {
+      "name": "README.md",
+      "bytes": 1628,
+      "sha256": "6ab669b2bd5a8b49c841dc5b361a36e19d92625037c3c79e24eef77880488e7d"
+    },
+    {
+      "name": "vendor_questions.md",
+      "bytes": 849,
+      "sha256": "e6528aecb5c08307b3a13564f24ec087e4a2dd70eca370d89b630b3a1b35448d"
+    },
+    {
+      "name": "vendor_defect_cases.jsonl",
+      "bytes": 6963,
+      "sha256": "707fd4a76d249e9f9a1789d94b6e40dd16cb00c76c45e4801c8d15cf6c8424bd"
+    }
+  ],
+  "attestation": {
+    "synthetic_product_neutral_inputs": true,
+    "customer_or_production_data_included": false,
+    "raw_vendor_responses_included": false,
+    "aggregate_rates_claimed": false,
+    "independent_provider_capture_claimed": false,
+    "pii_policy_exclusions": ["location", "postcode", "house_number", "telephone"]
+  }
+}

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Garnet — OWU Routing Schema</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; padding: 32px; }
+  h1 { color: #7dd3fc; font-size: 1.6rem; margin-bottom: 8px; }
+  .subtitle { color: #64748b; margin-bottom: 40px; font-size: 0.9rem; }
+
+  /* ── PHASE BLOCKS ── */
+  .phase { margin-bottom: 48px; }
+  .phase-title {
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: #94a3b8; margin-bottom: 16px;
+    border-left: 3px solid #334155; padding-left: 10px;
+  }
+
+  /* ── CARDS ── */
+  .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .card {
+    border-radius: 10px; padding: 16px 20px; flex: 1; min-width: 220px;
+    border: 1px solid; position: relative;
+  }
+  .card.blue   { background: #0c2340; border-color: #1d4ed8; }
+  .card.green  { background: #052e16; border-color: #16a34a; }
+  .card.purple { background: #1e1040; border-color: #7c3aed; }
+  .card.orange { background: #2d1600; border-color: #ea580c; }
+  .card.red    { background: #2d0a0a; border-color: #dc2626; }
+  .card.teal   { background: #042020; border-color: #0d9488; }
+  .card.gray   { background: #1e2433; border-color: #475569; }
+
+  .card h3 { font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; }
+  .card.blue h3   { color: #60a5fa; }
+  .card.green h3  { color: #4ade80; }
+  .card.purple h3 { color: #a78bfa; }
+  .card.orange h3 { color: #fb923c; }
+  .card.red h3    { color: #f87171; }
+  .card.teal h3   { color: #2dd4bf; }
+  .card.gray h3   { color: #94a3b8; }
+
+  .card p { font-size: 0.8rem; color: #94a3b8; line-height: 1.6; }
+  .card code {
+    background: #0f1117; border: 1px solid #334155;
+    padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; color: #e2e8f0;
+    font-family: 'Fira Code', 'Consolas', monospace;
+  }
+
+  /* ── TABLE ── */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 8px; }
+  .tbl th { background: #1e2433; color: #7dd3fc; text-align: left; padding: 8px 10px; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; }
+  .tbl td { padding: 8px 10px; border-bottom: 1px solid #1e2433; vertical-align: top; }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl tr:hover td { background: #131929; }
+  .idx  { color: #fbbf24; font-weight: 700; }
+  .url  { color: #60a5fa; }
+  .key  { color: #34d399; font-family: monospace; font-size: 0.72rem; }
+  .model-badge {
+    display: inline-block; background: #1e1040; border: 1px solid #7c3aed;
+    color: #a78bfa; border-radius: 4px; padding: 2px 7px; font-size: 0.7rem;
+    margin: 2px 2px 2px 0;
+  }
+
+  /* ── ARROWS ── */
+  .arrow {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; color: #334155; margin: 8px 0;
+  }
+  .arrow.right { flex-direction: row; gap: 8px; font-size: 0.75rem; color: #64748b; }
+  .arrow-label { font-size: 0.72rem; color: #64748b; }
+
+  /* ── HTTP BLOCK ── */
+  .http-block {
+    background: #070d1a; border: 1px solid #1e3a5f; border-radius: 10px;
+    padding: 20px; font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.78rem; line-height: 2;
+  }
+  .http-method { color: #fbbf24; font-weight: 700; }
+  .http-url    { color: #60a5fa; }
+  .http-header-key   { color: #a78bfa; }
+  .http-header-val   { color: #4ade80; }
+  .http-header-val.key-val { color: #f87171; }
+  .http-header-val.forced  { color: #fb923c; }
+  .http-comment { color: #475569; font-style: italic; }
+  .http-body-key { color: #94a3b8; }
+  .http-body-val { color: #fbbf24; }
+
+  /* ── CORRECTION BOX ── */
+  .correction {
+    background: #1a0a00; border: 2px solid #ea580c; border-radius: 10px;
+    padding: 20px; margin-bottom: 32px;
+  }
+  .correction h3 { color: #fb923c; margin-bottom: 12px; font-size: 0.9rem; }
+  .correction p { font-size: 0.82rem; color: #cbd5e1; line-height: 1.7; }
+  .correction .good { color: #4ade80; font-weight: 700; }
+  .correction .bad  { color: #f87171; font-weight: 700; text-decoration: line-through; }
+
+  /* ── FORCE URL EXPLAINER ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media(max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  .highlight-box {
+    background: #0a1a0a; border: 1px solid #16a34a; border-radius: 8px;
+    padding: 14px; margin-top: 12px;
+  }
+  .highlight-box p { font-size: 0.8rem; color: #86efac; line-height: 1.6; }
+  .highlight-box strong { color: #4ade80; }
+
+  /* ── FLOW DIAGRAM ── */
+  .flow {
+    display: flex; flex-direction: column; gap: 0;
+    background: #070d1a; border: 1px solid #1e3a5f;
+    border-radius: 10px; overflow: hidden;
+  }
+  .flow-step {
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 16px 20px; border-bottom: 1px solid #1a2540;
+    transition: background 0.15s;
+  }
+  .flow-step:last-child { border-bottom: none; }
+  .flow-step:hover { background: #0d1829; }
+  .flow-num {
+    min-width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+  }
+  .n-blue   { background: #1d4ed8; color: #fff; }
+  .n-green  { background: #16a34a; color: #fff; }
+  .n-purple { background: #7c3aed; color: #fff; }
+  .n-orange { background: #ea580c; color: #fff; }
+  .n-teal   { background: #0d9488; color: #fff; }
+  .flow-content h4 { font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; }
+  .flow-content p  { font-size: 0.77rem; color: #64748b; line-height: 1.6; }
+  .flow-content code {
+    background: #1e2433; border-radius: 3px; padding: 1px 5px;
+    font-size: 0.72rem; color: #e2e8f0; font-family: monospace;
+  }
+
+  .tag {
+    display: inline-block; font-size: 0.65rem; font-weight: 700;
+    padding: 1px 6px; border-radius: 3px; margin-left: 6px;
+    letter-spacing: 0.5px; vertical-align: middle;
+  }
+  .tag.critical { background: #7c3aed; color: #fff; }
+  .tag.note     { background: #0d9488; color: #fff; }
+  .tag.fix      { background: #dc2626; color: #fff; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — OWU Routing Schema</h1>
+<p class="subtitle">How connections, urlIdx, FORCE_OPENAI_BASE_URL and x-openai-base-url work together</p>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- CORRECTION BOX -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="correction">
+  <h3>⚡ Your Understanding vs Reality</h3>
+  <p>
+    <span class="bad">Wrong:</span> "the provider URL is in the forced URL"<br><br>
+    <span class="good">Correct:</span>
+    <code style="background:#0f1117;padding:2px 6px;border-radius:4px;color:#4ade80;">FORCE_OPENAI_BASE_URL</code>
+    always points to the <strong style="color:#fb923c;">proxy</strong> — it never changes.<br>
+    The real provider URL (Anthropic, OpenAI…) travels separately inside the
+    <code style="background:#0f1117;padding:2px 6px;border-radius:4px;color:#a78bfa;">x-openai-base-url</code>
+    header so the proxy knows where to actually forward.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- PHASE 1 — ADDING A CONNECTION -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-title">Phase 1 — Admin adds a connection in OWU Settings (done once)</div>
+  <div class="row">
+    <div class="card blue">
+      <h3>Admin fills the form</h3>
+      <p>
+        URL: <code>https://api.anthropic.com/v1</code><br>
+        Key: <code>sk-ant-api03-...</code><br><br>
+        OWU immediately does a <code>GET /models</code> to that URL to fetch the model list.
+      </p>
+    </div>
+    <div class="card green">
+      <h3>OWU builds its internal arrays</h3>
+      <table class="tbl">
+        <tr><th>Index</th><th>Base URL</th><th>Key</th></tr>
+        <tr>
+          <td class="idx">0</td>
+          <td class="url">https://api.anthropic.com/v1</td>
+          <td class="key">sk-ant-api03-***</td>
+        </tr>
+        <tr>
+          <td class="idx">1</td>
+          <td class="url">https://api.openai.com/v1</td>
+          <td class="key">sk-proj-***</td>
+        </tr>
+        <tr>
+          <td class="idx">2</td>
+          <td class="url">https://api.groq.com/openai/v1</td>
+          <td class="key">gsk_***</td>
+        </tr>
+      </table>
+      <p style="margin-top:10px">
+        <code>OPENAI_API_BASE_URLS[idx]</code><br>
+        <code>OPENAI_API_KEYS[idx]</code>
+      </p>
+    </div>
+    <div class="card purple">
+      <h3>Models get stamped with urlIdx</h3>
+      <p>Every model returned from index 0 gets <code>urlIdx = 0</code> baked in.</p>
+      <br>
+      <span class="model-badge">claude-opus-4-5 · urlIdx=0</span>
+      <span class="model-badge">claude-sonnet-4-6 · urlIdx=0</span>
+      <br><br>
+      <span class="model-badge">gpt-4o · urlIdx=1</span>
+      <span class="model-badge">gpt-4o-mini · urlIdx=1</span>
+      <br><br>
+      <span class="model-badge">llama-3.3-70b · urlIdx=2</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- PHASE 2 — FORCE_OPENAI_BASE_URL -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-title">Phase 2 — FORCE_OPENAI_BASE_URL: The redirect trick</div>
+  <div class="two-col">
+    <div class="card orange">
+      <h3>Without FORCE_OPENAI_BASE_URL</h3>
+      <p>
+        OWU sends directly to the real provider.<br><br>
+        <code>url = OPENAI_API_BASE_URLS[idx]</code><br>
+        → <code>https://api.anthropic.com/v1</code><br><br>
+        The message goes straight to Anthropic. <span style="color:#f87171">No privacy filter.</span>
+      </p>
+    </div>
+    <div class="card green">
+      <h3>With FORCE_OPENAI_BASE_URL set</h3>
+      <p>
+        <code>FORCE_OPENAI_BASE_URL=http://privacy-proxy:8080/openai</code><br><br>
+        OWU now sends to the proxy instead:<br>
+        <code>url = FORCE_OPENAI_BASE_URL</code><br>
+        → <code>http://privacy-proxy:8080/openai</code><br><br>
+        <strong style="color:#4ade80">ALL providers go through proxy.</strong>
+        One env var intercepts everything.
+      </p>
+      <div class="highlight-box">
+        <p>
+          The key is still <strong>OPENAI_API_KEYS[idx]</strong> — the real LLM key.<br>
+          FORCE_OPENAI_BASE_URL only overrides the <strong>URL</strong>, never the key.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- PHASE 3 — WHAT OWU SENDS TO PROXY (exact HTTP) -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-title">Phase 3 — What OWU sends to the proxy (exact HTTP request)</div>
+
+  <div class="row">
+    <div style="flex:1;min-width:300px">
+      <div class="http-block">
+        <span class="http-method">POST</span>
+        <span class="http-url"> http://privacy-proxy:8080/openai/v1/chat/completions</span><br>
+        <br>
+        <span class="http-comment">── Headers ──────────────────────────────────────</span><br>
+        <span class="http-header-key">Authorization:       </span>
+        <span class="http-header-val key-val">Bearer sk-ant-api03-XXXXXXXXXXXX</span>
+        <span class="http-comment">  ← real LLM key</span><br>
+
+        <span class="http-header-key">x-openai-base-url:   </span>
+        <span class="http-header-val forced">https://api.anthropic.com/v1</span>
+        <span class="http-comment">  ← real provider URL</span><br>
+
+        <span class="http-header-key">x-garnet-entities:   </span>
+        <span class="http-header-val">PERSON,EMAIL_ADDRESS</span>
+        <span class="http-comment">  ← optional PII filter</span><br>
+
+        <span class="http-header-key">x-garnet-queryexpand:</span>
+        <span class="http-header-val">false</span><br>
+
+        <span class="http-header-key">Content-Type:        </span>
+        <span class="http-header-val">application/json</span><br>
+        <br>
+        <span class="http-comment">── Body ─────────────────────────────────────────</span><br>
+        {<br>
+        &nbsp;&nbsp;<span class="http-body-key">"model":</span>
+        <span class="http-body-val"> "claude-opus-4-5"</span>,<br>
+        &nbsp;&nbsp;<span class="http-body-key">"chat_id":</span>
+        <span class="http-body-val"> "abc123"</span>,
+        <span class="http-comment">  ← session key for proxy</span><br>
+        &nbsp;&nbsp;<span class="http-body-key">"stream":</span>
+        <span class="http-body-val"> true</span>,<br>
+        &nbsp;&nbsp;<span class="http-body-key">"messages":</span>
+        <span class="http-body-val"> [...]</span>
+        <span class="http-comment">  ← contains real PII</span><br>
+        }
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:260px;display:flex;flex-direction:column;gap:12px">
+      <div class="card blue">
+        <h3>Authorization header <span class="tag critical">KEY</span></h3>
+        <p>
+          Contains the <strong style="color:#60a5fa">real LLM API key</strong>.
+          This is what the proxy uses to authenticate with the provider.
+          Comes from <code>OPENAI_API_KEYS[urlIdx]</code>.
+        </p>
+      </div>
+      <div class="card orange">
+        <h3>x-openai-base-url <span class="tag critical">KEY</span></h3>
+        <p>
+          The <strong style="color:#fb923c">real provider URL</strong>.
+          Set by OWU from <code>OPENAI_API_BASE_URLS[urlIdx]</code>.
+          This is how the proxy knows WHERE to forward — even though
+          the request arrived at the proxy address.
+        </p>
+      </div>
+      <div class="card purple">
+        <h3>chat_id in body <span class="tag note">IMPORTANT</span></h3>
+        <p>
+          Used by the proxy to build the <code>session_id</code> —
+          the key for storing <code>TOKEN → real_value</code> mappings.
+          Without it, the proxy forgets mappings between messages.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- PHASE 4 — PROXY RECEIVES -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-title">Phase 4 — What happens inside the proxy (first 20 lines of proxy())</div>
+  <div class="flow">
+
+    <div class="flow-step">
+      <div class="flow-num n-blue">1</div>
+      <div class="flow-content">
+        <h4>Catch-all route receives request</h4>
+        <p><code>path = "openai/v1/chat/completions"</code><br>
+        <code>is_openai = path.startswith("openai/")</code> → <code>True</code><br>
+        <code>actual_path = "v1/chat/completions"</code><br>
+        <code>is_chat = actual_path in ("v1/chat/completions", ...)</code> → <code>True</code></p>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num n-green">2</div>
+      <div class="flow-content">
+        <h4>Read the real provider URL from header</h4>
+        <p>
+          <code>openai_url = request.headers.get("x-openai-base-url", OPENAI_API_URL)</code><br>
+          → gets <code>https://api.anthropic.com/v1</code> from the header OWU sent.<br>
+          If missing, falls back to the env var default.
+        </p>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num n-purple">3</div>
+      <div class="flow-content">
+        <h4>Self-loop detection <span class="tag fix">IMPORTANT</span></h4>
+        <p>
+          If <code>x-openai-base-url</code> points back at the proxy itself
+          (<code>"privacy-proxy"</code> or <code>"localhost:8080"</code>),
+          the proxy re-routes by reading the <code>Authorization</code> header key prefix:<br><br>
+          <code>sk-ant-</code> → Anthropic &nbsp;|&nbsp;
+          <code>AIza / gemini</code> → Gemini &nbsp;|&nbsp;
+          <code>gsk-</code> → Groq &nbsp;|&nbsp;
+          <code>sk-or-</code> → OpenRouter &nbsp;|&nbsp;
+          else → OpenAI
+        </p>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num n-orange">4</div>
+      <div class="flow-content">
+        <h4>Build final destination URL</h4>
+        <p>
+          <code>url = f"{openai_url.rstrip('/')}/{actual_path}"</code><br>
+          → <code>https://api.anthropic.com/v1/v1/chat/completions</code><br><br>
+          This is what the proxy will actually call after pseudonymizing.
+        </p>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num n-teal">5</div>
+      <div class="flow-content">
+        <h4>Strip privacy_proxy flag + extract chat_id</h4>
+        <p>
+          <code>privacy_enabled = body.pop("privacy_proxy", True)</code> — removes it so it doesn't reach the LLM<br>
+          <code>session_id = body.get("chat_id") or ...</code><br>
+          <code>body.pop("chat_id", None)</code> — also removed before forwarding
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- FINAL SUMMARY -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-title">Summary — The two URLs explained</div>
+  <div class="row">
+    <div class="card teal">
+      <h3>URL #1 — Where the request goes TO</h3>
+      <p>
+        Set by <code>FORCE_OPENAI_BASE_URL</code> in docker-compose.<br>
+        Always: <code>http://privacy-proxy:8080/openai</code><br><br>
+        This redirects ALL models through the proxy, regardless of which provider they come from.
+        <strong style="color:#2dd4bf">Never changes at runtime.</strong>
+      </p>
+    </div>
+    <div class="card orange">
+      <h3>URL #2 — Where the proxy forwards TO</h3>
+      <p>
+        Sent in the <code>x-openai-base-url</code> header by OWU.<br>
+        Comes from <code>OPENAI_API_BASE_URLS[urlIdx]</code> — the real provider URL configured in settings.<br><br>
+        Examples:<br>
+        <code>https://api.anthropic.com/v1</code><br>
+        <code>https://api.openai.com/v1</code><br>
+        <code>https://api.groq.com/openai/v1</code><br><br>
+        <strong style="color:#fb923c">Changes per model/provider.</strong>
+      </p>
+    </div>
+    <div class="card gray">
+      <h3>The key — carried in Authorization</h3>
+      <p>
+        <code>OPENAI_API_KEYS[urlIdx]</code> — the real LLM key.<br><br>
+        OWU puts it in the <code>Authorization: Bearer …</code> header.<br>
+        The proxy extracts it and forwards it to the provider.<br><br>
+        For Anthropic: proxy converts <code>Authorization: Bearer sk-ant-...</code>
+        → <code>x-api-key: sk-ant-...</code> (Anthropic's required format).
+      </p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

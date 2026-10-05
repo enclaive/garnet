@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet Privacy Proxy — How It Works</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    line-height: 1.7;
+    padding: 40px 20px;
+  }
+
+  .container { max-width: 960px; margin: 0 auto; }
+
+  h1 {
+    font-size: 2rem;
+    color: #f0f6fc;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    color: #8b949e;
+    font-size: 1rem;
+    margin-bottom: 48px;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    color: #58a6ff;
+    margin-bottom: 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #21262d;
+  }
+  h3 {
+    font-size: 1rem;
+    color: #79c0ff;
+    margin-bottom: 8px;
+    margin-top: 16px;
+  }
+
+  p { margin-bottom: 12px; color: #c9d1d9; }
+
+  .section {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    padding: 28px 32px;
+    margin-bottom: 32px;
+  }
+
+  /* ── Flow Diagram ─────────────────────────────────────────── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 24px 0;
+  }
+
+  .flow-box {
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.82rem;
+    text-align: center;
+    min-width: 110px;
+    color: #e5e7eb;
+  }
+  .flow-box.user   { border-color: #3b82f6; background: #1e3a5f; color: #93c5fd; }
+  .flow-box.webui  { border-color: #8b5cf6; background: #2e1065; color: #c4b5fd; }
+  .flow-box.proxy  { border-color: #10b981; background: #064e3b; color: #6ee7b7; font-weight: 600; }
+  .flow-box.llm    { border-color: #f59e0b; background: #451a03; color: #fcd34d; }
+  .flow-box.store  { border-color: #ef4444; background: #450a0a; color: #fca5a5; }
+
+  .flow-arrow {
+    color: #4b5563;
+    font-size: 1.3rem;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+
+  /* ── Big pipeline ─────────────────────────────────────────── */
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .step {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 14px 12px;
+    text-align: center;
+    position: relative;
+  }
+  .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #58a6ff;
+    color: #0d1117;
+    font-weight: 700;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 8px;
+  }
+  .step-title { font-size: 0.78rem; font-weight: 600; color: #f0f6fc; margin-bottom: 4px; }
+  .step-desc  { font-size: 0.72rem; color: #8b949e; }
+
+  /* ── File cards ───────────────────────────────────────────── */
+  .files-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-top: 16px;
+  }
+  @media (max-width: 640px) { .files-grid { grid-template-columns: 1fr; } .pipeline { grid-template-columns: 1fr; } }
+
+  .file-card {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-left: 3px solid #58a6ff;
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .file-card.green  { border-left-color: #10b981; }
+  .file-card.purple { border-left-color: #8b5cf6; }
+  .file-card.yellow { border-left-color: #f59e0b; }
+  .file-card.red    { border-left-color: #ef4444; }
+  .file-card.gray   { border-left-color: #6b7280; }
+
+  .file-name {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    color: #f0f6fc;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .file-role {
+    font-size: 0.8rem;
+    color: #8b949e;
+    margin-bottom: 6px;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 99px;
+    font-weight: 600;
+    margin-right: 4px;
+    margin-bottom: 2px;
+  }
+  .badge.blue   { background: #1d4ed8; color: #bfdbfe; }
+  .badge.green  { background: #065f46; color: #6ee7b7; }
+  .badge.purple { background: #5b21b6; color: #ddd6fe; }
+  .badge.yellow { background: #78350f; color: #fde68a; }
+  .badge.gray   { background: #374151; color: #d1d5db; }
+
+  /* ── Code blocks ──────────────────────────────────────────── */
+  pre {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    padding: 16px;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    font-family: 'Courier New', monospace;
+    margin: 10px 0;
+    line-height: 1.5;
+  }
+  .kw  { color: #ff7b72; }
+  .fn  { color: #d2a8ff; }
+  .str { color: #a5d6ff; }
+  .cm  { color: #8b949e; font-style: italic; }
+  .num { color: #79c0ff; }
+  .var { color: #e3b341; }
+
+  /* ── Callouts ─────────────────────────────────────────────── */
+  .callout {
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin: 14px 0;
+    font-size: 0.88rem;
+  }
+  .callout.info    { background: #0c2d6b; border-left: 3px solid #58a6ff; }
+  .callout.warning { background: #3d2500; border-left: 3px solid #f59e0b; }
+  .callout.tip     { background: #052e16; border-left: 3px solid #10b981; }
+  .callout-title   { font-weight: 700; margin-bottom: 4px; }
+
+  /* ── Example transform ────────────────────────────────────── */
+  .transform {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 12px;
+    align-items: center;
+    margin: 16px 0;
+  }
+  .transform-box {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-family: monospace;
+    font-size: 0.82rem;
+  }
+  .transform-box.before { border-color: #3b82f6; color: #93c5fd; }
+  .transform-box.after  { border-color: #10b981; color: #6ee7b7; }
+  .transform-label { font-size: 0.7rem; color: #8b949e; margin-bottom: 4px; }
+  .arrow-mid { font-size: 1.5rem; color: #58a6ff; text-align: center; }
+
+  /* ── Table ────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: 0.83rem; margin-top: 12px; }
+  th { background: #161b22; color: #8b949e; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #21262d; }
+  td { padding: 8px 12px; border-bottom: 1px solid #21262d; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td code { font-family: monospace; color: #d2a8ff; font-size: 0.78rem; }
+
+  /* ── Header pill ──────────────────────────────────────────── */
+  .header-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #10b981;
+    color: #0d1117;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 99px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  .toc {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+  }
+  .toc h2 { margin-bottom: 10px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 4px; }
+  .toc a { color: #58a6ff; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+  /* ── Navbar ───────────────────────────────────────────────── */
+  .navbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #010409;
+    border-bottom: 1px solid #21262d;
+    padding: 0;
+    margin: -40px -20px 40px;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+  }
+  .nav-btn {
+    padding: 14px 24px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #8b949e;
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color .15s, border-color .15s;
+  }
+  .nav-btn:hover { color: #c9d1d9; }
+  .nav-btn.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+
+  /* ── Pages ────────────────────────────────────────────────── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── Page 3 — Function blocks ─────────────────────────────── */
+  .flow-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 16px 0 24px; }
+  .flow-step { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 5px 12px; font-size: 0.77rem; color: #94a3b8; white-space: nowrap; }
+  .flow-arrow-sm { color: #3b82f6; font-size: 1rem; padding: 0 2px; }
+
+  .fn-block { background: #0d1117; border: 1px solid #21262d; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+  .fn-block:hover { border-color: #30363d; }
+  .fn-header { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; cursor: pointer; user-select: none; }
+  .fn-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+  .fn-icon.setup    { background: #1e293b; }
+  .fn-icon.util     { background: #0d2010; }
+  .fn-icon.stream   { background: #1a1040; }
+  .fn-icon.endpoint { background: #0a1f20; }
+  .fn-icon.proxy    { background: #200a0a; }
+  .fn-header-text { flex: 1; }
+  .fn-name { font-size: 0.9rem; font-weight: 600; color: #f0f6fc; font-family: 'Courier New', monospace; }
+  .fn-lineno { font-size: 0.72rem; color: #484f58; margin-top: 2px; font-family: monospace; }
+  .fn-summary { font-size: 0.84rem; color: #8b949e; margin-top: 5px; }
+  .fn-toggle { color: #484f58; font-size: 0.85rem; padding-top: 4px; flex-shrink: 0; }
+
+  .fn-body { padding: 0 20px 18px 70px; display: none; }
+  .fn-body.open { display: block; }
+  .fn-body p { font-size: 0.84rem; color: #8b949e; margin-bottom: 8px; }
+  .fn-body ul { list-style: none; padding: 0; }
+  .fn-body ul li { font-size: 0.83rem; color: #8b949e; padding: 3px 0 3px 16px; position: relative; }
+  .fn-body ul li::before { content: '→'; position: absolute; left: 0; color: #58a6ff; font-size: 0.78rem; }
+  .fn-body .note-b { background: #0c2d6b; border-left: 3px solid #58a6ff; border-radius: 4px; padding: 9px 12px; font-size: 0.81rem; color: #93c5fd; margin-top: 10px; }
+  .fn-body .warn-b { background: #3d2500; border-left: 3px solid #f59e0b; border-radius: 4px; padding: 9px 12px; font-size: 0.81rem; color: #fbbf24; margin-top: 10px; }
+
+  .fn-sub { margin-top: 14px; }
+  .fn-sub h4 { font-size: 0.69rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #58a6ff; margin-bottom: 6px; }
+
+  .section-label-p3 { font-size: 0.68rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #58a6ff; margin-bottom: 16px; margin-top: 40px; }
+  .section-label-p3:first-of-type { margin-top: 0; }
+
+  .big-fn-block { background: #0d1117; border: 2px solid #1e3a5f; border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+  .big-fn-block .fn-header { background: #0a1e30; }
+  .big-fn-block .fn-name { color: #93c5fd; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="navbar">
+  <button class="nav-btn active" onclick="switchPage('p1', this)">Proxy Overview</button>
+  <button class="nav-btn" onclick="switchPage('p2', this)">Mapping Store in Proxy</button>
+  <button class="nav-btn" onclick="switchPage('p3', this)">Function Blocks</button>
+</div>
+<div class="container">
+
+<div class="page active" id="p1">
+  <div class="header-pill">🔒 Garnet Lesson</div>
+  <h1>Privacy Proxy — How It Works</h1>
+  <p class="subtitle">Full walkthrough: request flow, every file's role, and how all components connect.</p>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Big Picture — What the Proxy Does</a></li>
+      <li><a href="#flow">Request Flow Step by Step</a></li>
+      <li><a href="#files">Role of Every File</a></li>
+      <li><a href="#pseudo">How Pseudonymization Works</a></li>
+      <li><a href="#mapping">The Mapping Store</a></li>
+      <li><a href="#depseudo">How Depseudonymization Works</a></li>
+      <li><a href="#streaming">Streaming + Depseudo</a></li>
+      <li><a href="#headers">Special HTTP Headers</a></li>
+    </ol>
+  </div>
+
+  <!-- ── 1. Overview ─────────────────────────────────────────── -->
+  <div class="section" id="overview">
+    <h2>1. Big Picture — What the Proxy Does</h2>
+    <p>
+      Garnet sits between <strong>Open WebUI</strong> (the chat interface) and any <strong>LLM</strong> (OpenAI, Anthropic, Ollama, Groq, Gemini…).
+      Its job: replace real names / emails / IBANs with random tokens <em>before</em> they reach the LLM, then swap them back in the response.
+    </p>
+
+    <div class="transform">
+      <div>
+        <div class="transform-label">User writes →</div>
+        <div class="transform-box before">"Max Mustermann at<br>Enclaive GmbH sent<br>IBAN DE89 3704 0044…"</div>
+      </div>
+      <div class="arrow-mid">→<br><span style="font-size:.7rem;color:#8b949e">proxy</span><br>→</div>
+      <div>
+        <div class="transform-label">LLM sees →</div>
+        <div class="transform-box after">"PERSON_cc75010d at<br>ORGANIZATION_bd3a68a5<br>sent IBAN_CODE_f4e21a…"</div>
+      </div>
+    </div>
+
+    <p>The LLM never sees real PII. The user gets back a perfectly readable answer — the proxy restores everything on the way out.</p>
+
+    <div class="callout info">
+      <div class="callout-title">Architecture</div>
+      Browser → Caddy (TLS) → Open WebUI → <strong>Privacy Proxy :8080</strong> → LLM provider
+    </div>
+
+    <div class="flow">
+      <div class="flow-box user">👤 User<br><small>Browser</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box webui">Open WebUI<br><small>Svelte + FastAPI</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box proxy">Privacy Proxy<br><small>:8080 FastAPI</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box llm">LLM<br><small>OpenAI / Ollama…</small></div>
+      <div class="flow-arrow">↔</div>
+      <div class="flow-box store">Mapping Store<br><small>token ↔ real value</small></div>
+    </div>
+  </div>
+
+  <!-- ── 2. Step-by-step flow ───────────────────────────────── -->
+  <div class="section" id="flow">
+    <h2>2. Request Flow — Step by Step</h2>
+
+    <div class="pipeline">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-title">Receive</div>
+        <div class="step-desc"><code>proxy()</code> catches every POST to <code>/v1/chat/completions</code></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-title">Scan history</div>
+        <div class="step-desc">Each message in the chat history is checked for PII</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-title">Pseudonymize</div>
+        <div class="step-desc">PII → tokens via GLiNER + Presidio + regex</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-title">Forward</div>
+        <div class="step-desc">Cleaned request → LLM provider over HTTPS</div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-title">Restore</div>
+        <div class="step-desc">Tokens → real values in the response before user sees it</div>
+      </div>
+    </div>
+
+    <h3>Where this happens in code</h3>
+    <pre><span class="cm"># main.py — the catch-all route</span>
+<span class="kw">@app</span>.api_route(<span class="str">"/{path:path}"</span>, methods=[<span class="str">"GET"</span>, <span class="str">"POST"</span>, <span class="str">"PUT"</span>, <span class="str">"DELETE"</span>])
+<span class="kw">async def</span> <span class="fn">proxy</span>(request: Request, path: str):
+    <span class="var">session_id</span>  = request.headers.get(<span class="str">"x-garnet-session-id"</span>, <span class="str">"default"</span>)
+    <span class="var">body</span>        = <span class="kw">await</span> request.json()
+
+    <span class="cm"># Step 3 — pseudonymize every user message</span>
+    <span class="kw">for</span> msg <span class="kw">in</span> body[<span class="str">"messages"</span>]:
+        msg[<span class="str">"content"</span>] = _pseudo_with_cache(msg[<span class="str">"content"</span>], session_id, enabled_types)
+
+    <span class="cm"># Step 4 — forward to real LLM</span>
+    response = <span class="kw">await</span> client.post(url, json=body, ...)
+
+    <span class="cm"># Step 5 — depseudonymize response</span>
+    <span class="kw">return</span> depseudonymize(response_text, session_id, store)</pre>
+
+    <div class="callout tip">
+      <div class="callout-title">Internal requests are skipped</div>
+      Requests that contain system-prompt markers (title generation, tag generation, follow-up suggestions) are detected by <code>detect_internal_type()</code> and passed through without pseudonymization — the LLM only sees internal Garnet prompts, no user PII.
+    </div>
+  </div>
+
+  <!-- ── 3. Files ───────────────────────────────────────────── -->
+  <div class="section" id="files">
+    <h2>3. Role of Every File in <code>backend/privacy_proxy/app/</code></h2>
+
+    <div class="files-grid">
+
+      <div class="file-card">
+        <div class="file-name">main.py</div>
+        <div class="file-role">Entry point. FastAPI app. The traffic cop.</div>
+        <div class="tag-row">
+          <span class="badge blue">FastAPI routes</span>
+          <span class="badge green">proxy()</span>
+          <span class="badge blue">stream_with_depseudo()</span>
+        </div>
+        <p style="margin-top:10px;font-size:.8rem;color:#8b949e">
+          Defines all HTTP endpoints: the main catch-all <code>proxy()</code>, <code>/vault/scan</code> for pre-flight scanning, and <code>/analyze</code> for entity detection.
+          Coordinates all other modules — calls pseudonymizer, reads/writes mapping store, calls depseudonymizer.
+        </p>
+      </div>
+
+      <div class="file-card green">
+        <div class="file-name">pseudonymizer.py</div>
+        <div class="file-role">Detects PII and replaces it with tokens.</div>
+        <div class="tag-row">
+          <span class="badge green">GLiNER</span>
+          <span class="badge green">Presidio</span>
+          <span class="badge gray">regex fallback</span>
+        </div>
+        <p style="margin-top:10px;font-size:.8rem;color:#8b949e">
+          Runs three layers: GLiNER (transformer for PERSON/LOCATION/ORG), Presidio (pattern + NLP for email/IBAN/phone), and regex fallback.
+          Language auto-detected (EN / DE). Returns text with tokens like <code>PERSON_cc75010d</code>.
+        </p>
+      </div>
+
+      <div class="file-card purple">
+        <div class="file-name">depseudonymizer.py</div>
+        <div class="file-role">Restores tokens back to real values.</div>
+        <div class="tag-row">
+          <span class="badge purple">depseudonymize()</span>
+          <span class="badge purple">check_leakage()</span>
+        </div>
+        <p style="margin-top:10px;font-size:.8rem;color:#8b949e">
+          Looks up every token in the session mapping and does a simple string replace.
+          Also runs <code>check_leakage()</code> — if the LLM tries to explain what a token means ("PERSON_abc refers to Max"), it redacts the real name.
+        </p>
+      </div>
+
+      <div class="file-card yellow">
+        <div class="file-name">mapping_store.py</div>
+        <div class="file-role">Stores token ↔ real-value dictionaries per session.</div>
+        <div class="tag-row">
+          <span class="badge yellow">MappingStore</span>
+          <span class="badge yellow">Redis optional</span>
+          <span class="badge gray">TTL 1h</span>
+        </div>
+        <p style="margin-top:10px;font-size:.8rem;color:#8b949e">
+          In-memory dict keyed by <code>session_id</code>. Each session keeps its own <code>{"PERSON_abc": "Max Mustermann"}</code> dict.
+          If Redis is configured (<code>REDIS_URL</code> env var), mappings survive proxy restarts. Entries expire after 1 hour.
+        </p>
+      </div>
+
+      <div class="file-card">
+        <div class="file-name">custom_recognizers.py</div>
+        <div class="file-role">Custom Presidio pattern rules for EN + DE.</div>
+        <div class="tag-row">
+          <span class="badge blue">email</span>
+          <span class="badge blue">ORG suffix</span>
+          <span class="badge blue">IBAN</span>
+          <span class="badge blue">phone</span>
+        </div>
+        <p style="margin-top:10px;font-size:.8rem;color:#8b949e">
+          Presidio's built-in recognizers miss German patterns. This file adds regex-based recognizers for EMAIL, ORGANIZATION (GmbH, AG…), IBAN, and phone numbers — in both English and German.
+        </p>
+      </div>
+
+      <div class="file-card gray">
+        <div class="file-name">logs.py</div>
+        <div class="file-role">All print/log helpers. No logic, only formatting.</div>
+        <div class="tag-row">
+          <span class="badge gray">log_to_llm()</span>
+          <span class="badge gray">log_mapping()</span>
+          <span class="badge gray">log_garnet()</span>
+        </div>
+        <p style="margin-top:10px;font-size:.8rem;color:#8b949e">
+          Centralizes all terminal output. PII is intentionally kept out of logs — <code>log_to_llm()</code> shows the pseudonymized text, not the original.
+          Separates user-facing vs internal log levels.
+        </p>
+      </div>
+
+      <div class="file-card gray">
+        <div class="file-name">models.py</div>
+        <div class="file-role">Pydantic data models for request/response shapes.</div>
+        <div class="tag-row">
+          <span class="badge gray">Pydantic</span>
+          <span class="badge gray">type safety</span>
+        </div>
+        <p style="margin-top:10px;font-size:.8rem;color:#8b949e">
+          Defines the typed structures used internally. Keeps route handlers clean.
+        </p>
+      </div>
+
+      <div class="file-card red">
+        <div class="file-name">test_proxy.py</div>
+        <div class="file-role">Integration + unit tests for the proxy logic.</div>
+        <div class="tag-row">
+          <span class="badge gray">pytest</span>
+          <span class="badge red">T4D cases</span>
+        </div>
+        <p style="margin-top:10px;font-size:.8rem;color:#8b949e">
+          Contains T4D vendor defect reproduction cases. Tests the full pseudonymize → forward → depseudonymize pipeline end to end.
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── 4. Pseudonymization ────────────────────────────────── -->
+  <div class="section" id="pseudo">
+    <h2>4. How Pseudonymization Works</h2>
+    <p>Three detection layers run in sequence. Each adds entities to the same result list.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Library</th>
+          <th>What it catches</th>
+          <th>Languages</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. GLiNER</strong></td>
+          <td><code>gliner_multi_pii-v1</code></td>
+          <td>PERSON, LOCATION, ORGANIZATION — context-aware transformer</td>
+          <td>Multilingual</td>
+        </tr>
+        <tr>
+          <td><strong>2. Presidio</strong></td>
+          <td><code>presidio-analyzer</code> + spaCy</td>
+          <td>EMAIL, IBAN, PHONE, fallback NER</td>
+          <td>EN + DE</td>
+        </tr>
+        <tr>
+          <td><strong>3. Regex</strong></td>
+          <td>Built-in <code>re</code></td>
+          <td>Email, phone, IBAN — pattern-only fallback when NLP misses</td>
+          <td>Any</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Token generation</h3>
+    <pre><span class="cm"># Deterministic: same text always → same token within a session</span>
+<span class="var">token</span> = f<span class="str">"PERSON_{hashlib.md5(original.encode()).hexdigest()[:8]}"</span>
+
+<span class="cm"># Result stored in session mapping:</span>
+mapping[<span class="str">"PERSON_cc75010d"</span>] = <span class="str">"Max Mustermann"</span></pre>
+
+    <div class="callout info">
+      <div class="callout-title">Why deterministic hashing?</div>
+      Same name in message 1 and message 5 gets the SAME token. The LLM sees consistent names across the conversation, so it doesn't get confused by multiple tokens for the same entity.
+    </div>
+
+    <h3>Cache layer</h3>
+    <pre><span class="cm"># _pseudo_with_cache() — avoid re-running NLP on the same text twice</span>
+<span class="var">h</span> = hashlib.md5(text.encode()).hexdigest()
+<span class="var">hit</span> = session_cache.get(h)
+<span class="kw">if</span> hit <span class="kw">is not None</span>:
+    <span class="kw">return</span> hit          <span class="cm"># skip GLiNER + Presidio entirely</span>
+<span class="var">out</span> = pseudonymize(text, session_id, store, enabled_types)
+session_cache[h] = out</pre>
+
+    <p>The per-session cache (<code>pseudo_cache</code>) lives in memory. Each unique text is only analyzed once per session — important because chat history grows and the same messages would otherwise be re-scanned on every new turn.</p>
+  </div>
+
+  <!-- ── 5. Mapping Store ───────────────────────────────────── -->
+  <div class="section" id="mapping">
+    <h2>5. The Mapping Store — Memory of the Proxy</h2>
+
+    <p>The mapping store is the <strong>heart of reversibility</strong>. Without it, pseudonymization is a one-way street.</p>
+
+    <pre><span class="cm"># Structure: session_id → { token: original }</span>
+store = {
+  <span class="str">"session-abc123"</span>: {
+    <span class="str">"PERSON_cc75010d"</span>:       <span class="str">"Max Mustermann"</span>,
+    <span class="str">"ORGANIZATION_bd3a68a5"</span>: <span class="str">"Enclaive GmbH"</span>,
+    <span class="str">"IBAN_CODE_f4e21a"</span>:      <span class="str">"DE89 3704 0044 0532 0130 00"</span>,
+  }
+}</pre>
+
+    <h3>Two backends</h3>
+    <div class="files-grid">
+      <div class="file-card yellow">
+        <div class="file-name">In-memory (default)</div>
+        <div class="file-role">Python dict, lives in the proxy process</div>
+        <p style="font-size:.8rem;color:#8b949e;margin-top:8px">
+          Fast, zero config. Lost on proxy restart. Fine for most deployments since sessions are short-lived.
+        </p>
+      </div>
+      <div class="file-card green">
+        <div class="file-name">Redis (optional)</div>
+        <div class="file-role">Set <code>REDIS_URL</code> env var to enable</div>
+        <p style="font-size:.8rem;color:#8b949e;margin-top:8px">
+          Mappings survive restarts. Useful for long sessions or multi-replica deployments. TTL is set to 1 hour via <code>SETEX</code>.
+        </p>
+      </div>
+    </div>
+
+    <div class="callout warning">
+      <div class="callout-title">Isolation is per session_id</div>
+      The session ID comes from the <code>x-garnet-session-id</code> header (set by Open WebUI per chat).
+      Two users in different chats never share a mapping — their tokens stay isolated.
+    </div>
+  </div>
+
+  <!-- ── 6. Depseudo ────────────────────────────────────────── -->
+  <div class="section" id="depseudo">
+    <h2>6. How Depseudonymization Works</h2>
+
+    <p>After the LLM responds, the proxy runs <code>depseudonymize()</code> before returning anything to Open WebUI.</p>
+
+    <pre><span class="cm"># depseudonymizer.py</span>
+<span class="kw">def</span> <span class="fn">depseudonymize</span>(text: str, session_id: str, store: dict) -> str:
+    mapping = store.get(session_id, {})
+
+    <span class="cm"># safety check — did LLM accidentally reveal a real name?</span>
+    text = check_leakage(text, mapping)
+
+    <span class="cm"># replace tokens, longest first to avoid partial matches</span>
+    <span class="kw">for</span> token <span class="kw">in</span> sorted(mapping.keys(), key=len, reverse=<span class="kw">True</span>):
+        text = text.replace(token, mapping[token])
+
+    <span class="kw">return</span> text</pre>
+
+    <h3>Leakage detection</h3>
+    <pre><span class="cm"># If LLM says "PERSON_abc refers to Max Mustermann" → redact</span>
+LEAK_PATTERNS = [<span class="str">"refers to"</span>, <span class="str">"stands for"</span>, <span class="str">"is actually"</span>,
+                 <span class="str">"real name is"</span>, <span class="str">"which is"</span>, <span class="str">"means"</span>]</pre>
+
+    <p>If the response contains one of these phrases AND a real value from the mapping, that real value is replaced with <code>[REDACTED]</code>. This prevents the LLM from "explaining" a pseudonym back to the user.</p>
+  </div>
+
+  <!-- ── 7. Streaming ───────────────────────────────────────── -->
+  <div class="section" id="streaming">
+    <h2>7. Streaming + Depseudo — The Tricky Part</h2>
+    <p>
+      LLMs stream responses token-by-token as <code>text/event-stream</code>. Tokens like <code>PERSON_cc75</code> can arrive split across chunks.
+      The proxy must buffer until a complete token is guaranteed before depseudonymizing.
+    </p>
+
+    <pre><span class="cm"># split_at_safe_boundary() — don't flush a partial token</span>
+<span class="kw">def</span> <span class="fn">split_at_safe_boundary</span>(buffer: str):
+    TOKEN_NAMES = [<span class="str">'PERSON'</span>, <span class="str">'ORGANIZATION'</span>, <span class="str">'EMAIL_ADDRESS'</span>, ...]
+
+    <span class="cm"># if buffer ends with "PERS" → hold it, don't flush yet</span>
+    <span class="kw">for</span> token <span class="kw">in</span> TOKEN_NAMES:
+        <span class="kw">for</span> length <span class="kw">in</span> range(<span class="num">1</span>, len(token) + <span class="num">1</span>):
+            <span class="kw">if</span> buffer.endswith(token[:length]):
+                safe = buffer[:-length]
+                <span class="kw">return</span> safe, buffer[len(safe):]  <span class="cm"># (safe_to_flush, held)</span>
+
+    <span class="kw">return</span> buffer, <span class="str">""</span>  <span class="cm"># nothing partial — flush everything</span></pre>
+
+    <div class="callout info">
+      <div class="callout-title">First chunk is special</div>
+      <code>stream_with_depseudo()</code> sends a metadata chunk first (before any LLM output) containing the pseudonymized prompt preview, entity count breakdown, and query variants. Open WebUI uses this to show the privacy sidebar.
+    </div>
+  </div>
+
+  <!-- ── 8. Headers ─────────────────────────────────────────── -->
+  <div class="section" id="headers">
+    <h2>8. Special HTTP Headers</h2>
+    <p>Open WebUI and the proxy communicate extra context via custom headers. These never go to the LLM.</p>
+
+    <table>
+      <thead>
+        <tr><th>Header</th><th>Direction</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>x-garnet-session-id</code></td>
+          <td>OWU → Proxy</td>
+          <td>Which mapping dict to use. One per chat session.</td>
+        </tr>
+        <tr>
+          <td><code>x-garnet-user-id</code></td>
+          <td>OWU → Proxy</td>
+          <td>User identifier for logging.</td>
+        </tr>
+        <tr>
+          <td><code>x-garnet-entities</code></td>
+          <td>OWU → Proxy</td>
+          <td>Comma-separated list of entity types to enable (e.g. <code>PERSON,EMAIL_ADDRESS</code>). Empty = all.</td>
+        </tr>
+        <tr>
+          <td><code>x-garnet-queryexpand</code></td>
+          <td>OWU → Proxy</td>
+          <td>If <code>true</code>, proxy calls GPT-4o-mini to generate 3 RAG query variants before forwarding.</td>
+        </tr>
+        <tr>
+          <td><code>x-openai-base-url</code></td>
+          <td>OWU → Proxy</td>
+          <td>Where to forward the request. Proxy auto-detects self-loops and routes to the real provider.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warning">
+      <div class="callout-title">Self-loop detection</div>
+      If <code>x-openai-base-url</code> points back to the proxy itself (contains <code>localhost:8080</code> or <code>privacy-proxy</code>), the proxy reads the <code>Authorization</code> header to figure out the real provider:
+      <br><br>
+      <code>sk-ant-*</code> → Anthropic &nbsp;|&nbsp;
+      <code>AIza*</code> → Gemini &nbsp;|&nbsp;
+      <code>gsk-*</code> → Groq &nbsp;|&nbsp;
+      <code>sk-or-*</code> → OpenRouter &nbsp;|&nbsp;
+      else → OpenAI
+    </div>
+  </div>
+
+  <p style="text-align:center;color:#4b5563;font-size:.78rem;margin-top:40px">
+    Generated from graphify codebase analysis · Garnet branch demo1upgrade · 2026-08-22
+  </p>
+</div><!-- /page p1 -->
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- PAGE 2 — Mapping Store in Proxy                           -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="page" id="p2">
+  <div class="header-pill">🗄️ Garnet Lesson</div>
+  <h1>Mapping Store — How It Works in the Proxy</h1>
+  <p class="subtitle">Where tokens are saved, how they're looked up, and how the proxy uses them to restore PII.</p>
+
+  <!-- 1. What is it -->
+  <div class="section">
+    <h2>1. What Is the Mapping Store?</h2>
+    <p>The mapping store is a dictionary that remembers <strong>which token replaced which real value</strong>. Without it, pseudonymization is a one-way street — you could never restore the original names in the response.</p>
+
+    <pre><span class="cm"># Structure — one dict per session</span>
+store = {
+  <span class="str">"session-abc123"</span>: {
+    <span class="str">"PERSON_cc75010d"</span>:       <span class="str">"Max Mustermann"</span>,
+    <span class="str">"ORGANIZATION_bd3a68a5"</span>: <span class="str">"Enclaive GmbH"</span>,
+    <span class="str">"IBAN_CODE_f4e21a"</span>:      <span class="str">"DE89 3704 0044 0532 0130 00"</span>,
+  },
+  <span class="str">"session-xyz999"</span>: {
+    <span class="str">"PERSON_9f3b21c0"</span>: <span class="str">"Anna Schmidt"</span>,
+  }
+}</pre>
+
+    <div class="callout info">
+      <div class="callout-title">Key idea</div>
+      Each chat session has its own isolated dict. Token <code>PERSON_cc75010d</code> in session A means something completely different from the same token in session B — or it might not exist at all.
+    </div>
+  </div>
+
+  <!-- 2. Created -->
+  <div class="section">
+    <h2>2. Where Is It Created?</h2>
+    <p>At the top of <code>main.py</code>, once, when the proxy starts:</p>
+    <pre><span class="cm"># main.py line 53 — lives for the entire process lifetime</span>
+store = MappingStore(ttl=<span class="num">3600</span>)</pre>
+    <p>One global <code>store</code> object. All requests share it. Sessions are isolated by <code>session_id</code> key inside it.</p>
+  </div>
+
+  <!-- 3. session_id -->
+  <div class="section">
+    <h2>3. How Does the Proxy Know Which Session?</h2>
+    <p>The <code>session_id</code> is resolved at the start of every request in <code>proxy()</code>:</p>
+    <pre><span class="cm"># main.py line 401</span>
+session_id = (
+    body.get(<span class="str">"chat_id"</span>)                                   <span class="cm"># preferred — OWU sends this</span>
+    <span class="kw">or</span> (messages[<span class="num">0</span>].get(<span class="str">"id"</span>) <span class="kw">if</span> messages <span class="kw">else None</span>)        <span class="cm"># fallback</span>
+    <span class="kw">or</span> hashlib.md5(first_msg.encode()).hexdigest()[:<span class="num">12</span>]       <span class="cm"># last resort</span>
+)</pre>
+    <p>OWU always sends <code>chat_id</code> — one unique ID per chat conversation. That becomes the key into the mapping store.</p>
+  </div>
+
+  <!-- 4. Written -->
+  <div class="section">
+    <h2>4. When Is It Written To?</h2>
+    <p>Every time <code>pseudonymize()</code> runs, it writes new tokens into the store for that session. This happens in two places in <code>proxy()</code>:</p>
+
+    <h3>4a — File content (RAG context)</h3>
+    <pre><span class="cm"># main.py line 572 — pseudonymize uploaded file text</span>
+pseudonymized_text = pseudonymize(
+    content_text, session_id, store.get_store(), enabled_types=enabled_types
+)
+<span class="cm"># store now contains tokens found in the file</span>
+store.get_store().flush(session_id)  <span class="cm"># persist to Redis if configured</span></pre>
+
+    <h3>4b — User message (last message)</h3>
+    <pre><span class="cm"># main.py line 630 — pseudonymize the actual user prompt</span>
+pseudonymized_text = pseudonymize(
+    original_content_text, session_id, store.get_store(), enabled_types=enabled_types
+)
+<span class="cm"># more tokens may be added for names in the user's message</span>
+store.get_store().flush(session_id)</pre>
+
+    <div class="callout tip">
+      <div class="callout-title">Snapshot trick</div>
+      The proxy snapshots the keys <em>before</em> pseudonymizing, then checks after to count how many new tokens were added:
+      <pre style="margin-top:8px"><span class="var">existing_keys_before</span> = <span class="fn">set</span>(store.get_store().get(session_id, {}).keys())
+<span class="cm"># ... pseudonymize ...</span>
+<span class="var">new_keys</span> = <span class="fn">set</span>(store.get_store().get(session_id, {}).keys()) - existing_keys_before
+<span class="var">file_entity_count</span> = <span class="fn">len</span>(new_keys)  <span class="cm"># shown in privacy sidebar</span></pre>
+    </div>
+  </div>
+
+  <!-- 5. Read -->
+  <div class="section">
+    <h2>5. When Is It Read?</h2>
+    <p>After the LLM responds, the proxy builds the full mapping for this session and passes it to the depseudonymizer:</p>
+
+    <pre><span class="cm"># main.py line 729 — build session mapping before depseudo</span>
+session_mapping = <span class="fn">dict</span>(store.get_store().get(session_id, {}))
+
+<span class="cm"># also merge file mappings (uploaded files use "file:" prefix)</span>
+<span class="kw">if</span> privacy_enabled:
+    <span class="kw">for</span> key, mapping <span class="kw">in</span> store._store.items():
+        <span class="kw">if</span> key.startswith(<span class="str">"file:"</span>):
+            session_mapping.update(mapping)</pre>
+
+    <p>Why merge file mappings? Because a token like <code>PERSON_cc75010d</code> might have been introduced by an uploaded file, not the chat session itself. Both need to be restored in the response.</p>
+
+    <pre><span class="cm"># then passed into stream_with_depseudo</span>
+<span class="kw">return</span> StreamingResponse(
+    stream_with_depseudo(src, <span class="var">session_mapping</span>, ...)
+)</pre>
+
+    <p>Inside <code>stream_with_depseudo</code>, every safe chunk gets tokens replaced:</p>
+    <pre><span class="kw">for</span> token <span class="kw">in</span> sorted(session_mapping.keys(), key=len, reverse=<span class="kw">True</span>):
+    safe = safe.replace(token, session_mapping[token])</pre>
+
+    <div class="callout warning">
+      <div class="callout-title">Longest first — why?</div>
+      If mapping has <code>PERSON_cc7</code> and <code>PERSON_cc75010d</code>, replacing the short one first would corrupt the long one. Sorting by length descending avoids this.
+    </div>
+  </div>
+
+  <!-- 6. Full lifecycle -->
+  <div class="section">
+    <h2>6. Full Lifecycle in One Picture</h2>
+
+    <div class="pipeline" style="grid-template-columns: repeat(4,1fr)">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-title">Request arrives</div>
+        <div class="step-desc">proxy() resolves session_id from chat_id</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-title">Pseudonymize</div>
+        <div class="step-desc">pseudonymize() detects PII, writes tokens → store[session_id]</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-title">Forward</div>
+        <div class="step-desc">Cleaned body sent to LLM. Store waits.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-title">Depseudonymize</div>
+        <div class="step-desc">Read store[session_id] → replace tokens → user sees real names</div>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <div class="callout-title">TTL = 1 hour</div>
+      Sessions expire after 1 hour of inactivity. After that, tokens are gone — old messages can no longer be restored. This is intentional: mappings are not permanent storage.
+    </div>
+  </div>
+
+  <!-- 7. Redis -->
+  <div class="section">
+    <h2>7. Redis — The Optional Second Backend</h2>
+    <p>By default the mapping store is just a Python dict in memory. The problem: if the proxy restarts (Docker redeploy, crash), all mappings are lost. Active chats would see tokens like <code>PERSON_cc75010d</code> instead of real names in the response.</p>
+
+    <p>Redis solves this. Set one env var and the store survives restarts:</p>
+    <pre><span class="cm"># docker-compose or k8s env</span>
+REDIS_URL=redis://localhost:6379</pre>
+
+    <h3>How it works in mapping_store.py</h3>
+    <pre><span class="cm"># on startup — connect or fall back silently</span>
+<span class="kw">try</span>:
+    _redis_client = redis.from_url(REDIS_URL) <span class="kw">if</span> REDIS_URL <span class="kw">else None</span>
+    <span class="kw">if</span> _redis_client: _redis_client.ping()
+<span class="kw">except</span>:
+    _redis_client = <span class="kw">None</span>  <span class="cm"># Redis down → memory-only, no crash</span></pre>
+
+    <h3>Write — every flush() call</h3>
+    <pre><span class="cm"># when proxy calls store.get_store().flush(session_id)</span>
+_redis_client.setex(
+    <span class="str">f"garnet:mapping:{session_id}"</span>,  <span class="cm"># key</span>
+    <span class="num">3600</span>,                             <span class="cm"># TTL in seconds</span>
+    json.dumps(mapping)               <span class="cm"># value — the full token dict</span>
+)</pre>
+
+    <h3>Read — when session not in memory</h3>
+    <pre><span class="cm"># proxy restarts, memory is empty, but Redis still has it</span>
+raw = _redis_client.get(<span class="str">f"garnet:mapping:{session_id}"</span>)
+<span class="kw">if</span> raw:
+    mapping = json.loads(raw)
+    self._memory[session_id] = mapping  <span class="cm"># restore to memory</span></pre>
+
+    <div class="files-grid" style="margin-top:16px">
+      <div class="file-card yellow">
+        <div class="file-name">Memory only (default)</div>
+        <div class="file-role">No config needed</div>
+        <p style="font-size:.8rem;color:#8b949e;margin-top:8px">Fast. Lost on restart. Fine for short sessions.</p>
+      </div>
+      <div class="file-card green">
+        <div class="file-name">Memory + Redis</div>
+        <div class="file-role">Set REDIS_URL env var</div>
+        <p style="font-size:.8rem;color:#8b949e;margin-top:8px">Memory is the fast cache. Redis is the backup. Read from memory first, fall back to Redis only on a miss.</p>
+      </div>
+    </div>
+
+    <div class="callout warning">
+      <div class="callout-title">Redis key format</div>
+      Keys follow the pattern <code>garnet:mapping:{session_id}</code>. File sessions use <code>garnet:mapping:file:{file_id}</code>. This is how the proxy separates chat mappings from file mappings in Redis.
+    </div>
+  </div>
+
+</div><!-- /page p2 -->
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- PAGE 3 — Function Blocks                                   -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="page" id="p3">
+  <div class="header-pill">🧩 Garnet Lesson</div>
+  <h1>main.py — Every Function Explained</h1>
+  <p class="subtitle">Each block is one function. Click to expand. Covers setup → utilities → streaming → endpoints → the big proxy().</p>
+
+  <div class="flow-bar">
+    <div class="flow-step">Browser / OWU</div>
+    <span class="flow-arrow-sm">→</span>
+    <div class="flow-step">proxy() — catch-all route</div>
+    <span class="flow-arrow-sm">→</span>
+    <div class="flow-step">pseudonymize PII</div>
+    <span class="flow-arrow-sm">→</span>
+    <div class="flow-step">LLM (Ollama / OpenAI / Anthropic…)</div>
+    <span class="flow-arrow-sm">→</span>
+    <div class="flow-step">stream_with_depseudo()</div>
+    <span class="flow-arrow-sm">→</span>
+    <div class="flow-step">real names restored → browser</div>
+  </div>
+
+  <!-- SETUP -->
+  <p class="section-label-p3">1 · Setup &amp; globals</p>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon setup">⚙️</div>
+      <div class="fn-header-text">
+        <div class="fn-name">Imports &amp; env vars</div>
+        <div class="fn-lineno">main.py : 1–43</div>
+        <div class="fn-summary">Loads all libraries and reads config from environment variables.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <ul>
+        <li><code>OLLAMA_URL</code> — where Ollama is running (default localhost:11434)</li>
+        <li><code>OPENAI_API_URL</code> — default OpenAI base, overridden per-request via header</li>
+        <li><code>RESPONSES_API_MODELS</code> — GPT-5 models that need the newer <code>/v1/responses</code> endpoint</li>
+        <li><code>SYSTEM_PROMPT_MARKERS</code> — strings that identify OWU internal messages so they are skipped by the pseudonymizer</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon setup">🗄️</div>
+      <div class="fn-header-text">
+        <div class="fn-name">MappingStore &amp; pseudo_cache</div>
+        <div class="fn-lineno">main.py : 53–56</div>
+        <div class="fn-summary">Two in-memory stores that remember what PII was replaced with what token.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <ul>
+        <li><code>store = MappingStore()</code> — the main session→token→real-value dictionary, optionally backed by Redis</li>
+        <li><code>pseudo_cache</code> — a secondary dict keyed by <code>session_id → md5(text)</code> so the same sentence isn't re-pseudonymized every turn</li>
+      </ul>
+      <div class="warn-b">⚠ Both are global and never evicted — known bugs P0-2 &amp; P0-8 in the improvement report.</div>
+    </div>
+  </div>
+
+  <!-- UTILITIES -->
+  <p class="section-label-p3">2 · Utility functions</p>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon util">📄</div>
+      <div class="fn-header-text">
+        <div class="fn-name">extract_text_content(content)</div>
+        <div class="fn-lineno">main.py : 59–68</div>
+        <div class="fn-summary">Pulls plain text out of a message — handles both simple strings and OpenAI multi-part content arrays.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <p>A message <code>content</code> can be a plain string <em>or</em> a list like <code>[{"type":"text","text":"hello"}, {"type":"image_url",...}]</code></p>
+      <ul>
+        <li>String → return as-is</li>
+        <li>List → join all <code>text</code> blocks, skip image/file blocks</li>
+      </ul>
+      <div class="note-b">Used everywhere before calling pseudonymize — ensures we always pass a string, not a JSON array.</div>
+    </div>
+  </div>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon util">🔧</div>
+      <div class="fn-header-text">
+        <div class="fn-name">rebuild_content(original_content, pseudonymized_text)</div>
+        <div class="fn-lineno">main.py : 71–82</div>
+        <div class="fn-summary">Puts the pseudonymized text back into the original message structure without breaking image blocks.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <p>The reverse of <code>extract_text_content</code>. Preserves images/files in list-format messages.</p>
+      <ul>
+        <li>String original → returns pseudonymized string directly</li>
+        <li>List original → rebuilds list, swapping only <code>text</code> blocks, keeping image blocks untouched</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon util">⚡</div>
+      <div class="fn-header-text">
+        <div class="fn-name">_pseudo_with_cache(text, session_id, enabled_types)</div>
+        <div class="fn-lineno">main.py : 86–96</div>
+        <div class="fn-summary">Runs pseudonymize() but skips re-running GLiNER/spaCy if the same text was already processed this session.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <ul>
+        <li>Computes <code>MD5(text)</code> as cache key</li>
+        <li>If found in <code>pseudo_cache[session_id]</code> → returns cached result instantly (no NLP cost)</li>
+        <li>If not → calls <code>pseudonymize()</code>, stores result, returns it</li>
+      </ul>
+      <div class="note-b">Used for history messages — conversation history is resent every turn, so this avoids re-scanning 10 previous messages with GLiNER each time.</div>
+    </div>
+  </div>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon util">✂️</div>
+      <div class="fn-header-text">
+        <div class="fn-name">split_at_safe_boundary(buffer)</div>
+        <div class="fn-lineno">main.py : 99–115</div>
+        <div class="fn-summary">Prevents a pseudo token like PERSON_abc12 from being split across two SSE stream chunks.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <p>SSE streams arrive in arbitrary byte chunks. If a chunk ends mid-token like <code>"...PERSON_a"</code>, replacing it early would miss the full token <code>PERSON_abc123</code>.</p>
+      <ul>
+        <li>Checks if the buffer ends with a partial token prefix (<code>PERSON</code>, <code>ORGAN…</code>, etc.)</li>
+        <li>Returns <code>(safe_part, remainder)</code> — safe is depseudo'd and yielded, remainder held for next chunk</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon util">🔍</div>
+      <div class="fn-header-text">
+        <div class="fn-name">detect_internal_type(content)</div>
+        <div class="fn-lineno">main.py : 118–127</div>
+        <div class="fn-summary">Identifies OWU auto-generated system messages so the proxy skips pseudonymizing them.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <p>OWU sends many internal messages (title generators, tag generators, follow-up generators) that are not user text. Pseudonymizing those would break them.</p>
+      <ul>
+        <li><code>"follow_ups"</code> → <code>follow_ups</code></li>
+        <li><code>"Generate a concise"</code> + <code>"title"</code> → <code>title_gen</code></li>
+        <li><code>"Generate 1-3 broad tags"</code> → <code>tags_gen</code></li>
+        <li><code>"search_query"</code> → <code>search_query</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- STREAMING -->
+  <p class="section-label-p3">3 · Streaming depseudonymization</p>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon stream">🌊</div>
+      <div class="fn-header-text">
+        <div class="fn-name">stream_with_depseudo(response_stream, mapping, …)</div>
+        <div class="fn-lineno">main.py : 158–256</div>
+        <div class="fn-summary">The heart of Garnet — reads LLM SSE chunks, replaces pseudo tokens with real names, and forwards to browser in real-time.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <div class="fn-sub">
+        <h4>Step 1 — metadata yield</h4>
+        <ul>
+          <li>Immediately sends <code>{"type":"pseudonymized_prompt",...}</code> — OWU reads this to show the Garnet badge with entity count</li>
+        </ul>
+      </div>
+      <div class="fn-sub">
+        <h4>Step 2 — chunk loop</h4>
+        <ul>
+          <li>Receives raw bytes from LLM, splits on <code>\n</code>, strips <code>data: </code> prefix</li>
+          <li>Parses JSON, extracts <code>choices[0].delta.content</code></li>
+          <li>Also captures token usage in OpenAI, Anthropic native, and Anthropic OpenAI-compat formats</li>
+        </ul>
+      </div>
+      <div class="fn-sub">
+        <h4>Step 3 — safe depseudo per chunk</h4>
+        <ul>
+          <li>Appends chunk text to rolling <code>buffer</code></li>
+          <li>Calls <code>split_at_safe_boundary()</code> → safe part + held remainder</li>
+          <li>Replaces all pseudo tokens in safe part, longest token first</li>
+          <li>Yields <code>data: {"choices":[{"delta":{"content": safe}}]}</code> to browser</li>
+        </ul>
+      </div>
+      <div class="fn-sub">
+        <h4>Step 4 — flush + logs</h4>
+        <ul>
+          <li>Any leftover buffer is depseudo'd and sent after stream ends</li>
+          <li>Logs chunk count, total chars, TTFT, total latency, token counts, privacy audit</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ENDPOINTS -->
+  <p class="section-label-p3">4 · Small endpoints</p>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon endpoint">❤️</div>
+      <div class="fn-header-text">
+        <div class="fn-name">GET /health</div>
+        <div class="fn-lineno">main.py : 260–261</div>
+        <div class="fn-summary">Returns {"status":"ok"}. Used by Docker health checks and k8s readiness probes.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <div class="warn-b">⚠ Known issue (P1-24): GLiNER loads lazily on first real request, so /health passes before the model is actually ready.</div>
+    </div>
+  </div>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon endpoint">🔒</div>
+      <div class="fn-header-text">
+        <div class="fn-name">POST /vault/scan</div>
+        <div class="fn-lineno">main.py : 265–313</div>
+        <div class="fn-summary">Pseudonymizes an uploaded document and stores the mapping. Called when a user uploads a file to OWU.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <ul>
+        <li>Takes <code>{"text": "...", "file_id": "abc", "privacy_proxy": true}</code></li>
+        <li>If privacy off → returns text unchanged with zero entity count</li>
+        <li>Calls <code>pseudonymize()</code> with <code>session_id = "file:&lt;file_id&gt;"</code> — file mappings stored separately from chat</li>
+        <li>Returns entity count, breakdown by type (PERSON/ORG/etc.), and before/after preview</li>
+      </ul>
+      <div class="note-b">The "file:" prefix is how the proxy knows to merge file mappings into chat depseudo — any session starting with "file:" gets loaded as extra context.</div>
+    </div>
+  </div>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon endpoint">🔬</div>
+      <div class="fn-header-text">
+        <div class="fn-name">POST /analyze</div>
+        <div class="fn-lineno">main.py : 317–332</div>
+        <div class="fn-summary">Debug endpoint — detects entities in text and returns them without pseudonymizing anything.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <ul>
+        <li>Calls <code>detect_entities(text, language, enabled_types)</code></li>
+        <li>Returns <code>{"entities": [{type, value, start, end}, ...]}</code></li>
+        <li>Does NOT store any mapping — purely read-only inspection</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon endpoint">🏷️</div>
+      <div class="fn-header-text">
+        <div class="fn-name">GET /openai/api/tags</div>
+        <div class="fn-lineno">main.py : 336–343</div>
+        <div class="fn-summary">Proxies Ollama's model list so OWU can discover available local models.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+      <ul>
+        <li>Forwards to <code>OLLAMA_URL/api/tags</code> and returns the response as-is</li>
+        <li>No pseudonymization — model names are not PII</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- MAIN PROXY -->
+  <p class="section-label-p3">5 · Main proxy handler — the big one</p>
+
+  <div class="big-fn-block">
+    <div class="fn-header" onclick="toggleFn(this)">
+      <div class="fn-icon" style="background:#200a0a;font-size:1.1rem;width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🚀</div>
+      <div class="fn-header-text">
+        <div class="fn-name">proxy(request, path) — catches ALL routes</div>
+        <div class="fn-lineno">main.py : 347–end</div>
+        <div class="fn-summary">Every request that isn't /health, /vault/scan, /analyze goes here. The full Garnet pipeline in one function.</div>
+      </div>
+      <div class="fn-toggle">▸</div>
+    </div>
+    <div class="fn-body">
+
+      <div class="fn-sub">
+        <h4>Block A — Route detection</h4>
+        <ul>
+          <li>Is the path <code>openai/…</code>? → flag <code>is_openai = True</code></li>
+          <li>Is it a chat endpoint? (<code>v1/chat/completions</code>, <code>api/chat</code>…) → flag <code>is_chat = True</code></li>
+          <li>Non-chat requests (embeddings, model list) are passed through without any PII processing</li>
+        </ul>
+      </div>
+
+      <div class="fn-sub">
+        <h4>Block B — URL &amp; provider resolution</h4>
+        <ul>
+          <li>If the base URL points back to the proxy itself (self-loop) → detect real provider from API key prefix</li>
+          <li><code>sk-ant-</code> → Anthropic &nbsp;|&nbsp; <code>AIza</code> → Gemini &nbsp;|&nbsp; <code>gsk-</code> → Groq &nbsp;|&nbsp; <code>sk-or-</code> → OpenRouter</li>
+          <li>Sets <code>provider_label</code> used in logs</li>
+        </ul>
+      </div>
+
+      <div class="fn-sub">
+        <h4>Block C — Session ID</h4>
+        <ul>
+          <li>Tries in order: <code>body.chat_id</code> → <code>messages[0].id</code> → <code>MD5(first_message)[:12]</code></li>
+          <li>Session ID is the key linking all messages to their PII mapping store</li>
+        </ul>
+        <div class="warn-b">⚠ MD5 fallback means two users saying "Hi" share a session — known bug P0-9.</div>
+      </div>
+
+      <div class="fn-sub">
+        <h4>Block D — Responses API remap (GPT-5 models only)</h4>
+        <ul>
+          <li>Converts <code>/v1/chat/completions</code> body → <code>/v1/responses</code> format</li>
+          <li>Moves <code>system</code> messages into <code>instructions</code> field</li>
+          <li>Remaps <code>image_url</code> → <code>input_image</code>, <code>text</code> → <code>input_text</code></li>
+          <li>Moves <code>response_format</code> into <code>text.format</code>, <code>reasoning_effort</code> into <code>reasoning.effort</code></li>
+        </ul>
+      </div>
+
+      <div class="fn-sub">
+        <h4>Block E — History pseudonymization</h4>
+        <ul>
+          <li>Loops over all messages except the last one</li>
+          <li>Skips empty messages, OWU internal system-prompt messages, and already-pseudonymized messages</li>
+          <li>Calls <code>_pseudo_with_cache()</code> on each — GLiNER only runs on new text</li>
+          <li>Replaces <code>msg["content"]</code> in-place</li>
+        </ul>
+      </div>
+
+      <div class="fn-sub">
+        <h4>Block F — RAG / file context pseudonymization</h4>
+        <ul>
+          <li>Scans all messages for <code>&lt;context&gt;</code> / <code>&lt;source</code> / <code>{{CONTEXT}}</code> tags — RAG-injected document chunks</li>
+          <li>For large files (&gt;50 000 chars) → splits into 10k-char overlapping chunks, pseudonymizes each, rejoins</li>
+          <li>Merges file mapping with chat session mapping so depseudo works across both</li>
+        </ul>
+      </div>
+
+      <div class="fn-sub">
+        <h4>Block G — Last user message pseudonymization</h4>
+        <ul>
+          <li>Takes <code>messages[-1]</code> (the new user message)</li>
+          <li>Calls <code>pseudonymize()</code> directly — not cached, it's always new text</li>
+          <li>Stores the pseudonymized version as <code>pseudonymized_user_message</code> — sent to OWU for the badge</li>
+          <li>If nothing was replaced → logs "no PII detected"</li>
+        </ul>
+      </div>
+
+      <div class="fn-sub">
+        <h4>Block H — Forward to LLM (Ollama, non-streaming)</h4>
+        <ul>
+          <li>Ollama returns a single JSON object (not SSE)</li>
+          <li>Fetches response, extracts <code>message.content</code></li>
+          <li>Replaces all pseudo tokens with real values inline, returns modified JSON</li>
+        </ul>
+      </div>
+
+      <div class="fn-sub">
+        <h4>Block I — Forward to LLM (OpenAI/cloud, streaming)</h4>
+        <ul>
+          <li>Opens streaming HTTP request to the provider</li>
+          <li>Builds <code>session_mapping</code> = chat mapping + all file: mappings merged</li>
+          <li>If <code>stream=False</code> → regular request, depseudo full response, return JSON</li>
+          <li>If streaming → passes byte generator to <code>stream_with_depseudo()</code>, returns <code>StreamingResponse</code></li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- END-TO-END -->
+  <p class="section-label-p3">6 · Full flow in one trace</p>
+
+  <div class="section" style="margin-bottom:0">
+    <h2>One user message — end to end</h2>
+    <div class="pipeline" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+      <div class="step"><div class="step-num">A</div><div class="step-title">Route detect</div><div class="step-desc">is_openai=true, is_chat=true, resolve provider URL</div></div>
+      <div class="step"><div class="step-num">B</div><div class="step-title">Session ID</div><div class="step-desc">Extract chat_id from body</div></div>
+      <div class="step"><div class="step-num">E</div><div class="step-title">History pseudo</div><div class="step-desc">_pseudo_with_cache() on messages[:-1]</div></div>
+      <div class="step"><div class="step-num">F</div><div class="step-title">RAG pseudo</div><div class="step-desc">Pseudonymize &lt;context&gt; blocks</div></div>
+      <div class="step"><div class="step-num">G</div><div class="step-title">User msg pseudo</div><div class="step-desc">"Max" → "PERSON_cc75010d"</div></div>
+      <div class="step"><div class="step-num">I</div><div class="step-title">Stream + depseudo</div><div class="step-desc">stream_with_depseudo() → browser sees real names</div></div>
+    </div>
+    <div class="callout tip">
+      <div class="callout-title">Key invariant</div>
+      The LLM never sees a real name. The browser never sees a token. The mapping store is the only place where the two meet.
+    </div>
+  </div>
+
+  <p style="text-align:center;color:#4b5563;font-size:.78rem;margin-top:32px">
+    Generated 2026-08-23 · branch demo1upgrade · main.py
+  </p>
+</div><!-- /page p3 -->
+
+<script>
+function switchPage(pageId, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+  btn.classList.add('active');
+  window.scrollTo(0, 0);
+}
+</script>
+
+</div>
+</body>
+</html>

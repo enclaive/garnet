@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet — Full Routing Map</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0a0e1a; color: #e2e8f0; padding: 32px; max-width: 1200px; margin: 0 auto; }
+h1 { color: #7dd3fc; font-size: 1.8rem; margin-bottom: 6px; }
+.subtitle { color: #475569; margin-bottom: 48px; font-size: 0.88rem; }
+h2 { font-size: 0.85rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #64748b; margin: 52px 0 18px; border-left: 3px solid #1e3a5f; padding-left: 12px; }
+code { font-family: 'Fira Code', 'Consolas', monospace; }
+hr { border: none; border-top: 1px solid #1e2d45; margin: 40px 0; }
+
+/* CARDS */
+.row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.card { border-radius: 10px; padding: 16px 18px; flex: 1; min-width: 200px; border: 1px solid; }
+.card h3 { font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; }
+.card p, .card li { font-size: 0.78rem; color: #94a3b8; line-height: 1.7; }
+.card ul { padding-left: 14px; }
+.c-blue   { background: #071829; border-color: #1d4ed8; } .c-blue h3   { color: #60a5fa; }
+.c-green  { background: #041810; border-color: #15803d; } .c-green h3  { color: #4ade80; }
+.c-purple { background: #110a26; border-color: #6d28d9; } .c-purple h3 { color: #a78bfa; }
+.c-orange { background: #1a0d00; border-color: #c2410c; } .c-orange h3 { color: #fb923c; }
+.c-teal   { background: #031915; border-color: #0f766e; } .c-teal h3   { color: #2dd4bf; }
+.c-red    { background: #1a0606; border-color: #b91c1c; } .c-red h3    { color: #f87171; }
+.c-gray   { background: #111827; border-color: #374151; } .c-gray h3   { color: #9ca3af; }
+.c-yellow { background: #1a1200; border-color: #a16207; } .c-yellow h3 { color: #fbbf24; }
+
+/* FLOW */
+.flow { display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid #1e3356; background: #060c18; margin-bottom: 14px; }
+.fs { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #111d30; }
+.fs:last-child { border-bottom: none; }
+.fs:hover { background: #0b1525; }
+.fn { min-width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+.nb { background: #1d4ed8; color: #fff; }
+.ng { background: #15803d; color: #fff; }
+.np { background: #6d28d9; color: #fff; }
+.no { background: #c2410c; color: #fff; }
+.nt { background: #0f766e; color: #fff; }
+.nr { background: #b91c1c; color: #fff; }
+.ny { background: #a16207; color: #fff; }
+.fc h4 { font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; }
+.fc p  { font-size: 0.77rem; color: #64748b; line-height: 1.6; }
+.fc code { background: #1e2433; border-radius: 3px; padding: 1px 5px; font-size: 0.72rem; color: #e2e8f0; font-family: monospace; }
+
+/* CODE BLOCK */
+.cb { background: #060c18; border: 1px solid #1e3356; border-radius: 10px; padding: 18px 22px; font-size: 0.77rem; line-height: 2; font-family: 'Fira Code', 'Consolas', monospace; overflow-x: auto; margin-bottom: 14px; }
+.cm { color: #475569; font-style: italic; }
+.cv { color: #4ade80; }
+.cs { color: #fbbf24; }
+.cf { color: #60a5fa; }
+.co { color: #fb923c; }
+.cr { color: #f87171; }
+.cp { color: #a78bfa; }
+
+/* SPLIT */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 14px; }
+@media(max-width: 760px) { .split { grid-template-columns: 1fr; } }
+
+/* LABELS */
+.slabel { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 10px; border-radius: 4px; display: inline-block; margin-bottom: 10px; }
+.sl-local  { background: #031915; color: #2dd4bf; border: 1px solid #0f766e; }
+.sl-cloud  { background: #071829; color: #60a5fa; border: 1px solid #1d4ed8; }
+.sl-proxy  { background: #110a26; color: #a78bfa; border: 1px solid #6d28d9; }
+.sl-off    { background: #1a0606; color: #f87171; border: 1px solid #b91c1c; }
+.sl-bypass { background: #1a0d00; color: #fb923c; border: 1px solid #c2410c; }
+
+/* HTTP BLOCK */
+.http { background: #070d1a; border: 1px solid #1e3a5f; border-radius: 10px; padding: 18px 20px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.77rem; line-height: 2; }
+.hm { color: #fbbf24; font-weight: 700; }
+.hu { color: #60a5fa; }
+.hk { color: #a78bfa; }
+.hv { color: #4ade80; }
+.hv2 { color: #f87171; }
+.hv3 { color: #fb923c; }
+.hc { color: #475569; font-style: italic; }
+
+/* DIAGRAM */
+.diagram { background: #060c18; border: 1px solid #1e3356; border-radius: 10px; padding: 24px; font-family: 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.9; color: #94a3b8; overflow-x: auto; margin-bottom: 14px; }
+.d-blue   { color: #60a5fa; }
+.d-green  { color: #4ade80; }
+.d-purple { color: #a78bfa; }
+.d-orange { color: #fb923c; }
+.d-teal   { color: #2dd4bf; }
+.d-red    { color: #f87171; }
+.d-yellow { color: #fbbf24; }
+.d-gray   { color: #475569; }
+
+/* NOTE */
+.note { border-radius: 8px; padding: 14px 18px; margin-bottom: 14px; font-size: 0.8rem; line-height: 1.7; }
+.note-warn { background: #1a0d00; border: 1px solid #c2410c; color: #fed7aa; }
+.note-warn strong { color: #fb923c; }
+.note-info { background: #071829; border: 1px solid #1d4ed8; color: #bfdbfe; }
+.note-info strong { color: #60a5fa; }
+.note-ok { background: #041810; border: 1px solid #15803d; color: #bbf7d0; }
+.note-ok strong { color: #4ade80; }
+
+/* TABLE */
+.tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 14px; }
+.tbl th { background: #1e2433; color: #7dd3fc; text-align: left; padding: 8px 12px; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; }
+.tbl td { padding: 9px 12px; border-bottom: 1px solid #1e2433; vertical-align: top; font-size: 0.78rem; color: #94a3b8; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: #0d1525; }
+.tick { color: #4ade80; font-weight: 700; }
+.cross { color: #f87171; font-weight: 700; }
+.warn-cell { color: #fb923c; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — Full Routing Map</h1>
+<p class="subtitle">From the Enable button in settings → to the response back in chat · all phases · local and cloud · what happens when proxy is off</p>
+
+<!-- ═══════════════════════════════ OVERVIEW ═══════════════════════════════ -->
+<h2>Big picture — normal flow (everything on)</h2>
+
+<div class="diagram">
+<span class="d-yellow">ADMIN</span>  adds connection in OWU Settings (URL + Key) → arrays built<br>
+<span class="d-yellow">USER</span>   picks model → hits Send<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-blue">Open WebUI</span>  (openai.py or ollama.py)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FORCE_*_BASE_URL set → redirects ALL traffic to proxy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-purple">Privacy Proxy</span>  :8080<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pseudonymize PII → forward clean body to LLM<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-green">LLM</span>  (Ollama · OpenAI · Anthropic · Groq · Gemini)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;responds with tokens (never sees real names)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-purple">Privacy Proxy</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;swap tokens → real values · stream back<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-yellow">USER</span>  sees real names in chat
+</div>
+
+<!-- ═══════════════════════════════ PHASE 1 ═══════════════════════════════ -->
+<h2>Phase 1 — Admin enables a connection (done once)</h2>
+
+<div class="row">
+  <div class="card c-blue">
+    <h3>Admin fills the form</h3>
+    <p>OWU Admin → Settings → Connections<br><br>
+    Enters URL + Key → hits <strong style="color:#60a5fa">Enable</strong><br>
+    OWU immediately calls <code>GET /models</code> to verify + pull model list.</p>
+  </div>
+  <div class="card c-green">
+    <h3>Two arrays built (by index)</h3>
+    <div class="cb" style="margin:0;padding:10px 14px;font-size:0.73rem">
+<span class="cs">OPENAI_API_BASE_URLS</span> = [<br>
+&nbsp;&nbsp;<span class="cv">"https://api.anthropic.com/v1"</span>,&nbsp;<span class="cm">// 0</span><br>
+&nbsp;&nbsp;<span class="cv">"https://api.openai.com/v1"</span>,&nbsp;&nbsp;&nbsp;<span class="cm">// 1</span><br>
+&nbsp;&nbsp;<span class="cv">"https://api.groq.com/openai/v1"</span>&nbsp;<span class="cm">// 2</span><br>
+]<br>
+<span class="cs">OPENAI_API_KEYS</span> = [<br>
+&nbsp;&nbsp;<span class="cv">"sk-ant-api03-…"</span>,<span class="cm">// 0</span><br>
+&nbsp;&nbsp;<span class="cv">"sk-proj-…"</span>,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">// 1</span><br>
+&nbsp;&nbsp;<span class="cv">"gsk_…"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">// 2</span><br>
+]
+    </div>
+    <p>Same idx = same connection. Always in sync by position.</p>
+  </div>
+  <div class="card c-purple">
+    <h3>Models stamped with urlIdx</h3>
+    <p>Every model returned from idx 0 gets <code>urlIdx=0</code> baked in permanently.</p><br>
+    <p style="color:#a78bfa;font-size:0.77rem">claude-opus-4-5 · urlIdx=0</p>
+    <p style="color:#60a5fa;font-size:0.77rem;margin-top:3px">gpt-4o · urlIdx=1</p>
+    <p style="color:#4ade80;font-size:0.77rem;margin-top:3px">llama-3.3-70b · urlIdx=2 (Groq)</p>
+    <p style="color:#2dd4bf;font-size:0.77rem;margin-top:3px">llama3 · Ollama (separate array)</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ PHASE 2 ═══════════════════════════════ -->
+<h2>Phase 2 — User sends a message: OWU routing decision</h2>
+
+<div class="split">
+  <div>
+    <div class="slabel sl-cloud">Cloud path (openai.py)</div>
+    <div class="flow">
+      <div class="fs"><div class="fn nb">1</div><div class="fc">
+        <h4>Read urlIdx from model</h4>
+        <p><code>idx = model['urlIdx']</code></p>
+      </div></div>
+      <div class="fs"><div class="fn ng">2</div><div class="fc">
+        <h4>Pick destination URL</h4>
+        <p><code>url = os.environ.get("FORCE_OPENAI_BASE_URL")<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;or OPENAI_API_BASE_URLS[idx]</code><br><br>
+        If <code>FORCE_OPENAI_BASE_URL</code> is set → proxy.<br>
+        If not set → real provider directly. <span style="color:#f87171">No privacy filter.</span></p>
+      </div></div>
+      <div class="fs"><div class="fn np">3</div><div class="fc">
+        <h4>Pick key (never overridden)</h4>
+        <p><code>key = OPENAI_API_KEYS[idx]</code><br>
+        Key always comes from arrays[idx], regardless of FORCE_OPENAI_BASE_URL.</p>
+      </div></div>
+      <div class="fs"><div class="fn no">4</div><div class="fc">
+        <h4>Inject chat_id + build headers</h4>
+        <p><code>payload['chat_id'] = metadata.get('chat_id')</code><br>
+        <code>headers['Authorization'] = 'Bearer ' + key</code><br>
+        <code>headers['x-openai-base-url'] = OPENAI_API_BASE_URLS[idx]</code>&nbsp;<span style="color:#fb923c">← real provider, sent as header to proxy</span></p>
+      </div></div>
+      <div class="fs"><div class="fn nt">5</div><div class="fc">
+        <h4>Send to proxy</h4>
+        <p><code>POST http://privacy-proxy:8080/openai/v1/chat/completions</code></p>
+      </div></div>
+    </div>
+  </div>
+  <div>
+    <div class="slabel sl-local">Local path (ollama.py)</div>
+    <div class="flow">
+      <div class="fs"><div class="fn nb">1</div><div class="fc">
+        <h4>Pick Ollama URL</h4>
+        <p><code>force_url = os.environ.get('FORCE_OLLAMA_BASE_URL')</code><br>
+        <code>chat_url = force_url + '/api/chat'<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;or ollama_url + '/api/chat'</code></p>
+      </div></div>
+      <div class="fs"><div class="fn ng">2</div><div class="fc">
+        <h4>Inject chat_id</h4>
+        <p><code>payload['chat_id'] = metadata.get('chat_id', '')</code></p>
+      </div></div>
+      <div class="fs"><div class="fn np">3</div><div class="fc">
+        <h4>Add Garnet headers (only if forced)</h4>
+        <p><code>if force_url:</code><br>
+        &nbsp;&nbsp;<code>x-garnet-entities: ...</code><br>
+        &nbsp;&nbsp;<code>x-openai-base-url: &lt;original ollama url&gt;</code></p>
+      </div></div>
+      <div class="fs"><div class="fn no">4</div><div class="fc">
+        <h4>Send to proxy</h4>
+        <p><code>POST http://privacy-proxy:8080/api/chat</code></p>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ PHASE 3 ═══════════════════════════════ -->
+<h2>Phase 3 — Proxy classifies and prepares</h2>
+
+<div class="flow">
+  <div class="fs"><div class="fn nb">1</div><div class="fc">
+    <h4>Catch-all route — single function handles everything</h4>
+    <p><code>@app.api_route("/{path:path}")</code> — main.py line 332</p>
+  </div></div>
+  <div class="fs"><div class="fn ng">2</div><div class="fc">
+    <h4>Classify path</h4>
+    <p><code>is_openai = path.startswith("openai/")</code><br>
+    <code>is_chat = actual_path in ("v1/chat/completions", "api/chat", ...)</code><br>
+    Cloud → <code>is_openai=True</code> &nbsp;|&nbsp; Local → <code>is_openai=False</code></p>
+  </div></div>
+  <div class="fs"><div class="fn np">3</div><div class="fc">
+    <h4>Pop privacy toggle from body</h4>
+    <p><code>privacy_enabled = body.pop("privacy_proxy", True)</code><br>
+    Removed before forwarding — LLMs don't know this field exists.</p>
+  </div></div>
+  <div class="fs"><div class="fn no">4</div><div class="fc">
+    <h4>Build session_id</h4>
+    <p><code>session_id = chat_id or messages[0].id or md5(first_msg)[:12]</code><br>
+    Then: <code>body.pop("chat_id", None)</code> — also removed before forwarding.</p>
+  </div></div>
+  <div class="fs"><div class="fn nt">5</div><div class="fc">
+    <h4>Resolve real provider URL (cloud only)</h4>
+    <p><code>openai_url = headers.get("x-openai-base-url")</code><br>
+    Self-loop check: if URL points back at proxy → re-detect from API key prefix:<br>
+    <code>sk-ant-</code> → Anthropic &nbsp;|&nbsp; <code>gsk-</code> → Groq &nbsp;|&nbsp; <code>AIza</code> → Gemini &nbsp;|&nbsp; <code>sk-or-</code> → OpenRouter</p>
+  </div></div>
+  <div class="fs"><div class="fn ny">6</div><div class="fc">
+    <h4>Fix stream mode</h4>
+    <p>Cloud → keep caller's preference (default <code>true</code>)<br>
+    Ollama → <strong style="color:#fbbf24">always force <code>stream=False</code></strong> — proxy reads full response to depseudonymize</p>
+  </div></div>
+</div>
+
+<!-- ═══════════════════════════════ PHASE 4 ═══════════════════════════════ -->
+<h2>Phase 4 — Pseudonymization pipeline</h2>
+
+<div class="flow">
+  <div class="fs"><div class="fn nb">1</div><div class="fc">
+    <h4>History messages (all except last)</h4>
+    <p>MD5 cache per session — same text seen before → instant return, no re-processing.<br>
+    System prompts skipped: <code>### Task:</code>, <code>follow_ups</code>, <code>Generate</code>, etc.</p>
+  </div></div>
+  <div class="fs"><div class="fn ng">2</div><div class="fc">
+    <h4>File / RAG context</h4>
+    <p>Messages with <code>&lt;context&gt;</code>, <code>&lt;source</code>, <code>{{CONTEXT}}</code> → pseudonymized under <code>file:</code> session key.<br>
+    Files &gt;50k chars: chunked (10k chunks, 200 char overlap).</p>
+  </div></div>
+  <div class="fs"><div class="fn np">3</div><div class="fc">
+    <h4>Last message (user's actual question)</h4>
+    <p>1. Detect language (en/de)<br>
+    2. EMAIL + PHONE regex first<br>
+    3. Strip markdown, run spaCy NER → PERSON, ORG, IBAN, LOCATION, ID<br>
+    4. Filter overlaps → replace → <code>TYPE_sha256[:8]</code> token<br>
+    5. Store <code>token → original</code> in MappingStore[session_id]</p>
+  </div></div>
+</div>
+
+<!-- ═══════════════════════════════ PHASE 5 ═══════════════════════════════ -->
+<h2>Phase 5 — Forward to LLM + depseudonymize response</h2>
+
+<div class="split">
+  <div>
+    <div class="slabel sl-cloud">Cloud — streaming</div>
+    <div class="flow">
+      <div class="fs"><div class="fn nb">1</div><div class="fc">
+        <h4>Strip headers, convert for Anthropic</h4>
+        <p>Forward only: <code>authorization</code>, <code>content-type</code><br>
+        Anthropic: <code>Bearer sk-ant-…</code> → <code>x-api-key: sk-ant-…</code> + <code>anthropic-version</code></p>
+      </div></div>
+      <div class="fs"><div class="fn ng">2</div><div class="fc">
+        <h4>First yield — metadata chunk</h4>
+        <p><code>{ type: "pseudonymized_prompt", file_entity_count: N, ... }</code><br>
+        OWU reads this to show Garnet sidebar stats.</p>
+      </div></div>
+      <div class="fs"><div class="fn np">3</div><div class="fc">
+        <h4>Stream + safe boundary split</h4>
+        <p>Buffer accumulates. <code>split_at_safe_boundary()</code> checks if buffer ends with partial token name (e.g. <code>PERSO</code>). Holds it back, flushes safe part only.</p>
+      </div></div>
+      <div class="fs"><div class="fn no">4</div><div class="fc">
+        <h4>Replace tokens → real values</h4>
+        <p>Longest tokens first → yield as SSE → user sees real names throughout the stream.</p>
+      </div></div>
+    </div>
+  </div>
+  <div>
+    <div class="slabel sl-local">Ollama — sync</div>
+    <div class="flow">
+      <div class="fs"><div class="fn nb">1</div><div class="fc">
+        <h4>POST, await full response</h4>
+        <p><code>POST http://ollama:11434/api/chat</code><br>
+        No streaming. Proxy waits for full JSON.</p>
+      </div></div>
+      <div class="fs"><div class="fn ng">2</div><div class="fc">
+        <h4>Replace all tokens at once</h4>
+        <p><code>content = result["message"]["content"]</code><br>
+        Merge session + file: mappings → replace longest first → return full JSON.</p>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ WHAT IF DISABLED ═══════════════════════════════ -->
+<hr>
+<h2>What if the proxy is disabled? — Two different scenarios</h2>
+
+<div class="note note-warn">
+  <strong>These are not the same thing.</strong> "Proxy off" can mean two completely different situations with completely different behaviour. Read both.
+</div>
+
+<!-- SCENARIO A -->
+<div class="slabel sl-off">Scenario A — UI toggle off (privacy_proxy: false in body)</div>
+
+<div class="row" style="margin-top:10px">
+  <div class="card c-red">
+    <h3>What changes</h3>
+    <p>The user or admin toggled privacy off for this session.<br>
+    OWU adds <code>privacy_proxy: false</code> to the request body.</p>
+    <br>
+    <p>In the proxy (main.py line 351):<br>
+    <code>privacy_enabled = body.pop("privacy_proxy", True)</code><br>
+    → <code>False</code></p>
+  </div>
+  <div class="card c-orange">
+    <h3>What the proxy skips</h3>
+    <ul>
+      <li><code>line 418</code> — history pseudonymization → <strong style="color:#fb923c">skipped</strong></li>
+      <li><code>line 451</code> — last message pseudonymization → <strong style="color:#fb923c">skipped</strong></li>
+      <li><code>line 653</code> — file mapping merge → <strong style="color:#fb923c">skipped</strong></li>
+      <li><code>line 710</code> — file tokens in session_mapping → <strong style="color:#fb923c">skipped</strong></li>
+    </ul>
+  </div>
+  <div class="card c-gray">
+    <h3>What stays the same</h3>
+    <p>Request <strong style="color:#9ca3af">still goes through the proxy</strong>.<br>
+    FORCE_OPENAI_BASE_URL is still set. Routing doesn't change.<br><br>
+    Proxy becomes a <strong>transparent forwarder</strong> — same path, no PII filtering.<br>
+    Real names reach the LLM.</p>
+  </div>
+</div>
+
+<div class="diagram" style="margin-top:14px">
+<span class="d-yellow">USER</span> sends: "What about <span class="d-red">Max Mustermann</span>?"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-blue">OWU</span>  adds <span class="d-orange">privacy_proxy: false</span> to body<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-purple">Proxy</span>  privacy_enabled = False → skips all pseudonymization<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-green">LLM</span>  receives: "What about <span class="d-red">Max Mustermann</span>?"  ← <span class="d-red">real name exposed</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-green">LLM</span>  responds with real name (no tokens to swap back)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-yellow">USER</span>  sees: "Max Mustermann is..."  ← works, but no privacy
+</div>
+
+<hr>
+
+<!-- SCENARIO B -->
+<div class="slabel sl-bypass">Scenario B — FORCE_OPENAI_BASE_URL not set (proxy bypassed entirely)</div>
+
+<div class="row" style="margin-top:10px">
+  <div class="card c-red">
+    <h3>What changes</h3>
+    <p>The env var <code>FORCE_OPENAI_BASE_URL</code> is not set in docker-compose.<br><br>
+    openai.py line 1144:<br>
+    <code>url = os.environ.get("FORCE_OPENAI_BASE_URL")<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;or OPENAI_API_BASE_URLS[idx]</code><br><br>
+    → <code>None or "https://api.anthropic.com/v1"</code><br>
+    → OWU sends directly to Anthropic.</p>
+  </div>
+  <div class="card c-orange">
+    <h3>Proxy is never called</h3>
+    <p>The proxy container may still be running but OWU never calls it.<br><br>
+    <code>x-openai-base-url</code> header is still set by OWU but it goes to the real provider not the proxy — and the provider ignores it.</p>
+  </div>
+  <div class="card c-gray">
+    <h3>Same for Ollama</h3>
+    <p>ollama.py line 1328:<br>
+    <code>force_url = os.environ.get('FORCE_OLLAMA_BASE_URL')</code><br>
+    → <code>None</code><br>
+    <code>chat_url = ollama_url + '/api/chat'</code><br><br>
+    Goes straight to Ollama. No garnet headers added.</p>
+  </div>
+</div>
+
+<div class="diagram" style="margin-top:14px">
+<span class="d-yellow">USER</span> sends: "What about <span class="d-red">Max Mustermann</span>?"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-blue">OWU</span>  FORCE_OPENAI_BASE_URL = None → url = "https://api.anthropic.com/v1"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ <span class="d-gray">(proxy never contacted)</span><br>
+<span class="d-green">Anthropic</span>  receives: "What about <span class="d-red">Max Mustermann</span>?"  ← <span class="d-red">real name in cloud</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+<span class="d-yellow">USER</span>  sees: "Max Mustermann is..."
+</div>
+
+<hr>
+
+<!-- COMPARISON TABLE -->
+<h2>All states — comparison</h2>
+
+<table class="tbl">
+  <tr>
+    <th>State</th>
+    <th>Request goes to</th>
+    <th>Proxy involved?</th>
+    <th>PII pseudonymized?</th>
+    <th>Real names reach LLM?</th>
+  </tr>
+  <tr>
+    <td><strong style="color:#4ade80">Normal (everything on)</strong></td>
+    <td>proxy → LLM</td>
+    <td class="tick">✅ yes</td>
+    <td class="tick">✅ yes</td>
+    <td class="cross">❌ no — tokens only</td>
+  </tr>
+  <tr>
+    <td><strong style="color:#f87171">UI toggle off (<code>privacy_proxy: false</code>)</strong></td>
+    <td>proxy → LLM</td>
+    <td class="tick">✅ yes (transparent)</td>
+    <td class="cross">❌ skipped</td>
+    <td class="warn-cell">⚠️ yes — exposed</td>
+  </tr>
+  <tr>
+    <td><strong style="color:#fb923c">FORCE_OPENAI_BASE_URL not set</strong></td>
+    <td>LLM directly</td>
+    <td class="cross">❌ never called</td>
+    <td class="cross">❌ no proxy at all</td>
+    <td class="warn-cell">⚠️ yes — exposed</td>
+  </tr>
+  <tr>
+    <td><strong style="color:#fb923c">FORCE_OLLAMA_BASE_URL not set</strong></td>
+    <td>Ollama directly</td>
+    <td class="cross">❌ never called</td>
+    <td class="cross">❌ no proxy at all</td>
+    <td class="warn-cell">⚠️ yes (local, lower risk)</td>
+  </tr>
+</table>
+
+<!-- END-TO-END EXAMPLE -->
+<h2>End-to-end: normal flow in one diagram</h2>
+
+<div class="diagram">
+<span class="d-yellow">ADMIN</span>  adds Anthropic → arrays[0] = "https://api.anthropic.com/v1", "sk-ant-..."<br>
+<span class="d-yellow">USER</span>   picks claude-opus (urlIdx=0) → hits Send<br>
+<br>
+<span class="d-blue">openai.py:1144</span>  url = <span class="d-orange">FORCE_OPENAI_BASE_URL</span> → "http://privacy-proxy:8080/openai"<br>
+<span class="d-blue">openai.py:1145</span>  key = OPENAI_API_KEYS[0] → "sk-ant-api03-..."<br>
+<span class="d-blue">openai.py:1166</span>  payload["chat_id"] = "abc123"<br>
+<span class="d-blue">openai.py:1170</span>  headers["x-openai-base-url"] = "https://api.anthropic.com/v1"<br>
+<br>
+→ <span class="d-purple">POST http://privacy-proxy:8080/openai/v1/chat/completions</span><br>
+&nbsp;&nbsp;Authorization: Bearer sk-ant-api03-...<br>
+&nbsp;&nbsp;x-openai-base-url: https://api.anthropic.com/v1<br>
+&nbsp;&nbsp;body: { model, chat_id:"abc123", messages:[..."<span class="d-red">Max Mustermann</span>"...] }<br>
+<br>
+<span class="d-purple">proxy</span>  is_openai=True · session_id="abc123" · privacy_enabled=True<br>
+<span class="d-purple">proxy</span>  "Max Mustermann" → <span class="d-red">PERSON_cc75010d</span>  (stored in MappingStore["abc123"])<br>
+<span class="d-purple">proxy</span>  Authorization: Bearer → x-api-key (Anthropic format)<br>
+<br>
+→ <span class="d-green">POST https://api.anthropic.com/v1/chat/completions</span><br>
+&nbsp;&nbsp;x-api-key: sk-ant-api03-...<br>
+&nbsp;&nbsp;body: { messages:[..."<span class="d-red">PERSON_cc75010d</span>"...] }  ← LLM never sees real name<br>
+<br>
+← LLM: "...<span class="d-red">PERSON_cc75010d</span> is a software engineer..."<br>
+<br>
+<span class="d-purple">proxy</span>  stream_with_depseudo → <span class="d-red">PERSON_cc75010d</span> → <span class="d-green">Max Mustermann</span><br>
+<br>
+← <span class="d-yellow">USER</span> sees: "Max Mustermann is a software engineer..."
+</div>
+
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet — Helm Chart vs Helmfile</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0a0e1a; color: #e2e8f0; padding: 32px; max-width: 1200px; margin: 0 auto; }
+h1 { color: #7dd3fc; font-size: 1.8rem; margin-bottom: 6px; }
+.subtitle { color: #475569; margin-bottom: 48px; font-size: 0.88rem; }
+h2 { font-size: 0.85rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #64748b; margin: 52px 0 18px; border-left: 3px solid #1e3a5f; padding-left: 12px; }
+code { font-family: 'Fira Code', 'Consolas', monospace; }
+hr { border: none; border-top: 1px solid #1e2d45; margin: 40px 0; }
+
+.row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.card { border-radius: 10px; padding: 16px 18px; flex: 1; min-width: 200px; border: 1px solid; }
+.card h3 { font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; }
+.card p, .card li { font-size: 0.78rem; color: #94a3b8; line-height: 1.7; }
+.card ul { padding-left: 14px; }
+.c-blue   { background: #071829; border-color: #1d4ed8; } .c-blue h3   { color: #60a5fa; }
+.c-green  { background: #041810; border-color: #15803d; } .c-green h3  { color: #4ade80; }
+.c-purple { background: #110a26; border-color: #6d28d9; } .c-purple h3 { color: #a78bfa; }
+.c-orange { background: #1a0d00; border-color: #c2410c; } .c-orange h3 { color: #fb923c; }
+.c-teal   { background: #031915; border-color: #0f766e; } .c-teal h3   { color: #2dd4bf; }
+.c-gray   { background: #111827; border-color: #374151; } .c-gray h3   { color: #9ca3af; }
+.c-yellow { background: #1a1200; border-color: #a16207; } .c-yellow h3 { color: #fbbf24; }
+
+.flow { display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid #1e3356; background: #060c18; margin-bottom: 14px; }
+.fs { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #111d30; }
+.fs:last-child { border-bottom: none; }
+.fs:hover { background: #0b1525; }
+.fn { min-width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+.nb { background: #1d4ed8; color: #fff; }
+.ng { background: #15803d; color: #fff; }
+.np { background: #6d28d9; color: #fff; }
+.no { background: #c2410c; color: #fff; }
+.nt { background: #0f766e; color: #fff; }
+.ny { background: #a16207; color: #fff; }
+.fc h4 { font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; }
+.fc p  { font-size: 0.77rem; color: #64748b; line-height: 1.6; }
+.fc code { background: #1e2433; border-radius: 3px; padding: 1px 5px; font-size: 0.72rem; color: #e2e8f0; font-family: monospace; }
+
+.cb { background: #060c18; border: 1px solid #1e3356; border-radius: 10px; padding: 18px 22px; font-size: 0.77rem; line-height: 2; font-family: 'Fira Code', 'Consolas', monospace; overflow-x: auto; margin-bottom: 14px; }
+.cm { color: #475569; font-style: italic; }
+.cv { color: #4ade80; }
+.cs { color: #fbbf24; }
+.cf { color: #60a5fa; }
+.co { color: #fb923c; }
+.cr { color: #f87171; }
+.cp { color: #a78bfa; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 14px; }
+@media(max-width: 760px) { .split { grid-template-columns: 1fr; } }
+
+.diagram { background: #060c18; border: 1px solid #1e3356; border-radius: 10px; padding: 24px; font-family: 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.9; color: #94a3b8; overflow-x: auto; margin-bottom: 14px; }
+.d-blue   { color: #60a5fa; }
+.d-green  { color: #4ade80; }
+.d-purple { color: #a78bfa; }
+.d-orange { color: #fb923c; }
+.d-teal   { color: #2dd4bf; }
+.d-yellow { color: #fbbf24; }
+.d-gray   { color: #475569; }
+.d-red    { color: #f87171; }
+
+.note { border-radius: 8px; padding: 14px 18px; margin-bottom: 14px; font-size: 0.8rem; line-height: 1.7; }
+.note-info { background: #071829; border: 1px solid #1d4ed8; color: #bfdbfe; }
+.note-info strong { color: #60a5fa; }
+.note-ok { background: #041810; border: 1px solid #15803d; color: #bbf7d0; }
+.note-ok strong { color: #4ade80; }
+
+.tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 14px; }
+.tbl th { background: #1e2433; color: #7dd3fc; text-align: left; padding: 8px 12px; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; }
+.tbl td { padding: 9px 12px; border-bottom: 1px solid #1e2433; vertical-align: top; font-size: 0.78rem; color: #94a3b8; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: #0d1525; }
+
+.slabel { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 10px; border-radius: 4px; display: inline-block; margin-bottom: 10px; }
+.sl-chart  { background: #071829; color: #60a5fa; border: 1px solid #1d4ed8; }
+.sl-helm   { background: #041810; color: #4ade80; border: 1px solid #15803d; }
+.sl-k8s    { background: #110a26; color: #a78bfa; border: 1px solid #6d28d9; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — Helm Chart vs Helmfile</h1>
+<p class="subtitle">Two repos, two roles · how they connect · what each file does · concrete image tag example</p>
+
+<!-- OVERVIEW -->
+<h2>Big picture — two repos, one deploy</h2>
+
+<div class="diagram">
+<span class="d-blue">github.com/enclaive/garnet-helm</span>          <span class="d-gray">← THE RECIPE (templates, logic, defaults)</span><br>
+&nbsp;&nbsp;charts/open-webui/templates/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;workload-manager.yaml   <span class="d-gray">← generates WebUI pod + injects env vars</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;privacy-proxy.yaml      <span class="d-gray">← generates proxy pod</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ingress.yaml            <span class="d-gray">← generates Ingress</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;websocket-redis.yaml    <span class="d-gray">← generates Redis</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;service.yaml            <span class="d-gray">← generates Services</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;pvc.yaml                <span class="d-gray">← generates PersistentVolumeClaims</span><br>
+&nbsp;&nbsp;charts/open-webui/values.yaml       <span class="d-gray">← DEFAULT values (all false/empty)</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ published as OCI artifact<br>
+<span class="d-purple">harbor.enclaive.cloud/garnet/open-webui:14.7.1</span><br>
+<br>
+<span class="d-green">github.com/enclaive/enclaive-deployment</span>   <span class="d-gray">← YOUR CONFIG (what to deploy, which image)</span><br>
+&nbsp;&nbsp;118-garnet/helmfile.yaml<br>
+&nbsp;&nbsp;&nbsp;&nbsp;chart: oci://harbor.enclaive.cloud/garnet/open-webui<br>
+&nbsp;&nbsp;&nbsp;&nbsp;version: 14.7.1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;values:                  <span class="d-gray">← overrides the chart's defaults</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image.tag: "9bc82f159"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;privacyProxy.enabled: true<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
+<br>
+<span class="d-yellow">helmfile apply</span><br>
+&nbsp;&nbsp;→ pull chart from Harbor<br>
+&nbsp;&nbsp;→ merge helmfile values ON TOP of chart defaults<br>
+&nbsp;&nbsp;→ render templates → raw k8s YAML<br>
+&nbsp;&nbsp;→ kubectl apply → <span class="d-purple">k8s cluster (garnet.enclaive.cloud)</span>
+</div>
+
+<!-- ANALOGY -->
+<h2>Simple analogy</h2>
+
+<div class="row">
+  <div class="card c-blue">
+    <h3>garnet-helm = Recipe book</h3>
+    <p>Contains <strong style="color:#60a5fa">how</strong> to build Garnet in k8s.<br><br>
+    "If privacyProxy.enabled → create a proxy pod, inject FORCE_* env vars into WebUI"<br><br>
+    "Take <code>{{ .Values.image.repository }}:{{ .Values.image.tag }}</code> as the image"<br><br>
+    Never changes for a normal deploy. Only changes when the team adds new features to the chart itself.</p>
+  </div>
+  <div class="card c-green">
+    <h3>helmfile.yaml = Your ingredients</h3>
+    <p>Contains <strong style="color:#4ade80">what</strong> to put in the recipe.<br><br>
+    <code>image.tag: "9bc82f159"</code> ← which WebUI version<br>
+    <code>privacyProxy.tag: "e044d750e"</code> ← which proxy version<br>
+    <code>memory: 4Gi</code> ← how big<br>
+    <code>privacyProxy.enabled: true</code> ← which features on<br><br>
+    This is what Ahmed edits to deploy a new image or change a setting.</p>
+  </div>
+  <div class="card c-purple">
+    <h3>Harbor OCI = Published recipe</h3>
+    <p>The chart is packaged and pushed to Harbor as an OCI artifact.<br><br>
+    <code>harbor.enclaive.cloud/garnet/open-webui:14.7.1</code><br><br>
+    <code>version: 14.7.1</code> in helmfile pins exactly which chart version to use. Upgrading the chart = bump this version.</p>
+  </div>
+</div>
+
+<!-- CONCRETE EXAMPLE: IMAGE TAG -->
+<h2>Concrete example — image tag from helmfile → running pod</h2>
+
+<div class="slabel sl-helm">Step 1 — helmfile.yaml (your config)</div>
+<div class="cb">
+<span class="cs">image</span>:<br>
+&nbsp;&nbsp;<span class="cs">repository</span>: <span class="cv">harbor.enclaive.cloud/garnetdemo/garnet-webui</span><br>
+&nbsp;&nbsp;<span class="cs">tag</span>: <span class="cv">"9bc82f159"</span>   <span class="cm">← short git SHA of the WebUI image</span><br>
+&nbsp;&nbsp;<span class="cs">pullPolicy</span>: <span class="cv">IfNotPresent</span>
+</div>
+
+<div class="slabel sl-chart">Step 2 — workload-manager.yaml (chart template reads your values)</div>
+<div class="cb">
+<span class="cm"># inside the chart template — not edited by you</span><br>
+<span class="cf">{{- with .Values.image }}</span><br>
+&nbsp;&nbsp;<span class="cs">image</span>: <span class="cf">{{ .repository }}</span>:<span class="cf">{{ include "open-webui.tag" $ }}</span><br>
+&nbsp;&nbsp;<span class="cs">imagePullPolicy</span>: <span class="cf">{{ .pullPolicy }}</span><br>
+<span class="cf">{{- end }}</span>
+</div>
+
+<div class="slabel sl-k8s">Step 3 — rendered k8s manifest (what kubectl actually applies)</div>
+<div class="cb">
+<span class="cm"># generated — you never write this manually</span><br>
+<span class="cs">image</span>: <span class="cv">harbor.enclaive.cloud/garnetdemo/garnet-webui:9bc82f159</span><br>
+<span class="cs">imagePullPolicy</span>: <span class="cv">IfNotPresent</span>
+</div>
+
+<div class="note note-ok">
+  <strong>To deploy a new image:</strong> change <code>tag: "9bc82f159"</code> → <code>tag: "abc123def"</code> in helmfile.yaml, then run <code>helmfile apply</code>. Nothing else changes.
+</div>
+
+<!-- FORCE VARS EXAMPLE -->
+<h2>Concrete example — privacyProxy.enabled injects FORCE_* vars</h2>
+
+<div class="slabel sl-helm">helmfile.yaml</div>
+<div class="cb">
+<span class="cs">privacyProxy</span>:<br>
+&nbsp;&nbsp;<span class="cs">enabled</span>: <span class="cv">true</span>   <span class="cm">← this single flag triggers everything below</span>
+</div>
+
+<div class="slabel sl-chart">workload-manager.yaml (chart logic)</div>
+<div class="cb">
+<span class="cf">{{- if .Values.privacyProxy.enabled }}</span><br>
+- <span class="cs">name</span>: <span class="cv">"OLLAMA_BASE_URLS"</span><br>
+&nbsp;&nbsp;<span class="cs">value</span>: <span class="cf">{{ include "garnet.privacyProxyUrl" . | quote }}</span><br>
+- <span class="cs">name</span>: <span class="cv">"OPENAI_API_BASE_URL"</span><br>
+&nbsp;&nbsp;<span class="cs">value</span>: <span class="cf">{{ printf "%s/openai" (include "garnet.privacyProxyUrl" .) | quote }}</span><br>
+- <span class="cs">name</span>: <span class="cv">"FORCE_OLLAMA_BASE_URL"</span><br>
+&nbsp;&nbsp;<span class="cs">value</span>: <span class="cf">{{ include "garnet.privacyProxyUrl" . | quote }}</span><br>
+- <span class="cs">name</span>: <span class="cv">"FORCE_OPENAI_BASE_URL"</span><br>
+&nbsp;&nbsp;<span class="cs">value</span>: <span class="cf">{{ printf "%s/openai" (include "garnet.privacyProxyUrl" .) | quote }}</span><br>
+<span class="cf">{{- end }}</span>
+</div>
+
+<div class="slabel sl-k8s">rendered env vars in the WebUI pod</div>
+<div class="cb">
+- <span class="cs">name</span>: <span class="cv">OLLAMA_BASE_URLS</span><br>
+&nbsp;&nbsp;<span class="cs">value</span>: <span class="cv">"http://garnet-privacy-proxy:8080"</span><br>
+- <span class="cs">name</span>: <span class="cv">OPENAI_API_BASE_URL</span><br>
+&nbsp;&nbsp;<span class="cs">value</span>: <span class="cv">"http://garnet-privacy-proxy:8080/openai"</span><br>
+- <span class="cs">name</span>: <span class="cv">FORCE_OLLAMA_BASE_URL</span><br>
+&nbsp;&nbsp;<span class="cs">value</span>: <span class="cv">"http://garnet-privacy-proxy:8080"</span><br>
+- <span class="cs">name</span>: <span class="cv">FORCE_OPENAI_BASE_URL</span><br>
+&nbsp;&nbsp;<span class="cs">value</span>: <span class="cv">"http://garnet-privacy-proxy:8080/openai"</span>
+</div>
+
+<div class="note note-info">
+  <strong>You never write these env vars manually in k8s.</strong> The chart generates them from one flag. This is also why the helmfile.yaml has no FORCE_* in extraEnvVars — the chart template already handles it.
+</div>
+
+<!-- TEMPLATE TABLE -->
+<h2>Chart templates — what each file generates</h2>
+
+<table class="tbl">
+  <tr>
+    <th>Template file</th>
+    <th>Generates</th>
+    <th>Controlled by (in helmfile)</th>
+  </tr>
+  <tr>
+    <td><code>workload-manager.yaml</code></td>
+    <td>WebUI StatefulSet or Deployment + all env vars</td>
+    <td><code>image.*</code>, <code>extraEnvVars</code>, <code>privacyProxy.enabled</code>, <code>replicaCount</code></td>
+  </tr>
+  <tr>
+    <td><code>privacy-proxy.yaml</code></td>
+    <td>Privacy proxy Deployment + Service</td>
+    <td><code>privacyProxy.*</code> (image, resources, probes)</td>
+  </tr>
+  <tr>
+    <td><code>ingress.yaml</code></td>
+    <td>Ingress → garnet.enclaive.cloud with TLS</td>
+    <td><code>ingress.*</code> (host, class, tls, annotations)</td>
+  </tr>
+  <tr>
+    <td><code>websocket-redis.yaml</code></td>
+    <td>Redis StatefulSet for WebSocket sessions</td>
+    <td><code>websocket.*</code> (enabled, manager, persistence)</td>
+  </tr>
+  <tr>
+    <td><code>service.yaml</code></td>
+    <td>ClusterIP Services for WebUI + proxy</td>
+    <td><code>service.*</code></td>
+  </tr>
+  <tr>
+    <td><code>pvc.yaml</code></td>
+    <td>PersistentVolumeClaims (storage)</td>
+    <td><code>persistence.*</code> (size, storageClass)</td>
+  </tr>
+  <tr>
+    <td><code>garnet-secrets.yaml</code></td>
+    <td>Secret references (Redis URL, API keys)</td>
+    <td><code>garnetSecrets.*</code></td>
+  </tr>
+  <tr>
+    <td><code>garnet-dashboard.yaml</code></td>
+    <td>Dashboard Deployment + Service</td>
+    <td><code>garnetDashboard.*</code></td>
+  </tr>
+</table>
+
+<!-- DEPLOY FLOW -->
+<h2>Full deploy flow — step by step</h2>
+
+<div class="flow">
+  <div class="fs"><div class="fn nb">1</div><div class="fc">
+    <h4>You edit helmfile.yaml</h4>
+    <p>Change <code>image.tag</code>, bump a resource limit, toggle a feature. This is the only file you touch.</p>
+  </div></div>
+  <div class="fs"><div class="fn ng">2</div><div class="fc">
+    <h4>helmfile apply</h4>
+    <p>Helmfile reads <code>chart: oci://harbor.enclaive.cloud/garnet/open-webui</code> + <code>version: 14.7.1</code><br>
+    → pulls the chart OCI artifact from Harbor if not cached locally.</p>
+  </div></div>
+  <div class="fs"><div class="fn np">3</div><div class="fc">
+    <h4>Values merge</h4>
+    <p>Chart's <code>values.yaml</code> (defaults) + your helmfile values (overrides) → merged single values map.</p>
+  </div></div>
+  <div class="fs"><div class="fn no">4</div><div class="fc">
+    <h4>Template rendering</h4>
+    <p>Helm renders all <code>templates/*.yaml</code> using the merged values → raw k8s manifests (Deployment, Service, Ingress, PVC…)</p>
+  </div></div>
+  <div class="fs"><div class="fn nt">5</div><div class="fc">
+    <h4>kubectl apply</h4>
+    <p>Rendered manifests applied to namespace <code>garnet</code> on <code>garnet.enclaive.cloud</code>.<br>
+    k8s pulls the new image from Harbor → rolling update.</p>
+  </div></div>
+</div>
+
+<!-- WHO EDITS WHAT -->
+<h2>Who edits what</h2>
+
+<div class="row">
+  <div class="card c-green">
+    <h3>You (Ahmed) edit — helmfile.yaml</h3>
+    <ul>
+      <li>New image tag after a deploy</li>
+      <li>Extra env vars (<code>extraEnvVars</code>)</li>
+      <li>Resource limits (memory/CPU)</li>
+      <li>Feature toggles (privacyProxy, ollama, dashboard)</li>
+      <li>Ingress host / TLS</li>
+    </ul>
+  </div>
+  <div class="card c-blue">
+    <h3>Team edits — garnet-helm chart</h3>
+    <ul>
+      <li>New chart feature (new template, new flag)</li>
+      <li>Change how FORCE_* vars are injected</li>
+      <li>Add a new k8s resource type</li>
+      <li>Then publish new chart version to Harbor</li>
+      <li>Then bump <code>version:</code> in helmfile.yaml</li>
+    </ul>
+  </div>
+  <div class="card c-gray">
+    <h3>Never edit</h3>
+    <ul>
+      <li>Rendered manifests (auto-generated)</li>
+      <li>Chart defaults values.yaml (override in helmfile instead)</li>
+      <li>Harbor OCI artifact directly</li>
+    </ul>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Garnet — Privacy Proxy & Routing Full Diagram</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; padding: 24px; }
+  h1 { font-size: 1.6rem; color: #7dd3fc; margin-bottom: 6px; }
+  h2 { font-size: 1.1rem; color: #94a3b8; margin: 32px 0 12px; border-bottom: 1px solid #1e293b; padding-bottom: 6px; }
+  h3 { font-size: 0.85rem; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em; }
+  .subtitle { color: #64748b; font-size: .9rem; margin-bottom: 32px; }
+
+  /* ── layout ── */
+  .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .col { flex: 1; min-width: 260px; }
+
+  /* ── boxes ── */
+  .box {
+    background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .box.green  { border-color: #22c55e; }
+  .box.blue   { border-color: #3b82f6; }
+  .box.orange { border-color: #f97316; }
+  .box.red    { border-color: #ef4444; }
+  .box.purple { border-color: #a855f7; }
+  .box.yellow { border-color: #eab308; }
+
+  .box-title { font-size: .8rem; font-weight: 700; margin-bottom: 6px; letter-spacing: .04em; }
+  .box.green .box-title  { color: #4ade80; }
+  .box.blue .box-title   { color: #60a5fa; }
+  .box.orange .box-title { color: #fb923c; }
+  .box.red .box-title    { color: #f87171; }
+  .box.purple .box-title { color: #c084fc; }
+  .box.yellow .box-title { color: #facc15; }
+
+  .box p { font-size: .82rem; color: #94a3b8; line-height: 1.5; margin-bottom: 4px; }
+  .box code { background: #0f172a; color: #7dd3fc; font-size: .78rem; padding: 1px 5px; border-radius: 4px; }
+  .box ul { padding-left: 14px; }
+  .box li { font-size: .82rem; color: #94a3b8; line-height: 1.6; }
+  .box li code { background: #0f172a; color: #7dd3fc; font-size: .78rem; padding: 1px 4px; border-radius: 3px; }
+
+  /* ── arrows ── */
+  .arrow { text-align: center; font-size: 1.3rem; color: #475569; margin: 4px 0; }
+  .arrow.right { transform: rotate(-90deg); display: inline-block; }
+
+  /* ── flow diagram ── */
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .flow-node {
+    width: 100%; max-width: 620px;
+    background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+    padding: 10px 16px; text-align: center;
+  }
+  .flow-node .label { font-weight: 700; font-size: .85rem; }
+  .flow-node .sub   { font-size: .76rem; color: #64748b; margin-top: 2px; }
+  .flow-arrow { color: #475569; font-size: 1.4rem; line-height: 1; }
+  .flow-label { font-size: .72rem; color: #64748b; margin: -4px 0; }
+
+  /* node colours */
+  .fn-user    { border-color: #7dd3fc; }
+  .fn-user .label    { color: #7dd3fc; }
+  .fn-caddy   { border-color: #a855f7; }
+  .fn-caddy .label   { color: #c084fc; }
+  .fn-owui    { border-color: #22c55e; }
+  .fn-owui .label    { color: #4ade80; }
+  .fn-proxy   { border-color: #f97316; }
+  .fn-proxy .label   { color: #fb923c; }
+  .fn-llm     { border-color: #eab308; }
+  .fn-llm .label     { color: #facc15; }
+
+  /* ── routing table ── */
+  table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: 8px; }
+  th { background: #0f172a; color: #64748b; padding: 7px 10px; text-align: left; font-weight: 600; font-size: .75rem; text-transform: uppercase; }
+  td { padding: 7px 10px; border-top: 1px solid #1e293b; color: #94a3b8; }
+  td code { background: #0f172a; color: #7dd3fc; font-size: .77rem; padding: 1px 5px; border-radius: 3px; }
+  tr:hover td { background: #1e293b44; }
+
+  /* ── diff section ── */
+  .diff { display: flex; gap: 12px; flex-wrap: wrap; }
+  .diff-side { flex: 1; min-width: 240px; border-radius: 10px; padding: 14px; }
+  .diff-prod { background: #052e16; border: 1px solid #22c55e; }
+  .diff-cvm  { background: #431407; border: 1px solid #ef4444; }
+  .diff-side h3 { font-size: .85rem; font-weight: 700; margin-bottom: 10px; }
+  .diff-prod h3 { color: #4ade80; }
+  .diff-cvm  h3 { color: #f87171; }
+  .diff-side p, .diff-side li { font-size: .8rem; color: #94a3b8; line-height: 1.6; }
+  .diff-side ul { padding-left: 14px; }
+  .diff-side code { background: #0f172a; color: #7dd3fc; font-size: .77rem; padding: 1px 5px; border-radius: 3px; }
+
+  /* ── auth flow ── */
+  .auth-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+  .auth-node { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 5px 10px; font-size: .78rem; color: #94a3b8; }
+  .auth-node.ok  { border-color: #22c55e; color: #4ade80; }
+  .auth-node.bad { border-color: #ef4444; color: #f87171; }
+  .auth-arrow { color: #475569; font-size: .9rem; }
+
+  .badge { display: inline-block; font-size: .68rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
+  .badge-green  { background: #14532d; color: #4ade80; }
+  .badge-red    { background: #450a0a; color: #f87171; }
+  .badge-orange { background: #431407; color: #fb923c; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — Privacy Proxy & Routing</h1>
+<p class="subtitle">Full architecture: how a chat message travels from browser to LLM and back</p>
+
+<!-- ══════════════════════════════════════════════
+     SECTION 1 — End-to-End Flow (Prod / intended)
+     ══════════════════════════════════════════════ -->
+<h2>1 — Intended End-to-End Flow (prod / k8s)</h2>
+<div class="flow">
+
+  <div class="flow-node fn-user">
+    <div class="label">🖥 Browser</div>
+    <div class="sub">User types a message, picks a model (e.g. claude-opus-4)</div>
+  </div>
+  <div class="flow-arrow">▼</div>
+  <div class="flow-label">HTTPS :443</div>
+
+  <div class="flow-node fn-caddy">
+    <div class="label">🔒 Caddy (TLS termination)</div>
+    <div class="sub">Terminates TLS, forwards to Open WebUI on :8080</div>
+  </div>
+  <div class="flow-arrow">▼</div>
+  <div class="flow-label">HTTP :8080</div>
+
+  <div class="flow-node fn-owui">
+    <div class="label">🌐 Open WebUI (garnet-open-webui)</div>
+    <div class="sub">Authenticates user session · picks connection by urlIdx · builds payload</div>
+  </div>
+  <div class="flow-arrow">▼</div>
+  <div class="flow-label">POST http://privacy-proxy:8080/openai/chat/completions<br>Authorization: Bearer &lt;LLM key from DB[urlIdx]&gt;</div>
+
+  <div class="flow-node fn-proxy">
+    <div class="label">🛡 Privacy Proxy — FastAPI (garnet-privacy-proxy)</div>
+    <div class="sub">No auth required · pseudonymizes PII · routes by key prefix · forwards to real LLM</div>
+  </div>
+  <div class="flow-arrow">▼</div>
+  <div class="flow-label">POST https://api.anthropic.com/v1/chat/completions<br>x-api-key: &lt;sk-ant-...&gt;</div>
+
+  <div class="flow-node fn-llm">
+    <div class="label">🤖 LLM Provider (Anthropic / Gemini / Groq / OpenAI)</div>
+    <div class="sub">Sees only pseudonymized text — never real PII</div>
+  </div>
+  <div class="flow-arrow">▲</div>
+  <div class="flow-label">Response with pseudonymized tokens → Proxy de-pseudonymizes → WebUI shows real names</div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SECTION 2 — Open WebUI routing logic
+     ══════════════════════════════════════════════ -->
+<h2>2 — Open WebUI: how it picks URL and Key (openai.py L1144-1145)</h2>
+<div class="row">
+  <div class="col">
+    <div class="box blue">
+      <div class="box-title">Admin Panel → Connections</div>
+      <p>Each connection = one array index. Both stored in DB <code>config</code> table.</p>
+      <table>
+        <tr><th>idx</th><th>api_base_url</th><th>api_key</th></tr>
+        <tr><td>0</td><td><code>http://privacy-proxy:8080/openai</code></td><td><code>(empty or WebUI key)</code></td></tr>
+        <tr><td>1</td><td><code>https://api.anthropic.com/v1</code></td><td><code>sk-ant-...</code></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="col">
+    <div class="box green">
+      <div class="box-title">Model fetch → urlIdx stamped</div>
+      <p>When WebUI fetches models from connection <code>idx</code>, each model gets <code>urlIdx = idx</code> stamped on it.</p>
+      <br>
+      <div class="box-title">At send time (L1144-1145)</div>
+      <pre style="font-size:.76rem;color:#7dd3fc;background:#0f172a;padding:8px;border-radius:6px;overflow-x:auto;">
+url = FORCE_OPENAI_BASE_URL          # env var overrides ALL URLs
+   or OPENAI_API_BASE_URLS[urlIdx]   # fallback: DB url by index
+
+key = OPENAI_API_KEYS[urlIdx]        # key ALWAYS from DB by index
+      </pre>
+      <p style="margin-top:6px;color:#fb923c">⚠ FORCE_OPENAI_BASE_URL overrides the URL for every model, but the <strong>key</strong> always comes from DB[urlIdx]. The two are independent.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SECTION 3 — FastAPI Proxy routing logic
+     ══════════════════════════════════════════════ -->
+<h2>3 — FastAPI Privacy Proxy: routing logic (main.py L338-356)</h2>
+<div class="row">
+  <div class="col">
+    <div class="box orange">
+      <div class="box-title">Step 1 — Detect path type</div>
+      <ul>
+        <li><code>path.startswith("openai/")</code> → OpenAI-compatible route</li>
+        <li>anything else → Ollama route (<code>OLLAMA_URL</code>)</li>
+      </ul>
+    </div>
+    <div class="box orange">
+      <div class="box-title">Step 2 — Detect self-loop</div>
+      <p>If the <code>x-openai-base-url</code> header points back at itself (<code>privacy-proxy</code> or <code>localhost:8080</code>), the proxy knows it must route to a real provider.</p>
+    </div>
+    <div class="box orange">
+      <div class="box-title">Step 3 — Key-prefix routing</div>
+      <table>
+        <tr><th>Authorization header contains</th><th>Routes to</th></tr>
+        <tr><td><code>sk-ant-</code></td><td>Anthropic</td></tr>
+        <tr><td><code>AIza</code> or model has "gemini"</td><td>Google Gemini</td></tr>
+        <tr><td><code>gsk-</code> or model has "groq"</td><td>Groq</td></tr>
+        <tr><td><code>sk-or-</code></td><td>OpenRouter</td></tr>
+        <tr><td>anything else</td><td><code>OPENAI_API_URL</code> (real OpenAI)</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="col">
+    <div class="box orange">
+      <div class="box-title">Step 4 — Pseudonymize</div>
+      <p>Last user message scanned by Presidio NER. Real values replaced with tokens:</p>
+      <ul>
+        <li><code>Max Mustermann</code> → <code>PERSON_cc75010d</code></li>
+        <li><code>max@co.com</code> → <code>EMAIL_def456</code></li>
+        <li><code>+49 89 123</code> → <code>PHONE_ghi789</code></li>
+      </ul>
+      <p style="margin-top:6px">Mapping saved in Redis / memory store keyed by <code>session_id</code>.</p>
+    </div>
+    <div class="box orange">
+      <div class="box-title">Step 5 — Forward headers to provider</div>
+      <p>Proxy forwards only these headers:</p>
+      <ul>
+        <li><code>authorization</code> — or converted to <code>x-api-key</code> for Anthropic</li>
+        <li><code>content-type</code></li>
+        <li><code>openai-organization</code></li>
+        <li><code>x-openai-base-url</code></li>
+      </ul>
+    </div>
+    <div class="box orange">
+      <div class="box-title">Step 6 — De-pseudonymize response</div>
+      <p>Proxy replaces tokens back with real values using the session mapping, then streams result to WebUI.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SECTION 4 — cVM vs Prod difference
+     ══════════════════════════════════════════════ -->
+<h2>4 — cVM vs Prod: what is actually different</h2>
+<div class="diff">
+  <div class="diff-side diff-prod">
+    <h3>✅ Prod (k8s / Helm)</h3>
+    <ul>
+      <li><code>privacy-proxy</code> pod runs:<br><code>uvicorn privacy_proxy.app.main:app</code></li>
+      <li>FastAPI app — <strong>no auth required</strong> to call it</li>
+      <li>Has all Presidio deps installed (<code>presidio_analyzer</code>)</li>
+      <li>Actually pseudonymizes PII</li>
+      <li>Routes by key prefix in Authorization header</li>
+      <li>Helm <code>privacyProxy.enabled=true</code> injects FORCE env vars</li>
+    </ul>
+  </div>
+  <div class="diff-side diff-cvm">
+    <h3>❌ cVM (Docker Compose)</h3>
+    <ul>
+      <li><code>privacy-proxy</code> container runs:<br><code>uvicorn open_webui.main:app</code></li>
+      <li>It's a full <strong>Open WebUI</strong> instance — requires session auth</li>
+      <li><code>presidio_analyzer</code> not installed → FastAPI proxy can't start</li>
+      <li>No real pseudonymization happening on cVM</li>
+      <li><code>open-webui</code> sends Anthropic key to privacy-proxy's Open WebUI</li>
+      <li>Open WebUI auth: treats <code>sk-ant-...</code> as a WebUI API key lookup → <strong>404 in users table → 401</strong></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SECTION 5 — Auth flow detail (why 401)
+     ══════════════════════════════════════════════ -->
+<h2>5 — Why the 401 happens on cVM (auth.py get_current_user)</h2>
+<div class="box red">
+  <div class="box-title">Request path: open-webui → privacy-proxy (which is Open WebUI)</div>
+  <br>
+  <div class="auth-row">
+    <div class="auth-node">open-webui sends<br><code>Authorization: Bearer sk-ant-api03-...</code></div>
+    <div class="auth-arrow">→</div>
+    <div class="auth-node">privacy-proxy (Open WebUI)<br><code>get_current_user()</code></div>
+  </div>
+  <br>
+  <div class="auth-row">
+    <div class="auth-node">token starts with <code>sk-</code> ?</div>
+    <div class="auth-arrow">→ yes →</div>
+    <div class="auth-node"><code>get_current_user_by_api_key(token)</code><br>looks up <code>api_key</code> table</div>
+    <div class="auth-arrow">→</div>
+    <div class="auth-node bad">NOT FOUND<br>(Anthropic key ≠ WebUI API key)</div>
+    <div class="auth-arrow">→</div>
+    <div class="auth-node bad">HTTP 401<br>"Invalid bearer token"</div>
+  </div>
+  <br>
+  <p><strong>Root cause:</strong> Open WebUI's auth treats any <code>sk-*</code> token as a <em>WebUI API key</em> (stored in its own <code>api_key</code> table). The Anthropic key is not in that table.</p>
+  <p style="margin-top:6px"><strong>On prod this never happens</strong> — the privacy proxy is FastAPI with <em>no auth middleware at all</em>. Any request is accepted and processed.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SECTION 6 — The right fix
+     ══════════════════════════════════════════════ -->
+<h2>6 — The correct fix for cVM</h2>
+<div class="row">
+  <div class="col">
+    <div class="box purple">
+      <div class="box-title">Option A — Run the real FastAPI proxy (correct)</div>
+      <p>Install <code>presidio_analyzer</code> in the garnet-webui Docker image and add a <code>command:</code> override to docker-compose.yml for the privacy-proxy service:</p>
+      <pre style="font-size:.76rem;color:#7dd3fc;background:#0f172a;padding:8px;border-radius:6px;overflow-x:auto;">
+privacy-proxy:
+  image: harbor.../garnet-webui:...
+  command: >
+    bash -c "cd /app/backend/privacy_proxy
+    &amp;&amp; pip install presidio-analyzer presidio-anonymizer
+    &amp;&amp; python -m spacy download en_core_web_lg
+    &amp;&amp; uvicorn app.main:app --host 0.0.0.0 --port 8080"
+      </pre>
+      <p>This makes cVM match prod exactly. <strong>Ask Seb before doing this.</strong></p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="box yellow">
+      <div class="box-title">Option B — WebUI API key passthrough (quick workaround)</div>
+      <p>1. Generate a WebUI API key in privacy-proxy's Open WebUI for the admin user.<br>
+      2. Set that key as <code>api_keys[0]</code> in open-webui's DB.<br>
+      3. Ensure privacy-proxy's Open WebUI has the Anthropic key in its own connections and routes by model name.</p>
+      <br>
+      <p>⚠ This adds a second key-management layer and no PII pseudonymization. Only use if Option A is blocked.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SECTION 7 — Quick reference: what each env var does
+     ══════════════════════════════════════════════ -->
+<h2>7 — Env vars cheat sheet</h2>
+<div class="box blue">
+  <table>
+    <tr><th>Env var</th><th>Set on</th><th>Effect</th></tr>
+    <tr><td><code>FORCE_OPENAI_BASE_URL</code></td><td>open-webui</td><td>Overrides the destination URL for ALL OpenAI calls — always sends to proxy regardless of DB connection URL</td></tr>
+    <tr><td><code>FORCE_OLLAMA_BASE_URL</code></td><td>open-webui</td><td>Same but for Ollama calls</td></tr>
+    <tr><td><code>OPENAI_API_KEYS[idx]</code></td><td>open-webui DB</td><td>Key sent in Authorization header — NOT overridden by FORCE vars</td></tr>
+    <tr><td><code>OPENAI_API_URL</code></td><td>privacy-proxy</td><td>Default LLM destination when no key-prefix matches (fallback = real OpenAI)</td></tr>
+    <tr><td><code>OLLAMA_URL</code></td><td>privacy-proxy</td><td>Where to forward Ollama path requests</td></tr>
+    <tr><td><code>WEBUI_AUTH</code></td><td>open-webui / privacy-proxy</td><td><code>False</code> disables login page but API routes still check tokens</td></tr>
+    <tr><td><code>BYPASS_MODEL_ACCESS_CONTROL</code></td><td>open-webui</td><td>Skips per-model access checks — does NOT bypass session auth</td></tr>
+  </table>
+</div>
+
+<br>
+<p style="font-size:.72rem;color:#334155;text-align:center">Generated by Claude Code · Garnet project · garnet-privacy-proxy branch</p>
+
+</body>
+</html>

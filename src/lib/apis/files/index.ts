@@ -6,8 +6,7 @@ export const uploadFile = async (
 	file: File,
 	metadata?: object | null,
 	process?: boolean | null,
-	stream: boolean = true,
-	privacyEnabled: boolean = true
+	stream: boolean = true
 ) => {
 	const data = new FormData();
 	data.append('file', file);

@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet — Proxy Path Handling</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0a0e1a; color: #e2e8f0; padding: 32px; max-width: 1200px; margin: 0 auto; }
+h1 { color: #7dd3fc; font-size: 1.8rem; margin-bottom: 6px; }
+.subtitle { color: #475569; margin-bottom: 48px; font-size: 0.88rem; }
+h2 { font-size: 0.85rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #64748b; margin: 52px 0 18px; border-left: 3px solid #1e3a5f; padding-left: 12px; }
+code { font-family: 'Fira Code', 'Consolas', monospace; }
+hr { border: none; border-top: 1px solid #1e2d45; margin: 40px 0; }
+
+.row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.card { border-radius: 10px; padding: 16px 18px; flex: 1; min-width: 200px; border: 1px solid; }
+.card h3 { font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; }
+.card p, .card li { font-size: 0.78rem; color: #94a3b8; line-height: 1.7; }
+.card ul { padding-left: 14px; }
+.c-blue   { background: #071829; border-color: #1d4ed8; } .c-blue h3   { color: #60a5fa; }
+.c-green  { background: #041810; border-color: #15803d; } .c-green h3  { color: #4ade80; }
+.c-purple { background: #110a26; border-color: #6d28d9; } .c-purple h3 { color: #a78bfa; }
+.c-orange { background: #1a0d00; border-color: #c2410c; } .c-orange h3 { color: #fb923c; }
+.c-teal   { background: #031915; border-color: #0f766e; } .c-teal h3   { color: #2dd4bf; }
+.c-red    { background: #1a0606; border-color: #b91c1c; } .c-red h3    { color: #f87171; }
+.c-gray   { background: #111827; border-color: #374151; } .c-gray h3   { color: #9ca3af; }
+.c-yellow { background: #1a1200; border-color: #a16207; } .c-yellow h3 { color: #fbbf24; }
+
+.flow { display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid #1e3356; background: #060c18; margin-bottom: 14px; }
+.fs { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #111d30; }
+.fs:last-child { border-bottom: none; }
+.fs:hover { background: #0b1525; }
+.fn { min-width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+.nb { background: #1d4ed8; color: #fff; }
+.ng { background: #15803d; color: #fff; }
+.np { background: #6d28d9; color: #fff; }
+.no { background: #c2410c; color: #fff; }
+.nt { background: #0f766e; color: #fff; }
+.ny { background: #a16207; color: #fff; }
+.nr { background: #b91c1c; color: #fff; }
+.fc h4 { font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; }
+.fc p  { font-size: 0.77rem; color: #64748b; line-height: 1.6; }
+.fc code { background: #1e2433; border-radius: 3px; padding: 1px 5px; font-size: 0.72rem; color: #e2e8f0; font-family: monospace; }
+
+.cb { background: #060c18; border: 1px solid #1e3356; border-radius: 10px; padding: 18px 22px; font-size: 0.77rem; line-height: 2; font-family: 'Fira Code', 'Consolas', monospace; overflow-x: auto; margin-bottom: 14px; }
+.cm { color: #475569; font-style: italic; }
+.cv { color: #4ade80; }
+.cs { color: #fbbf24; }
+.cf { color: #60a5fa; }
+.co { color: #fb923c; }
+.cr { color: #f87171; }
+.cp { color: #a78bfa; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 14px; }
+@media(max-width: 760px) { .split { grid-template-columns: 1fr; } }
+
+.diagram { background: #060c18; border: 1px solid #1e3356; border-radius: 10px; padding: 24px; font-family: 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.9; color: #94a3b8; overflow-x: auto; margin-bottom: 14px; }
+.d-blue   { color: #60a5fa; }
+.d-green  { color: #4ade80; }
+.d-purple { color: #a78bfa; }
+.d-orange { color: #fb923c; }
+.d-teal   { color: #2dd4bf; }
+.d-yellow { color: #fbbf24; }
+.d-gray   { color: #475569; }
+.d-red    { color: #f87171; }
+
+.note { border-radius: 8px; padding: 14px 18px; margin-bottom: 14px; font-size: 0.8rem; line-height: 1.7; }
+.note-warn { background: #1a0d00; border: 1px solid #c2410c; color: #fed7aa; }
+.note-warn strong { color: #fb923c; }
+.note-info { background: #071829; border: 1px solid #1d4ed8; color: #bfdbfe; }
+.note-info strong { color: #60a5fa; }
+.note-ok { background: #041810; border: 1px solid #15803d; color: #bbf7d0; }
+.note-ok strong { color: #4ade80; }
+
+.tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 14px; }
+.tbl th { background: #1e2433; color: #7dd3fc; text-align: left; padding: 8px 12px; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; }
+.tbl td { padding: 9px 12px; border-bottom: 1px solid #1e2433; vertical-align: top; font-size: 0.78rem; color: #94a3b8; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: #0d1525; }
+.tick { color: #4ade80; font-weight: 700; }
+.cross { color: #f87171; font-weight: 700; }
+.warn-cell { color: #fb923c; font-weight: 700; }
+
+.slabel { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 10px; border-radius: 4px; display: inline-block; margin-bottom: 10px; }
+.sl-cloud  { background: #071829; color: #60a5fa; border: 1px solid #1d4ed8; }
+.sl-local  { background: #031915; color: #2dd4bf; border: 1px solid #0f766e; }
+.sl-warn   { background: #1a0d00; color: #fb923c; border: 1px solid #c2410c; }
+.sl-ok     { background: #041810; color: #4ade80; border: 1px solid #15803d; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — Proxy Path Handling</h1>
+<p class="subtitle">Every path the proxy receives · all providers · local and cloud · special cases (Responses API, images, system prompts)</p>
+
+<!-- ENTRY POINT -->
+<h2>Single entry point — catch-all route</h2>
+
+<div class="cb">
+<span class="cm"># main.py line 331 — ONE function handles everything</span><br>
+<span class="cf">@app.api_route</span>(<span class="cv">"/{path:path}"</span>, methods=[<span class="cv">"GET"</span>, <span class="cv">"POST"</span>, <span class="cv">"PUT"</span>, <span class="cv">"DELETE"</span>])<br>
+<span class="cf">async def</span> <span class="cs">proxy</span>(request: Request, path: str):<br>
+&nbsp;&nbsp;is_openai = path.<span class="cf">startswith</span>(<span class="cv">"openai/"</span>)          <span class="cm"># cloud or local?</span><br>
+&nbsp;&nbsp;actual_path = path[len(<span class="cv">"openai/"</span>):] <span class="cf">if</span> is_openai <span class="cf">else</span> path<br>
+&nbsp;&nbsp;is_chat = actual_path <span class="cf">in</span> (<span class="cv">"v1/chat/completions"</span>, <span class="cv">"api/chat"</span>, <span class="cv">"v1/completions"</span>, <span class="cv">"chat/completions"</span>)
+</div>
+
+<div class="note note-info">
+  <strong>⚠️ Route order matters.</strong> <code>/analyze</code> and <code>/health</code> and <code>GET /openai/api/tags</code> are defined BEFORE this catch-all. Anything defined after it gets a 405 — never add routes below line 331.
+</div>
+
+<!-- STEP 1: IS_OPENAI -->
+<h2>Step 1 — classify: cloud (openai/) vs local (Ollama)</h2>
+
+<div class="split">
+  <div>
+    <div class="slabel sl-cloud">Cloud path — is_openai = True</div>
+    <div class="flow">
+      <div class="fs"><div class="fn nb">in</div><div class="fc">
+        <h4>OWU sends to proxy with openai/ prefix</h4>
+        <p><code>POST /openai/v1/chat/completions</code><br>
+        <code>POST /openai/v1/models</code><br>
+        <code>POST /openai/v1/responses</code></p>
+      </div></div>
+      <div class="fs"><div class="fn ng">→</div><div class="fc">
+        <h4>actual_path strips the prefix</h4>
+        <p><code>openai/v1/chat/completions</code> → <code>v1/chat/completions</code><br>
+        <code>openai/v1/models</code> → <code>v1/models</code></p>
+      </div></div>
+      <div class="fs"><div class="fn np">url</div><div class="fc">
+        <h4>Final URL = real provider + actual_path</h4>
+        <p><code>https://api.anthropic.com/v1/chat/completions</code><br>
+        <code>https://api.openai.com/v1/chat/completions</code></p>
+      </div></div>
+    </div>
+  </div>
+  <div>
+    <div class="slabel sl-local">Local path — is_openai = False</div>
+    <div class="flow">
+      <div class="fs"><div class="fn nb">in</div><div class="fc">
+        <h4>OWU sends to proxy without prefix</h4>
+        <p><code>POST /api/chat</code><br>
+        <code>GET /api/tags</code><br>
+        <code>POST /api/generate</code></p>
+      </div></div>
+      <div class="fs"><div class="fn ng">→</div><div class="fc">
+        <h4>actual_path = path as-is</h4>
+        <p><code>/api/chat</code> stays <code>api/chat</code></p>
+      </div></div>
+      <div class="fs"><div class="fn np">url</div><div class="fc">
+        <h4>Final URL = OLLAMA_URL + actual_path</h4>
+        <p><code>http://ollama:11434/api/chat</code></p>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2: PROVIDER DETECTION -->
+<h2>Step 2 — cloud only: which provider?</h2>
+
+<div class="flow">
+  <div class="fs"><div class="fn nb">1</div><div class="fc">
+    <h4>Read x-openai-base-url header</h4>
+    <p>OWU injects this: <code>x-openai-base-url: https://api.anthropic.com/v1</code><br>
+    Proxy reads: <code>openai_url = request.headers.get("x-openai-base-url", OPENAI_API_URL)</code></p>
+  </div></div>
+  <div class="fs"><div class="fn ng">2</div><div class="fc">
+    <h4>Self-loop check</h4>
+    <p>If URL contains <code>privacy-proxy</code> or <code>localhost:8080</code> → it's pointing back at itself.<br>
+    Detect real provider from API key prefix instead:</p>
+  </div></div>
+  <div class="fs"><div class="fn np">3</div><div class="fc">
+    <h4>Key prefix → provider URL</h4>
+    <p>
+    <code>sk-ant-</code> → <span style="color:#a78bfa">https://api.anthropic.com/v1</span><br>
+    <code>AIza</code> or model contains <code>gemini</code> → <span style="color:#4ade80">https://generativelanguage.googleapis.com/v1beta/openai</span><br>
+    <code>gsk-</code> or model contains <code>groq</code> → <span style="color:#fb923c">https://api.groq.com/openai/v1</span><br>
+    <code>sk-or-</code> → <span style="color:#2dd4bf">https://openrouter.ai/api/v1</span><br>
+    anything else → <span style="color:#60a5fa">https://api.openai.com/v1</span>
+    </p>
+  </div></div>
+  <div class="fs"><div class="fn no">4</div><div class="fc">
+    <h4>Build final URL</h4>
+    <p><code>url = f"{openai_url.rstrip('/')}/{actual_path}"</code></p>
+  </div></div>
+</div>
+
+<!-- STEP 3: SPECIAL PATH OVERRIDES -->
+<h2>Step 3 — special path overrides (after provider detection)</h2>
+
+<!-- RESPONSES API -->
+<div class="slabel sl-warn">Override A — Responses API models</div>
+<div class="row" style="margin-top:10px;margin-bottom:20px">
+  <div class="card c-orange">
+    <h3>Which models</h3>
+    <p>Env var <code>RESPONSES_API_MODELS</code>:<br>
+    <code>gpt-5.5</code>, <code>gpt-5.5-pro</code>,<br>
+    <code>gpt-5.5-2026-04-23</code>,<br>
+    <code>gpt-5.5-pro-2026-04-23</code></p>
+  </div>
+  <div class="card c-orange">
+    <h3>URL override</h3>
+    <p>Normal: <code>{openai_url}/v1/chat/completions</code><br><br>
+    Responses API: <code>{openai_url}/responses</code><br><br>
+    Path changes from <code>chat/completions</code> → <code>responses</code></p>
+  </div>
+  <div class="card c-orange">
+    <h3>Body transform</h3>
+    <p><code>messages</code> → <code>input</code> (non-system only)<br>
+    system role → <code>instructions</code> string<br>
+    <code>max_tokens</code> → <code>max_output_tokens</code><br>
+    <code>messages</code> key removed from body</p>
+  </div>
+</div>
+
+<div class="cb">
+<span class="cm"># main.py — Responses API body transform</span><br>
+<span class="cf">if</span> use_responses_api <span class="cf">and</span> is_openai:<br>
+&nbsp;&nbsp;url = <span class="cf">f"</span>{openai_url}<span class="cf">/responses"</span>  <span class="cm"># ← URL override</span><br>
+&nbsp;&nbsp;body[<span class="cv">"instructions"</span>] = system_messages joined  <span class="cm"># ← system → instructions</span><br>
+&nbsp;&nbsp;body[<span class="cv">"input"</span>] = non_system messages          <span class="cm"># ← messages → input</span><br>
+&nbsp;&nbsp;body[<span class="cv">"max_output_tokens"</span>] = body.pop(<span class="cv">"max_tokens"</span>)  <span class="cm"># ← rename</span><br>
+&nbsp;&nbsp;body.pop(<span class="cv">"messages"</span>, None)                    <span class="cm"># ← remove old key</span>
+</div>
+
+<div class="note note-warn">
+  <strong>System prompt detected → Responses API cancelled.</strong> If OWU sends an internal prompt (title generation, follow-ups, etc.), <code>use_responses_api = False</code> and URL reverts to <code>actual_path</code>. This avoids sending OWU internals through the Responses API format.
+</div>
+
+<!-- IMAGE MODELS -->
+<div class="slabel sl-warn">Override B — Image generation models</div>
+<div class="row" style="margin-top:10px;margin-bottom:20px">
+  <div class="card c-red">
+    <h3>Which models</h3>
+    <p><code>dall-e-3</code><br><code>dall-e-2</code><br><code>gpt-image-1</code></p>
+  </div>
+  <div class="card c-red">
+    <h3>URL override</h3>
+    <p>Normal: <code>{openai_url}/v1/chat/completions</code><br><br>
+    Image: <code>{openai_url}/images/generations</code></p>
+  </div>
+  <div class="card c-red">
+    <h3>Body transform</h3>
+    <p>Extracts last user message text → <code>prompt</code><br>
+    Builds minimal body:<br>
+    <code>{ model, prompt, n:1, size:"1024x1024" }</code><br>
+    <code>response_format</code> stripped (gpt-image-1 rejects it)</p>
+  </div>
+</div>
+
+<!-- STEP 4: STREAM MODE -->
+<h2>Step 4 — stream mode decision</h2>
+
+<table class="tbl">
+  <tr>
+    <th>Path type</th>
+    <th>stream value sent to LLM</th>
+    <th>Why</th>
+  </tr>
+  <tr>
+    <td>Cloud chat (<code>is_openai=True</code>, <code>is_chat=True</code>)</td>
+    <td>Keep caller's preference (default <code>true</code>)</td>
+    <td>Streaming works end-to-end for cloud — depseudo happens chunk by chunk</td>
+  </tr>
+  <tr>
+    <td>Ollama chat (<code>is_openai=False</code>, <code>is_chat=True</code>)</td>
+    <td><strong style="color:#fbbf24">Always forced to False</strong></td>
+    <td>Proxy must read the full response to depseudonymize before returning. Never remove this.</td>
+  </tr>
+  <tr>
+    <td>Non-chat (models list, etc.)</td>
+    <td>Not modified</td>
+    <td>Passthrough — no pseudonymization needed</td>
+  </tr>
+  <tr>
+    <td>Image generation</td>
+    <td>Not modified (sync only)</td>
+    <td>Images API doesn't stream</td>
+  </tr>
+</table>
+
+<!-- STEP 5: HEADERS -->
+<h2>Step 5 — headers forwarded to provider</h2>
+
+<div class="split">
+  <div>
+    <div class="slabel sl-cloud">Cloud (OpenAI / Groq / Gemini / OpenRouter)</div>
+    <div class="cb" style="margin:0">
+<span class="cm"># Forward only these headers</span><br>
+forward_headers = {<br>
+&nbsp;&nbsp;<span class="cv">"authorization"</span>,<br>
+&nbsp;&nbsp;<span class="cv">"content-type"</span>,<br>
+&nbsp;&nbsp;<span class="cv">"openai-organization"</span>,<br>
+&nbsp;&nbsp;<span class="cv">"x-openai-base-url"</span><br>
+}
+    </div>
+  </div>
+  <div>
+    <div class="slabel sl-warn">Anthropic special case</div>
+    <div class="cb" style="margin:0">
+<span class="cm"># Convert auth format</span><br>
+<span class="cf">if</span> <span class="cv">"anthropic.com"</span> <span class="cf">in</span> url:<br>
+&nbsp;&nbsp;auth = headers.pop(<span class="cv">"authorization"</span>)<br>
+&nbsp;&nbsp;api_key = auth.removeprefix(<span class="cv">"Bearer "</span>)<br>
+&nbsp;&nbsp;headers[<span class="cv">"x-api-key"</span>] = api_key<br>
+&nbsp;&nbsp;headers[<span class="cv">"anthropic-version"</span>] = <span class="cv">"2023-06-01"</span>
+    </div>
+  </div>
+</div>
+
+<div class="card c-teal" style="margin-bottom:14px">
+  <h3>Ollama — no headers forwarded</h3>
+  <p><code>forward_headers = {}</code> — Ollama runs locally, no auth needed. All OWU headers stripped.</p>
+</div>
+
+<!-- STEP 6: RESPONSE PATHS -->
+<h2>Step 6 — response handling</h2>
+
+<div class="flow">
+  <div class="fs"><div class="fn nb">A</div><div class="fc">
+    <h4>Ollama chat (is_chat + not is_openai)</h4>
+    <p>Sync POST → full JSON response<br>
+    Depseudo: <code>result["message"]["content"]</code> — replace all tokens longest-first<br>
+    Merge session + file: mappings<br>
+    Return: <code>ORJSONResponse</code> with <code>pseudonymized_prompt</code> + <code>file_entity_count</code> + <code>query_variants</code> added</p>
+  </div></div>
+  <div class="fs"><div class="fn ng">B</div><div class="fc">
+    <h4>Cloud chat — stream=False</h4>
+    <p>Sync <code>_client.request()</code> → full JSON<br>
+    Depseudo: <code>result["choices"][0]["message"]["content"]</code><br>
+    Return: <code>ORJSONResponse</code></p>
+  </div></div>
+  <div class="fs"><div class="fn np">C</div><div class="fc">
+    <h4>Cloud chat — stream=True (default)</h4>
+    <p><code>StreamingResponse</code> via <code>stream_with_depseudo()</code><br>
+    First yield: metadata chunk <code>{ type: "pseudonymized_prompt", file_entity_count, ... }</code><br>
+    Then: buffer SSE chunks → <code>split_at_safe_boundary()</code> holds partial tokens → replace → yield<br>
+    Depseudo longest token first throughout the stream</p>
+  </div></div>
+  <div class="fs"><div class="fn no">D</div><div class="fc">
+    <h4>Image generation</h4>
+    <p>Sync POST to <code>/images/generations</code><br>
+    No pseudonymization of response (it's a URL, not text)<br>
+    Return raw response as-is</p>
+  </div></div>
+  <div class="fs"><div class="fn nt">E</div><div class="fc">
+    <h4>Non-chat passthrough (GET models, etc.)</h4>
+    <p>Falls through all is_chat blocks<br>
+    Final <code>httpx.request()</code> at bottom of function → return raw response<br>
+    No pseudonymization</p>
+  </div></div>
+</div>
+
+<!-- ALL PATHS TABLE -->
+<h2>All paths — complete reference</h2>
+
+<table class="tbl">
+  <tr>
+    <th>Path received by proxy</th>
+    <th>is_openai</th>
+    <th>is_chat</th>
+    <th>Forward to</th>
+    <th>Pseudo?</th>
+    <th>Stream?</th>
+    <th>Special</th>
+  </tr>
+  <tr>
+    <td><code>POST /openai/v1/chat/completions</code></td>
+    <td class="tick">✅</td>
+    <td class="tick">✅</td>
+    <td>OpenAI / Anthropic / Groq / Gemini</td>
+    <td class="tick">✅</td>
+    <td>caller decides</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><code>POST /openai/v1/chat/completions</code> (gpt-5.5)</td>
+    <td class="tick">✅</td>
+    <td class="tick">✅</td>
+    <td><code>{provider}/responses</code></td>
+    <td class="tick">✅</td>
+    <td>caller decides</td>
+    <td>Body transform: messages→input</td>
+  </tr>
+  <tr>
+    <td><code>POST /openai/v1/chat/completions</code> (dall-e / gpt-image-1)</td>
+    <td class="tick">✅</td>
+    <td class="tick">✅</td>
+    <td><code>{provider}/images/generations</code></td>
+    <td class="cross">❌</td>
+    <td>sync</td>
+    <td>Body: extract prompt only</td>
+  </tr>
+  <tr>
+    <td><code>POST /openai/v1/chat/completions</code> (OWU internal)</td>
+    <td class="tick">✅</td>
+    <td class="tick">✅</td>
+    <td>Provider normally</td>
+    <td class="cross">❌ skipped</td>
+    <td>caller decides</td>
+    <td>System prompt markers detected</td>
+  </tr>
+  <tr>
+    <td><code>GET /openai/v1/models</code></td>
+    <td class="tick">✅</td>
+    <td class="cross">❌</td>
+    <td><code>{provider}/v1/models</code></td>
+    <td class="cross">❌</td>
+    <td>passthrough</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><code>POST /api/chat</code></td>
+    <td class="cross">❌</td>
+    <td class="tick">✅</td>
+    <td><code>http://ollama:11434/api/chat</code></td>
+    <td class="tick">✅</td>
+    <td><strong style="color:#fbbf24">forced False</strong></td>
+    <td>No headers forwarded</td>
+  </tr>
+  <tr>
+    <td><code>GET /openai/api/tags</code></td>
+    <td colspan="2">dedicated route (before catch-all)</td>
+    <td><code>http://ollama:11434/api/tags</code></td>
+    <td class="cross">❌</td>
+    <td>passthrough</td>
+    <td>Returns Ollama model list</td>
+  </tr>
+  <tr>
+    <td><code>GET /health</code></td>
+    <td colspan="2">dedicated route</td>
+    <td>—</td>
+    <td class="cross">❌</td>
+    <td>—</td>
+    <td>Returns <code>{"status":"ok"}</code></td>
+  </tr>
+  <tr>
+    <td><code>POST /analyze</code></td>
+    <td colspan="2">dedicated route</td>
+    <td>—</td>
+    <td class="cross">❌</td>
+    <td>—</td>
+    <td>PII detection only, no LLM call</td>
+  </tr>
+</table>
+
+<!-- ANTHROPIC LIMITATION -->
+<hr>
+<h2>Anthropic via OpenAI-compat path — what we lose</h2>
+
+<div class="note note-warn">
+  <strong>We use the OpenAI-compatible path for Anthropic (<code>/v1/chat/completions</code>).</strong> Anthropic says this path is for testing only, not production. Features lost:
+</div>
+
+<div class="row">
+  <div class="card c-red">
+    <h3>Lost features</h3>
+    <ul>
+      <li>Prompt caching (would reduce cost 80%+)</li>
+      <li>Extended thinking / reasoning effort</li>
+      <li>PDF processing + citations</li>
+      <li>Guaranteed tool-use schema conformance</li>
+    </ul>
+  </div>
+  <div class="card c-gray">
+    <h3>What works fine</h3>
+    <ul>
+      <li>Standard chat completions</li>
+      <li>Streaming</li>
+      <li>Function / tool calling (basic)</li>
+      <li>All Claude models (Opus, Sonnet, Haiku)</li>
+    </ul>
+  </div>
+  <div class="card c-orange">
+    <h3>Fix: native Anthropic API</h3>
+    <p>Would require integrating <code>/v1/messages</code> natively in the proxy — different request/response format.<br><br>
+    Needs Seb approval before implementing.</p>
+  </div>
+</div>
+
+<!-- END-TO-END EXAMPLES -->
+<h2>End-to-end examples</h2>
+
+<div class="slabel sl-cloud">Example 1 — Claude (Anthropic) streaming</div>
+<div class="diagram" style="margin-top:10px;margin-bottom:20px">
+OWU: <span class="d-yellow">POST /openai/v1/chat/completions</span><br>
+&nbsp;&nbsp;Authorization: Bearer sk-ant-api03-...<br>
+&nbsp;&nbsp;x-openai-base-url: https://api.anthropic.com/v1<br>
+&nbsp;&nbsp;body: { model:"claude-opus-4-5", messages:[..."<span class="d-red">Max Mustermann</span>"...], stream:true }<br>
+<br>
+proxy: is_openai=<span class="d-green">True</span> · actual_path="v1/chat/completions" · is_chat=<span class="d-green">True</span><br>
+proxy: openai_url = "https://api.anthropic.com/v1" (from header)<br>
+proxy: url = "https://api.anthropic.com/v1/chat/completions"<br>
+proxy: "<span class="d-red">Max Mustermann</span>" → <span class="d-purple">PERSON_cc75010d</span><br>
+proxy: Authorization:Bearer → x-api-key + anthropic-version header<br>
+<br>
+→ <span class="d-green">POST https://api.anthropic.com/v1/chat/completions</span><br>
+&nbsp;&nbsp;x-api-key: sk-ant-api03-...<br>
+&nbsp;&nbsp;body: { messages:[..."<span class="d-purple">PERSON_cc75010d</span>"...], stream:true }<br>
+<br>
+← LLM: "...<span class="d-purple">PERSON_cc75010d</span> is a developer..."  (SSE stream)<br>
+proxy: <span class="d-purple">PERSON_cc75010d</span> → <span class="d-green">Max Mustermann</span>  (chunk by chunk)<br>
+← user sees: "Max Mustermann is a developer..."
+</div>
+
+<div class="slabel sl-local">Example 2 — Ollama (local) sync</div>
+<div class="diagram" style="margin-top:10px;margin-bottom:20px">
+OWU: <span class="d-yellow">POST /api/chat</span><br>
+&nbsp;&nbsp;body: { model:"llama3.2", messages:[..."<span class="d-red">Max Mustermann</span>"...], stream:true }<br>
+<br>
+proxy: is_openai=<span class="d-teal">False</span> · actual_path="api/chat" · is_chat=<span class="d-green">True</span><br>
+proxy: url = "http://ollama:11434/api/chat"<br>
+proxy: stream forced → <span class="d-orange">False</span>  ← critical, never remove<br>
+proxy: "<span class="d-red">Max Mustermann</span>" → <span class="d-purple">PERSON_cc75010d</span><br>
+proxy: forward_headers = {} (no auth for local Ollama)<br>
+<br>
+→ <span class="d-green">POST http://ollama:11434/api/chat</span><br>
+&nbsp;&nbsp;body: { messages:[..."<span class="d-purple">PERSON_cc75010d</span>"...], stream:false }<br>
+<br>
+← Ollama: { "message": { "content": "...<span class="d-purple">PERSON_cc75010d</span>..." } }<br>
+proxy: replace all tokens in message.content<br>
+← user sees: "Max Mustermann..."
+</div>
+
+<div class="slabel sl-warn">Example 3 — gpt-5.5 (Responses API)</div>
+<div class="diagram" style="margin-top:10px;margin-bottom:20px">
+OWU: <span class="d-yellow">POST /openai/v1/chat/completions</span><br>
+&nbsp;&nbsp;body: { model:"gpt-5.5", messages:[{role:"system",...},{role:"user","<span class="d-red">Max Mustermann</span>"}] }<br>
+<br>
+proxy: use_responses_api = <span class="d-orange">True</span>  (gpt-5.5 in RESPONSES_API_MODELS)<br>
+proxy: url overridden → "https://api.openai.com/v1/<span class="d-orange">responses</span>"<br>
+proxy: "<span class="d-red">Max Mustermann</span>" → <span class="d-purple">PERSON_cc75010d</span><br>
+proxy: body transform:<br>
+&nbsp;&nbsp;body["instructions"] = system message content<br>
+&nbsp;&nbsp;body["input"] = [{ role:"user", content:"...<span class="d-purple">PERSON_cc75010d</span>..." }]<br>
+&nbsp;&nbsp;body.pop("messages")<br>
+<br>
+→ <span class="d-green">POST https://api.openai.com/v1/responses</span><br>
+← stream → depseudo → user sees real name
+</div>
+
+</body>
+</html>

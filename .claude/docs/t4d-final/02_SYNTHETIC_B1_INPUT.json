@@ -1,0 +1,17 @@
+{
+  "case_id": "STRUCTURED_OUTPUT_MAPPING",
+  "classification": "SYNTHETIC_TEST_DATA_ONLY",
+  "instruction": "Extract the fields from this JSON exactly as given, preserving every value verbatim.",
+  "payload": {
+    "name": "Anna Müller-Öztürk",
+    "email": "a.mueller@example.de",
+    "reference_id": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    "score": 7,
+    "active": true,
+    "note": null,
+    "nested": {
+      "city": "München"
+    }
+  }
+}
+

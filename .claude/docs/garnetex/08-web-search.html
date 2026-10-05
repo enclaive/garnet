@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet — Web Search Feature</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0a0e1a; color: #e2e8f0; padding: 32px; max-width: 1200px; margin: 0 auto; }
+h1 { color: #7dd3fc; font-size: 1.8rem; margin-bottom: 6px; }
+.subtitle { color: #475569; margin-bottom: 48px; font-size: 0.88rem; }
+h2 { font-size: 0.85rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #64748b; margin: 52px 0 18px; border-left: 3px solid #1e3a5f; padding-left: 12px; }
+code { font-family: 'Fira Code', 'Consolas', monospace; }
+hr { border: none; border-top: 1px solid #1e2d45; margin: 40px 0; }
+
+.row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.card { border-radius: 10px; padding: 16px 18px; flex: 1; min-width: 200px; border: 1px solid; }
+.card h3 { font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; }
+.card p, .card li { font-size: 0.78rem; color: #94a3b8; line-height: 1.7; }
+.card ul { padding-left: 14px; }
+.c-blue   { background: #071829; border-color: #1d4ed8; } .c-blue h3   { color: #60a5fa; }
+.c-green  { background: #041810; border-color: #15803d; } .c-green h3  { color: #4ade80; }
+.c-purple { background: #110a26; border-color: #6d28d9; } .c-purple h3 { color: #a78bfa; }
+.c-orange { background: #1a0d00; border-color: #c2410c; } .c-orange h3 { color: #fb923c; }
+.c-teal   { background: #031915; border-color: #0f766e; } .c-teal h3   { color: #2dd4bf; }
+.c-red    { background: #1a0606; border-color: #b91c1c; } .c-red h3    { color: #f87171; }
+.c-gray   { background: #111827; border-color: #374151; } .c-gray h3   { color: #9ca3af; }
+.c-yellow { background: #1a1200; border-color: #a16207; } .c-yellow h3 { color: #fbbf24; }
+
+.flow { display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid #1e3356; background: #060c18; margin-bottom: 14px; }
+.fs { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #111d30; }
+.fs:last-child { border-bottom: none; }
+.fs:hover { background: #0b1525; }
+.fn { min-width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+.nb { background: #1d4ed8; color: #fff; }
+.ng { background: #15803d; color: #fff; }
+.np { background: #6d28d9; color: #fff; }
+.no { background: #c2410c; color: #fff; }
+.nt { background: #0f766e; color: #fff; }
+.nr { background: #b91c1c; color: #fff; }
+.ny { background: #a16207; color: #fff; }
+.fc h4 { font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; }
+.fc p  { font-size: 0.77rem; color: #64748b; line-height: 1.6; }
+.fc code { background: #1e2433; border-radius: 3px; padding: 1px 5px; font-size: 0.72rem; color: #e2e8f0; font-family: monospace; }
+
+.cb { background: #060c18; border: 1px solid #1e3356; border-radius: 10px; padding: 18px 22px; font-size: 0.77rem; line-height: 2; font-family: 'Fira Code', 'Consolas', monospace; overflow-x: auto; margin-bottom: 14px; }
+.cm { color: #475569; font-style: italic; }
+.cv { color: #4ade80; }
+.cs { color: #fbbf24; }
+.cf { color: #60a5fa; }
+.co { color: #fb923c; }
+.cr { color: #f87171; }
+.cp { color: #a78bfa; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 14px; }
+@media(max-width: 760px) { .split { grid-template-columns: 1fr; } }
+
+.slabel { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 10px; border-radius: 4px; display: inline-block; margin-bottom: 10px; }
+.sl-local  { background: #031915; color: #2dd4bf; border: 1px solid #0f766e; }
+.sl-cloud  { background: #071829; color: #60a5fa; border: 1px solid #1d4ed8; }
+.sl-proxy  { background: #110a26; color: #a78bfa; border: 1px solid #6d28d9; }
+.sl-off    { background: #1a0606; color: #f87171; border: 1px solid #b91c1c; }
+.sl-bypass { background: #1a0d00; color: #fb923c; border: 1px solid #c2410c; }
+.sl-special { background: #1a1200; color: #fbbf24; border: 1px solid #a16207; }
+
+.timing-bar { display: flex; height: 36px; border-radius: 8px; overflow: hidden; margin-bottom: 8px; font-size: 0.72rem; font-weight: 700; }
+.timing-bar div { display: flex; align-items: center; justify-content: center; white-space: nowrap; padding: 0 8px; }
+.t-owu    { background: #1d4ed8; color: #fff; }
+.t-pseudo { background: #6d28d9; color: #fff; }
+.t-ttft   { background: #0f766e; color: #fff; }
+.t-gen    { background: #c2410c; color: #fff; }
+
+.gap-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; }
+.gap-ok  { background: #041810; color: #4ade80; border: 1px solid #15803d; }
+.gap-warn { background: #1a1200; color: #fbbf24; border: 1px solid #a16207; }
+.gap-bad  { background: #1a0606; color: #f87171; border: 1px solid #b91c1c; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin-bottom: 14px; }
+th { text-align: left; padding: 10px 14px; background: #060c18; color: #64748b; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid #1e3356; }
+td { padding: 10px 14px; border-bottom: 1px solid #111d30; color: #94a3b8; }
+td:first-child { color: #e2e8f0; font-family: monospace; font-size: 0.75rem; }
+tr:hover td { background: #060c18; }
+</style>
+</head>
+<body>
+
+<h1>Web Search in Garnet</h1>
+<p class="subtitle">How normal prompts work vs. web-search-enabled prompts — with real timing data from production</p>
+
+<!-- ─── SECTION 1: TWO MODES ─── -->
+<h2>01 — Two Ways a Prompt Can Flow</h2>
+
+<div class="split">
+  <div>
+    <span class="slabel sl-local">Normal prompt</span>
+    <div class="flow">
+      <div class="fs">
+        <div class="fn nb">1</div>
+        <div class="fc">
+          <h4>User sends message</h4>
+          <p>OWU receives the prompt. No web search active. Sends directly to proxy.</p>
+        </div>
+      </div>
+      <div class="fs">
+        <div class="fn np">2</div>
+        <div class="fc">
+          <h4>Proxy pseudonymizes</h4>
+          <p>Presidio scans user message only. Fast — small input, no web content.</p>
+          <p><code>[IN USER] Max Mustermann → [OUT USER] PERSON_dddfab9b</code></p>
+        </div>
+      </div>
+      <div class="fs">
+        <div class="fn ng">3</div>
+        <div class="fc">
+          <h4>LLM answers from training data</h4>
+          <p>Only knowledge baked in at training cutoff. No live data. No citations.</p>
+        </div>
+      </div>
+      <div class="fs">
+        <div class="fn nt">4</div>
+        <div class="fc">
+          <h4>Proxy depseudonymizes</h4>
+          <p>Restores real names in LLM response before user sees it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <span class="slabel sl-cloud">Web search prompt</span>
+    <div class="flow">
+      <div class="fs">
+        <div class="fn nb">1</div>
+        <div class="fc">
+          <h4>User sends message (🔍 active)</h4>
+          <p>OWU detects web search is enabled. Runs query expansion, calls DDGS.</p>
+        </div>
+      </div>
+      <div class="fs">
+        <div class="fn nb">2</div>
+        <div class="fc">
+          <h4>DDGS fetches results <span class="gap-warn">~16s</span></h4>
+          <p>OWU searches Bing via DDGS, fetches page snippets, injects them as <code>&lt;source&gt;</code> blocks in the system prompt.</p>
+        </div>
+      </div>
+      <div class="fs">
+        <div class="fn np">3</div>
+        <div class="fc">
+          <h4>Proxy pseudonymizes everything</h4>
+          <p>Scans <strong>user message + all web results</strong>. More content = more time.</p>
+          <p><code>[IN FILE] len=5264 → [FILE PII] 5 entities</code></p>
+          <p><code>[IN USER] Max → [OUT USER] PERSON_a1a5936d</code></p>
+        </div>
+      </div>
+      <div class="fs">
+        <div class="fn ng">4</div>
+        <div class="fc">
+          <h4>LLM answers from training + live web</h4>
+          <p>Sees pseudonymized web snippets as context. Cites sources. More accurate on recent topics.</p>
+        </div>
+      </div>
+      <div class="fs">
+        <div class="fn nt">5</div>
+        <div class="fc">
+          <h4>Proxy depseudonymizes</h4>
+          <p>Restores real names in response. Web result entities also restored.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SECTION 2: WHAT DDGS IS ─── -->
+<h2>02 — What is DDGS?</h2>
+
+<div class="row">
+  <div class="card c-blue">
+    <h3>DDGS (DuckDuckGo Search)</h3>
+    <p>A Python library that queries search engines without needing an API key. OWU uses it to search the web on the user's behalf.</p>
+    <ul>
+      <li>No account or key required</li>
+      <li>Supports multiple backends: bing, google, yahoo…</li>
+      <li>Returns: title, URL, snippet per result</li>
+    </ul>
+  </div>
+  <div class="card c-orange">
+    <h3>Backends matter</h3>
+    <p>The <strong>duckduckgo HTML backend</strong> scrapes the DuckDuckGo website directly. DuckDuckGo blocks bots → returns 202 → OWU shows "An error occurred while searching".</p>
+    <p style="margin-top:8px"><strong>Fix:</strong> switch to <code>bing</code> backend — stable, no bot detection issues.</p>
+  </div>
+  <div class="card c-green">
+    <h3>Search query privacy gap</h3>
+    <p>The search query sent to DDGS/Bing is <strong>NOT pseudonymized</strong> — it goes through OWU directly, bypassing the proxy.</p>
+    <p style="margin-top:8px">Example: <code>"Enclaive GmbH Berlin GDPR privacy policy"</code> is sent to Bing unmasked.</p>
+    <p style="margin-top:8px">The web <em>results</em> that come back are pseudonymized by the proxy ✅</p>
+  </div>
+</div>
+
+<!-- ─── SECTION 3: INTERNAL PIPELINE ─── -->
+<h2>03 — What Happens Inside OWU (Before Proxy Sees Anything)</h2>
+
+<div class="flow">
+  <div class="fs">
+    <div class="fn nb">1</div>
+    <div class="fc">
+      <h4>Query expansion</h4>
+      <p>OWU asks the LLM to rewrite the user's question into 2-3 better search queries. Example:</p>
+      <p><code>"GDPR data subject rights"</code> · <code>"Enclaive GmbH Berlin GDPR privacy policy"</code> · <code>"GDPR rights individual company Germany"</code></p>
+    </div>
+  </div>
+  <div class="fs">
+    <div class="fn nb">2</div>
+    <div class="fc">
+      <h4>DDGS search</h4>
+      <p>Each query runs against the selected backend (bing). Returns <code>Result Count</code> results per query — title, URL, snippet.</p>
+    </div>
+  </div>
+  <div class="fs">
+    <div class="fn nb">3</div>
+    <div class="fc">
+      <h4>Web Loader (optional)</h4>
+      <p>If <strong>Bypass Web Loader is OFF</strong>: OWU fetches the full HTML of each result page → strips to plain text → much more content but much slower (~10-20s extra).</p>
+      <p>If <strong>Bypass Web Loader is ON</strong>: skips page fetch, uses only the short snippet from DDGS (3-4 lines). Fast.</p>
+    </div>
+  </div>
+  <div class="fs">
+    <div class="fn nb">4</div>
+    <div class="fc">
+      <h4>Embedding (optional)</h4>
+      <p>If <strong>Bypass Embedding is OFF</strong>: OWU embeds the page content with <code>nomic-embed-text</code> on CPU, then does vector similarity search to pick the best chunks. This is the <strong>slowest step — 20-30s on CPU</strong>.</p>
+      <p>If <strong>Bypass Embedding is ON</strong>: skips embedding entirely, sends snippets directly. Recommended.</p>
+    </div>
+  </div>
+  <div class="fs">
+    <div class="fn np">5</div>
+    <div class="fc">
+      <h4>Inject as system prompt → send to proxy</h4>
+      <p>OWU wraps the web results in <code>&lt;source id="1"&gt;...&lt;/source&gt;</code> tags and puts them in the system message. <strong>Now the proxy sees it as a file/RAG chunk.</strong></p>
+      <p><code>[IN FILE] role=system len=5264</code></p>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SECTION 4: HOW PROXY KNOWS IT'S WEB CONTENT ─── -->
+<h2>04 — How the Proxy Recognises Web Content</h2>
+
+<div class="cb">
+<span class="cm"># main.py — source tag detection</span><br>
+<span class="cf">is_file</span> = (<br>
+&nbsp;&nbsp;&nbsp;&nbsp;role == <span class="cs">"system"</span> <span class="cf">and</span> <span class="cs">"&lt;source"</span> <span class="cf">in</span> original_content_text<br>
+)<br>
+<br>
+<span class="cm"># If &lt;source&gt; found → treat as file/RAG content → run file pseudonymization</span><br>
+<span class="cf">if</span> is_file:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cv">log_in_file</span>(role, len(original_content_text), original_content_text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># ... scan for PII, pseudonymize, log [FILE PII]</span>
+</div>
+
+<div class="row">
+  <div class="card c-purple">
+    <h3>Why &lt;source&gt; tag?</h3>
+    <p>OWU wraps every web result in a <code>&lt;source id="N"&gt;</code> block so the LLM knows where each piece of info came from and can cite it. The proxy uses this same tag as a signal that the system message contains external content that needs pseudonymization.</p>
+  </div>
+  <div class="card c-green">
+    <h3>What gets pseudonymized</h3>
+    <ul>
+      <li>All <code>&lt;source&gt;</code> content (web snippets or full pages)</li>
+      <li>User message</li>
+      <li>Conversation history (previous turns)</li>
+    </ul>
+    <p style="margin-top:8px">What does NOT get pseudonymized: the search query sent to DDGS.</p>
+  </div>
+</div>
+
+<!-- ─── SECTION 5: REAL LOG COMPARISON ─── -->
+<h2>05 — Real Log: Normal Prompt vs Web Search</h2>
+
+<div class="split">
+  <div>
+    <span class="slabel sl-local">Normal prompt</span>
+    <div class="cb" style="font-size:0.72rem; line-height:1.9">
+<span class="cv">[GARNET]</span> session=abc privacy=<span class="cv">ON</span><br>
+<span class="cf">[IN  USER]</span> Max Mustermann at Enclaive GmbH<br>
+<span class="cm">← no [IN FILE] — no web content</span><br>
+<span class="cp">[OUT USER]</span> PERSON_dddfab9b at ORGANIZATION_bd3a68a5<br>
+<span class="cs">[→ LLM   ]</span> ... | <span class="cv">pseudo=85ms</span><br>
+<span class="cf">[← LLM   ]</span> '#' | <span class="cv">ttft=1.2s</span><br>
+<span class="cv">[→ USER  ]</span> depseudo | <span class="cv">ttft=1.2s total=4.3s</span>
+    </div>
+    <p style="font-size:0.75rem; color:#64748b">Total: <strong style="color:#4ade80">~4s</strong> — fast, no web step</p>
+  </div>
+  <div>
+    <span class="slabel sl-cloud">Web search prompt</span>
+    <div class="cb" style="font-size:0.72rem; line-height:1.9">
+<span class="cv">[GARNET]</span> session=def privacy=<span class="cv">ON</span><br>
+<span class="cf">[IN  USER]</span> Max Mustermann at Enclaive GmbH<br>
+<span class="cf">[IN  FILE]</span> role=system len=<span class="cs">5264</span> <span class="cm">← web results</span><br>
+<span class="cs">[FILE SCAN]</span> 1 RAG chunk(s) processed<br>
+<span class="co">[FILE PII ]</span> <span class="cs">5</span> new entities detected<br>
+<span class="cp">[OUT USER]</span> PERSON_a1a5936d at ORGANIZATION_bd3a68a5<br>
+<span class="cs">[→ LLM   ]</span> ... | <span class="co">pseudo=2093ms</span><br>
+<span class="cf">[← LLM   ]</span> '#' | ttft=4.22s<br>
+<span class="cv">[→ USER  ]</span> depseudo | <span class="co">ttft=4.22s total=34s</span>
+    </div>
+    <p style="font-size:0.75rem; color:#64748b">Total: <strong style="color:#fb923c">~50s</strong> (16s OWU web search not in proxy logs)</p>
+  </div>
+</div>
+
+<!-- ─── SECTION 6: TIMING BREAKDOWN ─── -->
+<h2>06 — Where the Time Goes (Web Search)</h2>
+
+<div style="margin-bottom:8px">
+  <div class="timing-bar">
+    <div class="t-owu"    style="width:32%">OWU: DDGS + fetch ~16s</div>
+    <div class="t-pseudo" style="width:4%" title="pseudo">pseudo 2s</div>
+    <div class="t-ttft"   style="width:6%">ttft 4s</div>
+    <div class="t-gen"    style="width:58%">LLM generation ~30s</div>
+  </div>
+  <p style="font-size:0.72rem; color:#475569">Proportional to real measured times. Total ≈ 50s.</p>
+</div>
+
+<table>
+  <tr><th>Step</th><th>Where</th><th>Time</th><th>Reducible?</th></tr>
+  <tr>
+    <td>DDGS query + page fetch</td>
+    <td>OWU (before proxy)</td>
+    <td><span class="gap-warn">~16s</span></td>
+    <td>Enable Bypass Web Loader → ~2s</td>
+  </tr>
+  <tr>
+    <td>nomic-embed-text (CPU)</td>
+    <td>OWU (before proxy)</td>
+    <td><span class="gap-bad">~20-30s</span></td>
+    <td>Enable Bypass Embedding → 0s ✅</td>
+  </tr>
+  <tr>
+    <td>Presidio NLP on web content</td>
+    <td>Proxy</td>
+    <td><span class="gap-warn">~2s</span></td>
+    <td>Reduce result count (3→2)</td>
+  </tr>
+  <tr>
+    <td>LLM TTFT</td>
+    <td>Anthropic API</td>
+    <td><span class="gap-warn">~4s</span></td>
+    <td>Use faster model (Sonnet/Haiku)</td>
+  </tr>
+  <tr>
+    <td>LLM generation</td>
+    <td>Anthropic API</td>
+    <td><span class="gap-bad">~30s</span></td>
+    <td>Use faster model or limit max_tokens</td>
+  </tr>
+</table>
+
+<!-- ─── SECTION 7: RECOMMENDED SETTINGS ─── -->
+<h2>07 — Recommended Admin Settings</h2>
+
+<div class="row">
+  <div class="card c-green">
+    <h3>Admin → Settings → Web Search</h3>
+    <ul>
+      <li>Engine: <code>DDGS</code></li>
+      <li>DDGS Backend: <code>bing</code> ← not duckduckgo (bot blocked)</li>
+      <li>Result Count: <code>2</code></li>
+      <li>Bypass Embedding and Retrieval: <code>ON</code></li>
+      <li>Bypass Web Loader: <code>ON</code></li>
+    </ul>
+  </div>
+  <div class="card c-blue">
+    <h3>Admin → Workspace → Models</h3>
+    <ul>
+      <li>Select your model → Capabilities</li>
+      <li>Web Search: <code>✅ enabled</code></li>
+      <li>Default Features → Web Search: <code>ON</code></li>
+    </ul>
+    <p style="margin-top:8px">The 🔍 button in chat must be blue before sending.</p>
+  </div>
+  <div class="card c-yellow">
+    <h3>Expected timing after settings</h3>
+    <ul>
+      <li>DDGS snippets: ~2s</li>
+      <li>Proxy pseudo: ~2s</li>
+      <li>LLM TTFT: ~4s</li>
+      <li>LLM generation: ~15-30s</li>
+      <li><strong>Total: ~20-35s</strong></li>
+    </ul>
+    <p style="margin-top:8px">Without web search: <strong>~4-8s</strong></p>
+  </div>
+</div>
+
+<!-- ─── SECTION 8: PRIVACY GAPS ─── -->
+<h2>08 — Privacy Status of Each Part</h2>
+
+<table>
+  <tr><th>Data</th><th>Pseudonymized?</th><th>Notes</th></tr>
+  <tr>
+    <td>User message</td>
+    <td><span class="gap-ok">✅ Yes</span></td>
+    <td><code>[IN USER] → [OUT USER]</code></td>
+  </tr>
+  <tr>
+    <td>Conversation history</td>
+    <td><span class="gap-ok">✅ Yes</span></td>
+    <td><code>[HISTORY PSEUDO] N message(s)</code> — uses session MD5 cache</td>
+  </tr>
+  <tr>
+    <td>Web search results (injected context)</td>
+    <td><span class="gap-ok">✅ Yes</span></td>
+    <td><code>[IN FILE] → [FILE PII] → [OUT FILE]</code> — treated as RAG chunk</td>
+  </tr>
+  <tr>
+    <td>Search query sent to DDGS/Bing</td>
+    <td><span class="gap-bad">⚠️ No</span></td>
+    <td>OWU sends it directly — bypasses proxy entirely. Real names leak to search engine.</td>
+  </tr>
+  <tr>
+    <td>LLM response</td>
+    <td><span class="gap-ok">✅ Yes</span></td>
+    <td>Depseudonymized before user sees it</td>
+  </tr>
+</table>
+
+<!-- ─── SECTION 9: LOG CHEATSHEET ─── -->
+<h2>09 — Log Line Cheatsheet</h2>
+
+<table>
+  <tr><th>Log line</th><th>Meaning</th></tr>
+  <tr><td>[IN  USER]</td><td>Original user message (real names visible)</td></tr>
+  <tr><td>[OUT USER]</td><td>Pseudonymized user message sent to LLM</td></tr>
+  <tr><td>[NO PII]</td><td>No entities found in user message — passed through unchanged</td></tr>
+  <tr><td>[IN  FILE]</td><td>Web/RAG content received — len= shows how much content</td></tr>
+  <tr><td>[OUT FILE]</td><td>Pseudonymized web/RAG content</td></tr>
+  <tr><td>[FILE SCAN]</td><td>How many chunks were processed</td></tr>
+  <tr><td>[FILE PII]</td><td>How many new entities found in web content</td></tr>
+  <tr><td>[HISTORY PSEUDO]</td><td>Previous turn messages pseudonymized for context window</td></tr>
+  <tr><td>[→ LLM] pseudo=Xms</td><td>Time from request arrival to LLM call (= pseudonymization cost)</td></tr>
+  <tr><td>[← LLM] ttft=Xs</td><td>Time to first LLM token</td></tr>
+  <tr><td>[→ USER] total=Xs</td><td>Full request time from proxy perspective (excludes OWU web fetch)</td></tr>
+</table>
+
+<hr>
+<p style="font-size:0.75rem; color:#334155; text-align:center">Garnet · garnetex 08 · web search feature · measured on production cVM 2026-07-22</p>
+
+</body>
+</html>

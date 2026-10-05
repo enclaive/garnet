@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Full History Pseudonymization — Design</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; padding: 32px; }
+  h1 { font-size: 1.8rem; color: #7dd3fc; margin-bottom: 6px; }
+  .subtitle { color: #94a3b8; margin-bottom: 40px; font-size: 0.95rem; }
+  h2 { font-size: 1.2rem; color: #f8fafc; margin-bottom: 16px; }
+  h3 { font-size: 0.95rem; color: #94a3b8; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .section { margin-bottom: 48px; }
+
+  /* comparison grid */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 48px; }
+  .box { background: #1e2230; border-radius: 12px; padding: 24px; border: 1px solid #2d3348; }
+  .box.bad  { border-color: #ef4444; }
+  .box.good { border-color: #22c55e; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; margin-bottom: 14px; }
+  .badge.bad  { background: #450a0a; color: #f87171; }
+  .badge.good { background: #052e16; color: #4ade80; }
+
+  /* message bubbles */
+  .msg { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-start; }
+  .msg .role { font-size: 0.7rem; font-weight: 700; min-width: 70px; padding-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .msg .role.user { color: #60a5fa; }
+  .msg .role.asst { color: #a78bfa; }
+  .msg .bubble { background: #2d3348; border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; line-height: 1.5; flex: 1; }
+  .msg .bubble.leak { background: #450a0a; border: 1px solid #ef4444; }
+  .msg .bubble.safe { background: #052e16; border: 1px solid #22c55e; }
+  .msg .bubble.neutral { background: #1e2a3a; border: 1px solid #3b82f6; }
+  .msg .bubble .real { color: #f87171; font-weight: 700; }
+  .msg .bubble .token { color: #4ade80; font-weight: 700; }
+  .msg .bubble .dim { color: #64748b; }
+  .msg .bubble .new { color: #fbbf24; font-weight: 700; }
+
+  /* flow arrows */
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; margin-bottom: 48px; }
+  .flow-row { display: flex; align-items: center; gap: 0; width: 100%; max-width: 900px; }
+  .flow-box { background: #1e2230; border: 1px solid #2d3348; border-radius: 10px; padding: 14px 20px; text-align: center; flex: 1; }
+  .flow-box .label { font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px; }
+  .flow-box .name { font-size: 1rem; font-weight: 700; color: #e2e8f0; }
+  .flow-box.highlight { border-color: #7dd3fc; background: #0c1a2e; }
+  .flow-box.change { border-color: #fbbf24; background: #1c1505; }
+  .arrow { color: #475569; font-size: 1.4rem; padding: 0 8px; flex-shrink: 0; }
+  .arrow.down { transform: rotate(90deg); }
+
+  /* code blocks */
+  .code-wrap { background: #0d1117; border: 1px solid #2d3348; border-radius: 10px; padding: 20px; margin-bottom: 16px; overflow-x: auto; }
+  .code-wrap pre { font-family: 'Consolas', monospace; font-size: 0.82rem; line-height: 1.7; color: #e2e8f0; }
+  .code-wrap .comment { color: #6b7280; }
+  .code-wrap .kw { color: #c084fc; }
+  .code-wrap .fn { color: #60a5fa; }
+  .code-wrap .str { color: #4ade80; }
+  .code-wrap .del { color: #f87171; text-decoration: line-through; opacity: 0.6; }
+  .code-wrap .add { color: #4ade80; }
+  .code-wrap .hl  { background: #1e2a1e; display: block; border-left: 3px solid #22c55e; padding-left: 8px; margin-left: -8px; }
+
+  /* steps */
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 48px; }
+  .step { background: #1e2230; border-radius: 10px; padding: 18px; border: 1px solid #2d3348; position: relative; }
+  .step .num { position: absolute; top: -12px; left: 16px; background: #3b82f6; color: #fff; font-weight: 700; font-size: 0.75rem; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .step .title { font-weight: 700; color: #f8fafc; margin-bottom: 6px; margin-top: 4px; font-size: 0.9rem; }
+  .step .desc { color: #94a3b8; font-size: 0.82rem; line-height: 1.5; }
+  .step.delete .num { background: #ef4444; }
+  .step.add    .num { background: #22c55e; }
+  .step.verify .num { background: #f59e0b; }
+
+  /* cache diagram */
+  .cache-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 48px; }
+  .cache-box { background: #1e2230; border-radius: 10px; padding: 20px; border: 1px solid #2d3348; }
+  .cache-box h3 { color: #fbbf24; margin-bottom: 12px; font-size: 0.9rem; }
+  .kv { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; font-size: 0.82rem; }
+  .kv .key { background: #0d1117; border: 1px solid #374151; border-radius: 4px; padding: 4px 8px; color: #60a5fa; font-family: monospace; }
+  .kv .arrow-r { color: #475569; }
+  .kv .val { color: #4ade80; font-family: monospace; }
+  .turn-label { font-size: 0.72rem; color: #64748b; margin-bottom: 10px; padding: 4px 8px; background: #0d1117; border-radius: 4px; display: inline-block; }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin-left: 8px; vertical-align: middle; }
+  .tag.hit  { background: #052e16; color: #4ade80; }
+  .tag.miss { background: #1c1505; color: #fbbf24; }
+
+  .divider { border: none; border-top: 1px solid #2d3348; margin: 48px 0; }
+</style>
+</head>
+<body>
+
+<h1>Full History Pseudonymization</h1>
+<p class="subtitle">Design walkthrough — what changes, why, and how</p>
+
+<!-- ═══════════════════════════════════════════════════════ PROBLEM -->
+<div class="section">
+  <h2>The Problem — what leaks today</h2>
+  <div class="compare">
+
+    <div class="box bad">
+      <span class="badge bad">BEFORE — broken</span>
+      <h3>Turn 3 — what the LLM actually sees</h3>
+
+      <div class="msg">
+        <div class="role user">user</div>
+        <div class="bubble leak">
+          <span class="real">Max</span> works at <span class="real">Enclaive</span>
+          <br><span class="dim">← from OWU DB, real names ❌</span>
+        </div>
+      </div>
+      <div class="msg">
+        <div class="role asst">assistant</div>
+        <div class="bubble leak">
+          <span class="real">Max</span> is an engineer at <span class="real">Enclaive</span>
+          <br><span class="dim">← from OWU DB, real names ❌</span>
+        </div>
+      </div>
+      <div class="msg">
+        <div class="role user">user</div>
+        <div class="bubble leak">
+          what is <span class="real">Max</span>'s email?
+          <br><span class="dim">← from OWU DB, real names ❌</span>
+        </div>
+      </div>
+      <div class="msg">
+        <div class="role asst">assistant</div>
+        <div class="bubble leak">
+          <span class="real">max@enclaive.io</span>
+          <br><span class="dim">← from OWU DB, real names ❌</span>
+        </div>
+      </div>
+      <div class="msg">
+        <div class="role user">user</div>
+        <div class="bubble neutral">
+          <span class="token">PERSON_cc75010d</span> what else?
+          <br><span class="dim">← only THIS message masked ✓</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="box good">
+      <span class="badge good">AFTER — fixed</span>
+      <h3>Turn 3 — what the LLM sees</h3>
+
+      <div class="msg">
+        <div class="role user">user</div>
+        <div class="bubble safe">
+          <span class="token">PERSON_cc75010d</span> works at <span class="token">ORGANIZATION_bd3a68a5</span>
+          <br><span class="dim">← masked ✓</span>
+        </div>
+      </div>
+      <div class="msg">
+        <div class="role asst">assistant</div>
+        <div class="bubble safe">
+          <span class="token">PERSON_cc75010d</span> is an engineer at <span class="token">ORGANIZATION_bd3a68a5</span>
+          <br><span class="dim">← masked ✓</span>
+        </div>
+      </div>
+      <div class="msg">
+        <div class="role user">user</div>
+        <div class="bubble safe">
+          what is <span class="token">PERSON_cc75010d</span>'s email?
+          <br><span class="dim">← masked ✓</span>
+        </div>
+      </div>
+      <div class="msg">
+        <div class="role asst">assistant</div>
+        <div class="bubble safe">
+          <span class="token">EMAIL_ADDRESS_f3a12b99</span>
+          <br><span class="dim">← masked ✓</span>
+        </div>
+      </div>
+      <div class="msg">
+        <div class="role user">user</div>
+        <div class="bubble safe">
+          <span class="token">PERSON_cc75010d</span> what else?
+          <br><span class="dim">← masked ✓</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════════════════════════ FLOW -->
+<div class="section">
+  <h2>Full Request Flow (after fix)</h2>
+  <div style="max-width:900px;">
+
+    <div style="display:flex; align-items:center; gap:0; margin-bottom:0;">
+      <div class="flow-box">
+        <div class="label">Browser</div>
+        <div class="name">You</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box">
+        <div class="label">Open WebUI</div>
+        <div class="name">OWU DB</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box change">
+        <div class="label">Privacy Proxy — CHANGED</div>
+        <div class="name">main.py</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box">
+        <div class="label">Cloud LLM</div>
+        <div class="name">Claude / GPT</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:0; margin-top:8px; text-align:center;">
+      <div style="font-size:0.75rem; color:#64748b; padding:8px;">sends full history<br>with real names</div>
+      <div style="font-size:0.75rem; color:#64748b; padding:8px;">full history<br>real names</div>
+      <div style="font-size:0.75rem; color:#4ade80; padding:8px; border: 1px solid #22c55e; border-radius:6px; background:#052e16;">masks ALL messages<br>→ tokens only</div>
+      <div style="font-size:0.75rem; color:#64748b; padding:8px;">sees only tokens<br>replies with tokens</div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:16px; max-width:900px;">
+      <div style="text-align:center; color:#94a3b8; font-size:0.82rem;">
+        ← response path (unchanged) — proxy depseudo → OWU stores real names → you see real names
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════════════════════════ CACHE -->
+<div class="section">
+  <h2>The Cache — why it matters</h2>
+  <div class="cache-grid">
+
+    <div class="cache-box">
+      <h3>Without cache — spaCy calls per turn</h3>
+      <div style="margin-bottom:12px; font-size:0.82rem; color:#94a3b8;">Each turn re-scans ALL previous messages</div>
+      <div class="kv"><span class="key">Turn 1</span><span class="arrow-r">→</span><span class="val">1 spaCy call</span></div>
+      <div class="kv"><span class="key">Turn 2</span><span class="arrow-r">→</span><span class="val">3 spaCy calls (2 old + 1 new)</span></div>
+      <div class="kv"><span class="key">Turn 5</span><span class="arrow-r">→</span><span class="val">9 spaCy calls</span></div>
+      <div class="kv"><span class="key">Turn 10</span><span class="arrow-r">→</span><span class="val">19 spaCy calls</span></div>
+      <div style="margin-top:12px; padding:10px; background:#450a0a; border-radius:6px; font-size:0.8rem; color:#f87171;">
+        O(n²) — gets slower every turn ❌
+      </div>
+    </div>
+
+    <div class="cache-box">
+      <h3>With cache — spaCy calls per turn</h3>
+      <div style="margin-bottom:12px; font-size:0.82rem; color:#94a3b8;">Old messages: cache hit (free). New message: 1 spaCy call.</div>
+      <div class="kv"><span class="key">Turn 1</span><span class="arrow-r">→</span><span class="val">1 call</span></div>
+      <div class="kv"><span class="key">Turn 2</span><span class="arrow-r">→</span><span class="val">1 call</span> <span class="tag hit">2 hits</span></div>
+      <div class="kv"><span class="key">Turn 5</span><span class="arrow-r">→</span><span class="val">1 call</span> <span class="tag hit">8 hits</span></div>
+      <div class="kv"><span class="key">Turn 10</span><span class="arrow-r">→</span><span class="val">1 call</span> <span class="tag hit">18 hits</span></div>
+      <div style="margin-top:12px; padding:10px; background:#052e16; border-radius:6px; font-size:0.8rem; color:#4ade80;">
+        O(1) — always 1 spaCy call per turn ✓
+      </div>
+    </div>
+
+  </div>
+
+  <h3 style="margin-bottom:12px;">How the cache works</h3>
+  <div class="code-wrap">
+    <pre>
+<span class="comment"># Structure: session_id → { md5(text) → masked_text }</span>
+pseudo_cache: <span class="kw">dict</span>[str, <span class="kw">dict</span>[str, str]] = {}
+
+<span class="kw">def</span> <span class="fn">_pseudo_with_cache</span>(text, session_id, enabled_types) -> str:
+    h = hashlib.md5(text.encode()).hexdigest()     <span class="comment"># fast fingerprint of text</span>
+    session_cache = pseudo_cache.setdefault(session_id, {})
+
+    hit = session_cache.get(h)
+    <span class="kw">if</span> hit <span class="kw">is not</span> None:
+        <span class="kw">return</span> hit                                 <span class="comment"># free — no spaCy</span>
+
+    out = pseudonymize(text, session_id, ...)       <span class="comment"># spaCy runs here</span>
+    session_cache[h] = out
+    <span class="kw">return</span> out
+    </pre>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════════════════════════ CODE CHANGES -->
+<div class="section">
+  <h2>The 4 Code Changes</h2>
+  <div class="steps" style="grid-template-columns: repeat(4, 1fr);">
+
+    <div class="step delete">
+      <div class="num">1</div>
+      <div class="title">DELETE lines 402-411</div>
+      <div class="desc">Remove the old loop that was <em>un-masking</em> assistant messages. It was actively putting real names back in before sending to the LLM — the root cause of the leak.</div>
+    </div>
+
+    <div class="step add">
+      <div class="num">2</div>
+      <div class="title">ADD cache dict</div>
+      <div class="desc">One line after <code>store = MappingStore()</code>. A dict keyed by session_id → md5 hash → masked result. No new deps.</div>
+    </div>
+
+    <div class="step add">
+      <div class="num">3</div>
+      <div class="title">ADD helper function</div>
+      <div class="desc"><code>_pseudo_with_cache()</code> — wraps pseudonymize with cache lookup. All masking calls go through here.</div>
+    </div>
+
+    <div class="step add">
+      <div class="num" style="background:#a78bfa;">4</div>
+      <div class="title">ADD history loop</div>
+      <div class="desc">Replace the deleted block with a new loop: for every old message, call <code>_pseudo_with_cache()</code>. Skip system prompts. Last message handled by existing block below.</div>
+    </div>
+
+  </div>
+
+  <h3 style="margin-bottom:12px;">Diff — main.py</h3>
+  <div class="code-wrap">
+    <pre>
+<span class="comment">  # Line 43 — add after store</span>
+<span class="add">+ pseudo_cache: dict[str, dict[str, str]] = {}</span>
+
+<span class="comment">  # After rebuild_content — new helper</span>
+<span class="add">+ def _pseudo_with_cache(text, session_id, enabled_types) -> str:</span>
+<span class="add">+     if not text: return text</span>
+<span class="add">+     h = hashlib.md5(text.encode("utf-8")).hexdigest()</span>
+<span class="add">+     session_cache = pseudo_cache.setdefault(session_id, {})</span>
+<span class="add">+     hit = session_cache.get(h)</span>
+<span class="add">+     if hit is not None: return hit</span>
+<span class="add">+     out = pseudonymize(text, session_id, store.get_store(), enabled_types=enabled_types)</span>
+<span class="add">+     session_cache[h] = out</span>
+<span class="add">+     return out</span>
+
+<span class="comment">  # Lines 402-411 — DELETE the old depseudo loop</span>
+<span class="del">- restored_count = 0</span>
+<span class="del">- for msg in messages[:-1]:</span>
+<span class="del">-     if msg.get("role") == "assistant":</span>
+<span class="del">-         msg["content"] = depseudonymize(msg["content"], session_id, store.get_store())</span>
+<span class="del">- if restored_count > 0: log_history_depseudo(restored_count)</span>
+
+<span class="comment">  # Same spot — ADD new history pseudo loop</span>
+<span class="add">+ if messages and privacy_enabled:</span>
+<span class="add">+     for msg in messages[:-1]:  # excludes last — handled below</span>
+<span class="add">+         text = extract_text_content(msg.get("content"))</span>
+<span class="add">+         if not text: continue</span>
+<span class="add">+         if any(m in text for m in SYSTEM_PROMPT_MARKERS): continue</span>
+<span class="add">+         out = _pseudo_with_cache(text, session_id, enabled_types)</span>
+<span class="add">+         if out != text: msg["content"] = rebuild_content(msg["content"], out)</span>
+    </pre>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════════════════════════ SAFETY CHECK -->
+<div class="section">
+  <h2>Safety Check — Task 2.4 (run FIRST)</h2>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+
+    <div class="box">
+      <h3>The concern</h3>
+      <p style="font-size:0.85rem; color:#94a3b8; line-height:1.6; margin-bottom:12px;">
+        Old assistant messages already have tokens like <code style="color:#4ade80;">PERSON_cc75010d</code>.
+        Will spaCy look at that and think "oh that looks like a person name" and re-tag it as a NEW token?
+      </p>
+      <div class="msg">
+        <div class="role asst">input</div>
+        <div class="bubble"><span class="token">PERSON_cc75010d</span> is an engineer</div>
+      </div>
+      <div style="font-size:0.8rem; color:#f87171; margin: 8px 0;">Risk: spaCy outputs PERSON_aaaabbbb → breaks conversation</div>
+      <div class="msg">
+        <div class="role asst">want</div>
+        <div class="bubble safe"><span class="token">PERSON_cc75010d</span> is an engineer <span class="dim">(unchanged)</span></div>
+      </div>
+    </div>
+
+    <div class="box">
+      <h3>How we verify</h3>
+      <div class="code-wrap" style="margin-bottom:12px;">
+        <pre style="font-size:0.78rem;">docker exec garnet-privacy-proxy python3 -c "
+from app.pseudonymizer import pseudonymize
+from app.mapping_store import MappingStore
+s = MappingStore(ttl=3600)
+txt = 'user talked to PERSON_cc75010d'
+out = pseudonymize(txt, 'test', s.get_store())
+assert out == txt, f're-tagged: {out}'
+print('ok')
+"</pre>
+      </div>
+      <div style="padding:10px; background:#052e16; border-radius:6px; font-size:0.8rem; color:#4ade80; margin-bottom:10px;">
+        If prints "ok" → no fast-path needed, ship as-is ✓
+      </div>
+      <div style="padding:10px; background:#450a0a; border-radius:6px; font-size:0.8rem; color:#f87171;">
+        If fails → add regex guard in _pseudo_with_cache:<br>
+        <code>if TOKEN_RE.search(text): return text</code>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════════════════════════ HOW CACHE KNOWS -->
+<div class="section">
+  <h2>How Does the Cache Know It Already Saw a Message?</h2>
+  <p style="color:#94a3b8; font-size:0.88rem; margin-bottom:24px;">Every text gets a unique fingerprint (md5). Same text = same fingerprint. Cache stores fingerprint → result.</p>
+
+  <!-- fingerprint concept -->
+  <h3 style="margin-bottom:14px;">Step 1 — Fingerprinting</h3>
+  <div style="display:flex; flex-direction:column; gap:10px; max-width:700px; margin-bottom:32px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div style="background:#1e2230; border:1px solid #2d3348; border-radius:8px; padding:10px 16px; font-size:0.85rem; flex:1; font-family:monospace; color:#e2e8f0;">"Max works at Enclaive"</div>
+      <div style="color:#7dd3fc; font-size:1.2rem;">→ md5 →</div>
+      <div style="background:#0c1a2e; border:1px solid #3b82f6; border-radius:8px; padding:10px 16px; font-size:0.85rem; font-family:monospace; color:#60a5fa; min-width:110px; text-align:center;">a3f7c1b2</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div style="background:#1e2230; border:1px solid #2d3348; border-radius:8px; padding:10px 16px; font-size:0.85rem; flex:1; font-family:monospace; color:#e2e8f0;">"what is his email?"</div>
+      <div style="color:#7dd3fc; font-size:1.2rem;">→ md5 →</div>
+      <div style="background:#0c1a2e; border:1px solid #3b82f6; border-radius:8px; padding:10px 16px; font-size:0.85rem; font-family:monospace; color:#60a5fa; min-width:110px; text-align:center;">d9e2f1a4</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div style="background:#1e2230; border:1px solid #2d3348; border-radius:8px; padding:10px 16px; font-size:0.85rem; flex:1; font-family:monospace; color:#e2e8f0;">"Max works at Enclaive" <span style="color:#fbbf24;">(same text again)</span></div>
+      <div style="color:#7dd3fc; font-size:1.2rem;">→ md5 →</div>
+      <div style="background:#0c1a2e; border:1px solid #3b82f6; border-radius:8px; padding:10px 16px; font-size:0.85rem; font-family:monospace; color:#60a5fa; min-width:110px; text-align:center;">a3f7c1b2</div>
+    </div>
+    <div style="background:#1c1505; border:1px solid #fbbf24; border-radius:8px; padding:10px 16px; font-size:0.82rem; color:#fbbf24;">
+      Same text → always same fingerprint. That's how the cache recognises it.
+    </div>
+  </div>
+
+  <!-- cache dict visual -->
+  <h3 style="margin-bottom:14px;">Step 2 — The Cache Dictionary</h3>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px;">
+    <div>
+      <div style="font-size:0.78rem; color:#64748b; margin-bottom:10px; font-family:monospace;">pseudo_cache["session-abc123"] = {</div>
+      <div style="background:#0d1117; border:1px solid #2d3348; border-radius:10px; padding:16px; font-family:monospace; font-size:0.82rem;">
+        <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
+          <span style="color:#60a5fa;">"a3f7c1b2"</span>
+          <span style="color:#475569;">→</span>
+          <span style="color:#4ade80; font-size:0.78rem;">"PERSON_cc75010d works at ORGANIZATION_bd3a68a5"</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
+          <span style="color:#60a5fa;">"d9e2f1a4"</span>
+          <span style="color:#475569;">→</span>
+          <span style="color:#4ade80; font-size:0.78rem;">"what is his email?"</span>
+          <span style="color:#64748b; font-size:0.75rem;">(no PII)</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span style="color:#60a5fa;">"b8c2d5e1"</span>
+          <span style="color:#475569;">→</span>
+          <span style="color:#4ade80; font-size:0.78rem;">"EMAIL_ADDRESS_f3a12b99"</span>
+        </div>
+      </div>
+      <div style="font-size:0.78rem; color:#64748b; margin-top:6px; font-family:monospace;">}</div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div style="background:#052e16; border:1px solid #22c55e; border-radius:8px; padding:14px;">
+        <div style="color:#4ade80; font-weight:700; font-size:0.85rem; margin-bottom:6px;">Cache HIT</div>
+        <div style="color:#94a3b8; font-size:0.82rem; line-height:1.5;">Fingerprint found in dict → return saved result immediately. spaCy never runs.</div>
+      </div>
+      <div style="background:#1c1505; border:1px solid #fbbf24; border-radius:8px; padding:14px;">
+        <div style="color:#fbbf24; font-weight:700; font-size:0.85rem; margin-bottom:6px;">Cache MISS</div>
+        <div style="color:#94a3b8; font-size:0.82rem; line-height:1.5;">Fingerprint not found → run spaCy → save result in dict → return. Next time: HIT.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- turn by turn walkthrough -->
+  <h3 style="margin-bottom:14px;">Step 3 — Turn by Turn Walkthrough</h3>
+  <div style="display:flex; flex-direction:column; gap:12px; max-width:860px;">
+
+    <!-- Turn 1 -->
+    <div style="background:#1e2230; border:1px solid #2d3348; border-radius:10px; overflow:hidden;">
+      <div style="background:#0c1a2e; padding:10px 16px; font-size:0.8rem; font-weight:700; color:#7dd3fc;">TURN 1 — You send "Max works at Enclaive"</div>
+      <div style="padding:14px 16px;">
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:0.82rem;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">OWU sends:</span>
+            <span style="font-family:monospace; color:#e2e8f0;">[ {user: "Max works at Enclaive"} ]</span>
+            <span style="background:#1c1505; color:#fbbf24; padding:2px 8px; border-radius:4px; font-size:0.72rem;">MISS</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">Proxy runs spaCy:</span>
+            <span style="font-family:monospace; color:#4ade80;">"PERSON_cc75010d works at ORGANIZATION_bd3a68a5"</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">Cache saves:</span>
+            <span style="font-family:monospace; color:#60a5fa;">a3f7c1b2</span><span style="color:#475569; margin:0 4px;">→</span><span style="font-family:monospace; color:#4ade80; font-size:0.78rem;">"PERSON_cc75010d works at ORGANIZATION_bd3a68a5"</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">spaCy calls:</span>
+            <span style="color:#fbbf24; font-weight:700;">1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Turn 2 -->
+    <div style="background:#1e2230; border:1px solid #2d3348; border-radius:10px; overflow:hidden;">
+      <div style="background:#0c1a2e; padding:10px 16px; font-size:0.8rem; font-weight:700; color:#7dd3fc;">TURN 2 — You send "what does he do?"</div>
+      <div style="padding:14px 16px;">
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:0.82rem;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">OWU sends:</span>
+            <span style="font-family:monospace; color:#e2e8f0; font-size:0.78rem;">[ {user: "Max works at Enclaive"}, {asst: "Max is an engineer"}, {user: "what does he do?"} ]</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">msg 1 (old):</span>
+            <span style="font-family:monospace; color:#60a5fa;">a3f7c1b2</span><span style="color:#475569; margin:0 4px;">→</span><span style="background:#052e16; color:#4ade80; padding:2px 8px; border-radius:4px; font-size:0.72rem; font-weight:700;">HIT — skip spaCy</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">msg 2 (old asst):</span>
+            <span style="color:#475569; font-size:0.78rem;">fingerprint of "Max is an engineer" →</span><span style="background:#1c1505; color:#fbbf24; padding:2px 8px; border-radius:4px; font-size:0.72rem; margin-left:4px; font-weight:700;">MISS → spaCy</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">msg 3 (new):</span>
+            <span style="color:#475569; font-size:0.78rem;">"what does he do?" — no PII, pseudonymize returns unchanged, cached anyway</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">spaCy calls:</span>
+            <span style="color:#fbbf24; font-weight:700;">2</span><span style="color:#64748b; margin-left:6px; font-size:0.78rem;">(msg 2 + msg 3 are new — turn 1's text: free)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Turn 5 -->
+    <div style="background:#1e2230; border:1px solid #2d3348; border-radius:10px; overflow:hidden;">
+      <div style="background:#0c1a2e; padding:10px 16px; font-size:0.8rem; font-weight:700; color:#7dd3fc;">TURN 5 — You send any new message</div>
+      <div style="padding:14px 16px;">
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:0.82rem;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">OWU sends:</span>
+            <span style="font-family:monospace; color:#e2e8f0;">9 messages (8 old + 1 new)</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">8 old msgs:</span>
+            <span style="background:#052e16; color:#4ade80; padding:2px 8px; border-radius:4px; font-size:0.72rem; font-weight:700;">ALL HITS — skip spaCy</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">1 new msg:</span>
+            <span style="background:#1c1505; color:#fbbf24; padding:2px 8px; border-radius:4px; font-size:0.72rem; font-weight:700;">MISS → spaCy runs once</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="color:#64748b; min-width:120px;">spaCy calls:</span>
+            <span style="color:#4ade80; font-weight:700; font-size:1rem;">1</span><span style="color:#64748b; margin-left:6px; font-size:0.78rem;">always 1, no matter how long the conversation</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════════════════════════ SUMMARY -->
+<div class="section">
+  <h2>Summary</h2>
+  <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:16px;">
+    <div class="box" style="border-color:#7dd3fc;">
+      <div style="font-size:2rem; margin-bottom:8px;">1</div>
+      <div style="font-weight:700; margin-bottom:6px;">File changed</div>
+      <div style="color:#94a3b8; font-size:0.85rem;">Only <code>backend/privacy_proxy/app/main.py</code></div>
+    </div>
+    <div class="box" style="border-color:#7dd3fc;">
+      <div style="font-size:2rem; margin-bottom:8px;">0</div>
+      <div style="font-weight:700; margin-bottom:6px;">New dependencies</div>
+      <div style="color:#94a3b8; font-size:0.85rem;">hashlib already imported. dict is stdlib.</div>
+    </div>
+    <div class="box" style="border-color:#7dd3fc;">
+      <div style="font-size:2rem; margin-bottom:8px;">O(1)</div>
+      <div style="font-weight:700; margin-bottom:6px;">spaCy calls per turn</div>
+      <div style="color:#94a3b8; font-size:0.85rem;">Always 1, regardless of conversation length.</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

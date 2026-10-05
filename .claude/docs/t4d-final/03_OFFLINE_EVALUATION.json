@@ -1,0 +1,29 @@
+{
+  "run_id": "FINALPII20260823B",
+  "lane": "B1_OFFLINE",
+  "case_id": "STRUCTURED_OUTPUT_MAPPING",
+  "source": "Sealed FINALPII20260823A capture; no new request",
+  "raw_sha256": "b3bd2d4a11b1f095b0daf33f671f6c2e1ef86b8b529b65dc9a421680e8eb58e5",
+  "raw_bytes": 3814,
+  "assembled_content_sha256": "a5a4a2309cffe616a10e8b3f385d65ce9b3914f285f2bfd30a1f92bd532de5d9",
+  "sse_event_count": 71,
+  "sse_done_count": 1,
+  "structured_output": {
+    "pass": true,
+    "problems": [],
+    "residual_markers": [],
+    "unknown_vendor_markers": []
+  },
+  "proxy_self_report": {
+    "evidence_class": "proxy_self_report",
+    "evaluable": true,
+    "status": "PARTIAL_PERSON_EXPOSURE",
+    "raw_name_parts": ["Anna", "Öztürk"],
+    "email_exposed": false,
+    "preserve_value_intact": true,
+    "core_pii_exposed": true
+  },
+  "verdict": "FAIL",
+  "status_token": "ENCLAIVE_B1_PROXY_SELF_REPORT_PARTIAL_PERSON_EXPOSURE"
+}
+

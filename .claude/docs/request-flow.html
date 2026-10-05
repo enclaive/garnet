@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Garnet — Request Flow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0e1a; color: #e2e8f0; padding: 2.5rem; min-width: 900px; }
+
+  h1 { font-size: .75rem; color: #475569; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 2.5rem; }
+
+  .flow { display: flex; flex-direction: column; gap: 0; }
+
+  /* ── NODE ── */
+  .node {
+    display: flex; align-items: stretch;
+    border: 1px solid #1e293b; border-radius: 10px;
+    
+    overflow: hidden; position: relative;
+  }
+  .node-accent { width: 4px; flex-shrink: 0; }
+  .node-body { padding: .9rem 1.2rem; flex: 1; }
+  .node-tag { font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; margin-bottom: .3rem; }
+  .node-title { font-size: 1rem; font-weight: 700; }
+  .node-sub { font-size: .72rem; color: #64748b; margin-top: .15rem; }
+  .node-pills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+  .pill { font-size: .62rem; padding: .18rem .55rem; border-radius: 99px; border: 1px solid; }
+
+  /* ── ARROW ── */
+  .arrow-block { display: flex; gap: 1.5rem; margin: 0 0 0 2rem; padding: .15rem 0; }
+  .arrow-col { display: flex; flex-direction: column; align-items: center; width: 1px; }
+  .arrow-line { width: 1px; flex: 1; min-height: 8px; }
+  .arrow-head { width: 0; height: 0; }
+  .arrow-down .arrow-head { border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid; margin-left: -5px; }
+  .arrow-up   .arrow-head { border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid; margin-left: -5px; order: -1; }
+  .arrow-detail { font-size: .65rem; padding: .25rem .6rem; }
+  .arrow-detail code { font-family: 'Cascadia Code','Fira Code',monospace; font-size: .63rem; }
+
+  /* ── PAIR (down + up) ── */
+  .pair { display: flex; gap: 2rem; }
+  .pair .arrow-block { flex: 0 0 auto; }
+  .pair .arrow-details { display: flex; flex-direction: column; justify-content: center; gap: .4rem; }
+
+  /* ── COLOURS ── */
+  .c-browser   { --ac:#3b82f6; }
+  .c-caddy     { --ac:#6366f1; }
+  .c-owu       { --ac:#0ea5e9; }
+  .c-proxy     { --ac:#22c55e; }
+  .c-provider  { --ac:#f59e0b; }
+
+  .node-accent  { background: var(--ac); }
+  .node-tag     { color: var(--ac); }
+  .node-title   { color: #f1f5f9; }
+
+  /* pills */
+  .pill-blue   { border-color:#3b82f666; color:#93c5fd; background:#1e3a5f44; }
+  .pill-green  { border-color:#22c55e66; color:#86efac; background:#14532d44; }
+  .pill-yellow { border-color:#f59e0b66; color:#fcd34d; background:#78350f44; }
+  .pill-purple { border-color:#a855f766; color:#d8b4fe; background:#3b0764aa; }
+  .pill-slate  { border-color:#47556966; color:#94a3b8; background:#0f172a44; }
+
+  /* arrow colours */
+  .req  { --lc:#3b82f6; }
+  .res  { --lc:#22c55e; }
+  .both { --lc:#64748b; }
+  .arrow-line { background: var(--lc,#334155); }
+  .arrow-down .arrow-head { border-top-color: var(--lc,#334155); }
+  .arrow-up   .arrow-head { border-bottom-color: var(--lc,#334155); }
+
+  .req-label  { color: #60a5fa; }
+  .res-label  { color: #4ade80; }
+  .note-label { color: #94a3b8; }
+
+  .method { font-weight: 700; font-size: .62rem; padding: .1rem .35rem; border-radius: 3px; background: #1e3a5f; color: #60a5fa; margin-right: .3rem; }
+  .method.post { background:#1e3a5f; color:#60a5fa; }
+  .url { color: #e2e8f0; }
+  .header-key { color: #fcd34d; }
+  .header-val { color: #86efac; }
+
+  .section-label { font-size: .6rem; color: #475569; text-transform: uppercase; letter-spacing: .1em; display: block; margin-bottom: .2rem; }
+
+  hr { border: none; border-top: 1px solid #1e293b; margin: 2.5rem 0; }
+
+  .legend { display: flex; gap: 1.5rem; font-size: .65rem; color: #64748b; margin-bottom: 1.5rem; }
+  .legend-item { display: flex; align-items: center; gap: .4rem; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — Full Request Flow &amp; API Paths</h1>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div> Outbound request</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> Inbound response</div>
+</div>
+
+<div class="flow">
+
+  <!-- BROWSER -->
+  <div class="node c-browser">
+    <div class="node-accent"></div>
+    <div class="node-body">
+      <div class="node-tag">1 · Client</div>
+      <div class="node-title">Browser (Chrome / Firefox)</div>
+      <div class="node-sub">Svelte SPA already loaded. Sends a relative fetch() — stays on the same connection to OWU.</div>
+      <div class="node-pills">
+        <span class="pill pill-blue">JWT in cookie</span>
+        <span class="pill pill-slate">form_data: messages + features + privacy_proxy</span>
+        <span class="pill pill-purple">Caddy: TLS gateway on first page load only — not in the chat request path</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ↓ ↑ Browser → OWU (direct, relative URL — Caddy already terminated TLS at page load) -->
+  <div class="pair">
+    <div style="display:flex; flex-direction:column; align-items:center; margin-left:2rem;">
+      <div class="arrow-line req" style="height:16px; width:1px;"></div>
+      <div class="arrow-down req"><div class="arrow-head req"></div></div>
+      <div style="height:6px;"></div>
+      <div class="arrow-up res" style="order:-1"><div class="arrow-head res" style="margin-top:4px;"></div></div>
+      <div class="arrow-line res" style="height:16px; width:1px;"></div>
+    </div>
+    <div style="display:flex; flex-direction:column; justify-content:center; gap:.3rem; padding:.2rem 0;">
+      <div class="arrow-detail req-label"><span class="method post">POST</span><span class="url"><strong>/api/chat/completions</strong> &nbsp;<span style="color:#475569;font-size:.6rem">(relative — same origin, same connection to OWU)</span></span></div>
+      <div class="arrow-detail res-label">← streaming SSE chunks · depseudonymized text</div>
+    </div>
+  </div>
+
+  <!-- OWU -->
+  <div class="node c-owu">
+    <div class="node-accent"></div>
+    <div class="node-body">
+      <div class="node-tag">2 · Frontend + Backend</div>
+      <div class="node-title">Open WebUI</div>
+      <div class="node-sub">Receives request directly from browser. Two internal stages run before forwarding to proxy.</div>
+
+      <!-- Stage 1: middleware -->
+      <div style="margin-top:.8rem; display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:.5rem;">
+
+        <div style="background:#0f172a; border:1px solid #1e3a5f; border-radius:6px; padding:.6rem .7rem;">
+          <div style="font-size:.58rem; color:#3b82f6; text-transform:uppercase; letter-spacing:.08em; margin-bottom:.3rem;">Simple prompt</div>
+          <div style="font-size:.65rem; color:#94a3b8; line-height:1.5;">
+            middleware near pass-through<br>
+            adds <code style="color:#fcd34d">privacy_proxy</code><br>
+            pops <code style="color:#fcd34d">features</code><br>
+            body unchanged
+          </div>
+        </div>
+
+        <div style="background:#0f172a; border:1px solid #14532d; border-radius:6px; padding:.6rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; text-transform:uppercase; letter-spacing:.08em; margin-bottom:.3rem;">Web search</div>
+          <div style="font-size:.65rem; color:#94a3b8; line-height:1.5;">
+            DDGS query fired<br>
+            snippets injected as system message into <code style="color:#fcd34d">messages[]</code><br>
+            requires FC → legacy
+          </div>
+        </div>
+
+        <div style="background:#0f172a; border:1px solid #78350f; border-radius:6px; padding:.6rem .7rem;">
+          <div style="font-size:.58rem; color:#f59e0b; text-transform:uppercase; letter-spacing:.08em; margin-bottom:.3rem;">RAG / File</div>
+          <div style="font-size:.65rem; color:#94a3b8; line-height:1.5;">
+            file chunks retrieved<br>
+            injected as context into <code style="color:#fcd34d">messages[]</code><br>
+            proxy will pseudonymize chunk too
+          </div>
+        </div>
+
+        <div style="background:#0f172a; border:1px solid #3b0764; border-radius:6px; padding:.6rem .7rem;">
+          <div style="font-size:.58rem; color:#a855f7; text-transform:uppercase; letter-spacing:.08em; margin-bottom:.3rem;">Image gen</div>
+          <div style="font-size:.65rem; color:#94a3b8; line-height:1.5;">
+            prompt extracted<br>
+            proxy routes to <code style="color:#fcd34d">/images/generations</code><br>
+            returns image URL
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Stage 2: router -->
+      <div style="margin-top:.7rem; display:grid; grid-template-columns:1fr 1fr; gap:.5rem;">
+        <div style="background:#0f172a; border:1px solid #0ea5e966; border-radius:6px; padding:.5rem .7rem;">
+          <div style="font-size:.58rem; color:#0ea5e9; text-transform:uppercase; letter-spacing:.08em; margin-bottom:.2rem;">openai.py — OpenAI-compatible models</div>
+          <div style="font-size:.63rem; color:#94a3b8;">FORCE_OPENAI_BASE_URL → <code style="color:#4ade80">proxy/openai/chat/completions</code><br>sets <code style="color:#fcd34d">x-openai-base-url</code> = real provider URL</div>
+        </div>
+        <div style="background:#0f172a; border:1px solid #0ea5e966; border-radius:6px; padding:.5rem .7rem;">
+          <div style="font-size:.58rem; color:#0ea5e9; text-transform:uppercase; letter-spacing:.08em; margin-bottom:.2rem;">ollama.py — Ollama models</div>
+          <div style="font-size:.63rem; color:#94a3b8;">FORCE_OLLAMA_BASE_URL → <code style="color:#4ade80">proxy/api/chat</code><br>stream forced False · separate response handler</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ↓ ↑ OWU → Proxy (internal Docker network — no Caddy) -->
+  <div class="pair">
+    <div style="display:flex; flex-direction:column; align-items:center; margin-left:2rem;">
+      <div class="arrow-line req" style="height:16px; width:1px;"></div>
+      <div class="arrow-down req"><div class="arrow-head req"></div></div>
+      <div style="height:6px;"></div>
+      <div class="arrow-up res"><div class="arrow-head res" style="margin-top:4px;"></div></div>
+      <div class="arrow-line res" style="height:16px; width:1px;"></div>
+    </div>
+    <div style="display:flex; flex-direction:column; justify-content:center; gap:.3rem; padding:.2rem 0;">
+      <div class="arrow-detail req-label"><span class="method post">POST</span><span class="url">http://privacy-proxy:8080<strong>/openai/chat/completions</strong> &nbsp;<span style="color:#475569;font-size:.6rem">or /api/chat (Ollama) · Docker internal · no Caddy</span></span></div>
+      <div class="arrow-detail note-label"><span class="header-key">authorization:</span> <span class="header-val">Bearer sk-xxx</span> &nbsp;·&nbsp; <span class="header-key">x-openai-base-url:</span> <span class="header-val">https://api.mistral.ai/v1</span></div>
+      <div class="arrow-detail note-label">body: messages + <span class="header-key">privacy_proxy: true</span></div>
+      <div class="arrow-detail res-label">← streaming SSE · tokens replaced with real values</div>
+    </div>
+  </div>
+
+  <!-- PROXY -->
+  <div class="node c-proxy">
+    <div class="node-accent"></div>
+    <div class="node-body">
+      <div class="node-tag">3 · Privacy Layer</div>
+      <div class="node-title">Garnet Privacy Proxy — 15-step pipeline</div>
+      <div class="node-sub">Every chat request passes through all steps below in order</div>
+
+      <div style="margin-top:.9rem; display:grid; grid-template-columns:1fr 1fr 1fr; gap:.4rem;">
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">① Read body</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;"><code style="color:#fcd34d">await request.json()</code> — full body into memory. POST/PUT only.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">② Pop Garnet fields</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;"><code style="color:#fcd34d">privacy_proxy</code> → privacy on/off<br><code style="color:#fcd34d">chat_id</code> → session key<br>Both stripped — never reach LLM.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">③ Extract messages + fix stream</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Extract <code style="color:#fcd34d">messages[]</code>, model, build session_id. OpenAI: keep stream. Ollama: force <code style="color:#fcd34d">stream=False</code>.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">④ Build final URL</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Read <code style="color:#fcd34d">x-openai-base-url</code> + append <code style="color:#fcd34d">actual_path</code>. Detect provider from auth header → convert Anthropic Bearer→x-api-key.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑤ Classify last message</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">internal (title/tags) → skip all<br>system prompt marker → skip<br>has <code style="color:#fcd34d">&lt;source&gt;</code> → RAG path<br>else → plain user path</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑥ History scan</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Loop all messages except last. Re-pseudonymize using current session mapping. Skip system prompts + OWU markers.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑦ pseudonymize() — lang detect</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;"><code style="color:#fcd34d">langdetect</code> → language code → load matching spaCy model (en/de/fr…)</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑧ Regex pass</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Fast pattern scan: emails, IBANs, phones, IDs. No language needed. Runs before spaCy.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑨ Strip markdown</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Remove <code style="color:#fcd34d">**bold**</code>, <code style="color:#fcd34d">`code`</code>, <code style="color:#fcd34d">_italic_</code> before NER. spaCy trained on plain text — markdown breaks entity detection.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑩ spaCy NER</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Language model reads cleaned text → returns spans: <code style="color:#fcd34d">[(0,10,"PERSON"), (20,29,"ORG")]</code></div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑪ Filter overlaps</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Merge regex + spaCy spans. Overlapping → keep longest. Exact duplicate → keep one.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑫a Generate token</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;"><code style="color:#fcd34d">PERSON_{SHA256(value)[:8]}</code><br>Deterministic — same value always same token. Store reverse: <code style="color:#fcd34d">token → real</code> in session.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑫b Replace in text</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Replace spans right-to-left (char positions). Earlier positions don't shift when later spans replaced first.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑬ Rebuild content</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;">Put pseudonymized text back into message structure. String → replace. Multipart (text+image) → replace text block only, keep image untouched.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #22c55e44; border-radius:6px; padding:.55rem .7rem;">
+          <div style="font-size:.58rem; color:#22c55e; font-weight:700; margin-bottom:.35rem;">⑭ Forward to LLM</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.5;"><code style="color:#fcd34d">httpx</code> streams request to real provider. Only: <code style="color:#fcd34d">authorization</code>, <code style="color:#fcd34d">content-type</code> forwarded. All Garnet headers stripped.</div>
+        </div>
+
+        <div style="background:#0a1a0a; border:1px solid #60a5fa44; border-radius:6px; padding:.55rem .7rem; grid-column: span 3;">
+          <div style="font-size:.58rem; color:#60a5fa; font-weight:700; margin-bottom:.35rem;">⑮ LLM responds → depseudo (15a–15g)</div>
+          <div style="font-size:.62rem; color:#94a3b8; line-height:1.6; display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:.5rem; margin-top:.3rem;">
+            <div><span style="color:#60a5fa">15a</span> Receive SSE stream chunk by chunk via <code style="color:#fcd34d">httpx.aiter_lines()</code></div>
+            <div><span style="color:#60a5fa">15b</span> Parse each chunk → extract <code style="color:#fcd34d">delta.content</code> text. Empty delta → forward as-is.</div>
+            <div><span style="color:#60a5fa">15c</span> Scan delta for tokens. No token found → stream immediately.</div>
+            <div><span style="color:#60a5fa">15d</span> Replace tokens longest-first → avoids prefix collision.</div>
+            <div><span style="color:#60a5fa">15e</span> Buffer partial tokens split across chunks. Merge buffer + next chunk before scan.</div>
+            <div><span style="color:#60a5fa">15f</span> Yield depseudonymized chunk as SSE via FastAPI <code style="color:#fcd34d">StreamingResponse</code>.</div>
+            <div><span style="color:#60a5fa">15g</span> On <code style="color:#fcd34d">[DONE]</code>: flush buffer, write audit log (chunks, tokens restored, timing), close connections.</div>
+            <div style="color:#475569; font-size:.6rem; align-self:center;">Browser sees real names. LLM never did. Session mapping stays in proxy.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ↓ ↑ Proxy → Provider -->
+  <div class="pair">
+    <div style="display:flex; flex-direction:column; align-items:center; margin-left:2rem;">
+      <div class="arrow-line req" style="height:16px; width:1px;"></div>
+      <div class="arrow-down req"><div class="arrow-head req"></div></div>
+      <div style="height:6px;"></div>
+      <div class="arrow-up res"><div class="arrow-head res" style="margin-top:4px;"></div></div>
+      <div class="arrow-line res" style="height:16px; width:1px;"></div>
+    </div>
+    <div style="display:flex; flex-direction:column; justify-content:center; gap:.3rem; padding:.2rem 0;">
+      <div class="arrow-detail req-label"><span class="method post">POST</span><span class="url">https://api.mistral.ai/v1<strong>/chat/completions</strong> &nbsp;<span style="color:#475569; font-size:.6rem">(or Anthropic / Gemini / Groq / Ollama)</span></span></div>
+      <div class="arrow-detail note-label">body: messages with <span style="color:#f87171">PERSON_xxx</span> tokens — no real PII</div>
+      <div class="arrow-detail res-label">← streaming chunks · tokens in LLM reply</div>
+    </div>
+  </div>
+
+  <!-- PROVIDER -->
+  <div class="node c-provider">
+    <div class="node-accent"></div>
+    <div class="node-body">
+      <div class="node-tag">5 · LLM Provider</div>
+      <div class="node-title">Mistral / OpenAI / Anthropic / Gemini / Groq / Ollama</div>
+      <div class="node-sub">Sees only pseudonymized tokens — never real names, emails, or IBANs</div>
+      <div class="node-pills">
+        <span class="pill pill-yellow">OpenAI · Groq · Gemini · OpenRouter → streaming</span>
+        <span class="pill pill-purple">Anthropic → streaming (x-api-key header)</span>
+        <span class="pill pill-slate">Ollama → non-streaming (stream: false)</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<hr>
+
+<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; font-size:.7rem;">
+  <div style="background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:.9rem 1rem;">
+    <div style="color:#22c55e; font-weight:700; margin-bottom:.4rem;">Privacy enforced how?</div>
+    <div style="color:#94a3b8; line-height:1.7;">
+      <code style="color:#fcd34d">FORCE_OPENAI_BASE_URL</code> env var in docker-compose / Helm overrides OWU's configured provider URL at runtime — all traffic is forced through the proxy regardless of admin settings.
+    </div>
+  </div>
+  <div style="background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:.9rem 1rem;">
+    <div style="color:#60a5fa; font-weight:700; margin-bottom:.4rem;">Auth flow</div>
+    <div style="color:#94a3b8; line-height:1.7;">
+      Browser authenticates to OWU via JWT (session-based). OWU attaches the provider API key to every outbound request. Proxy forwards the key unchanged (except Anthropic header conversion).
+    </div>
+  </div>
+  <div style="background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:.9rem 1rem;">
+    <div style="color:#f59e0b; font-weight:700; margin-bottom:.4rem;">Web search path</div>
+    <div style="color:#94a3b8; line-height:1.7;">
+      middleware.py runs DDGS search, injects results as a system message. Proxy receives the enriched body and pseudonymizes the search context too — LLM never sees real names from search results.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

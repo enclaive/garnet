@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet Privacy Proxy — How It Works</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e2e8f0; line-height: 1.65; }
+
+  header { background: linear-gradient(135deg, #1e3a5f, #0f2744); padding: 48px 32px 40px; border-bottom: 1px solid #1e40af33; }
+  header h1 { font-size: 2rem; font-weight: 700; color: #93c5fd; letter-spacing: -0.5px; }
+  header p { margin-top: 8px; color: #94a3b8; font-size: 1rem; max-width: 640px; }
+
+  .flow-bar { display: flex; align-items: center; gap: 0; padding: 24px 32px; background: #0a0d14; border-bottom: 1px solid #1e293b; flex-wrap: wrap; gap: 6px; }
+  .flow-step { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 6px 14px; font-size: 0.78rem; color: #94a3b8; white-space: nowrap; }
+  .flow-arrow { color: #3b82f6; font-size: 1.1rem; padding: 0 2px; }
+
+  .container { max-width: 980px; margin: 0 auto; padding: 40px 32px; }
+
+  h2.section-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #3b82f6; margin-bottom: 20px; margin-top: 52px; }
+  h2.section-label:first-child { margin-top: 0; }
+
+  .block { background: #141921; border: 1px solid #1e293b; border-radius: 12px; margin-bottom: 16px; overflow: hidden; transition: border-color 0.15s; }
+  .block:hover { border-color: #334155; }
+  .block-header { display: flex; align-items: flex-start; gap: 16px; padding: 20px 24px; cursor: pointer; user-select: none; }
+  .block-icon { width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+  .block-header-text { flex: 1; }
+  .block-name { font-size: 0.95rem; font-weight: 600; color: #e2e8f0; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+  .block-line { font-size: 0.75rem; color: #475569; margin-top: 2px; font-family: monospace; }
+  .block-summary { font-size: 0.88rem; color: #94a3b8; margin-top: 6px; }
+  .block-toggle { color: #475569; font-size: 0.9rem; padding-top: 4px; flex-shrink: 0; }
+
+  .block-body { padding: 0 24px 20px 78px; display: none; }
+  .block-body.open { display: block; }
+  .block-body p { font-size: 0.88rem; color: #94a3b8; margin-bottom: 10px; }
+  .block-body ul { list-style: none; padding: 0; }
+  .block-body ul li { font-size: 0.86rem; color: #94a3b8; padding: 4px 0; padding-left: 16px; position: relative; }
+  .block-body ul li::before { content: '→'; position: absolute; left: 0; color: #3b82f6; font-size: 0.8rem; }
+  .block-body .note { background: #0f2744; border-left: 3px solid #3b82f6; border-radius: 4px; padding: 10px 14px; font-size: 0.83rem; color: #93c5fd; margin-top: 12px; }
+  .block-body .warn { background: #2d1b00; border-left: 3px solid #f59e0b; border-radius: 4px; padding: 10px 14px; font-size: 0.83rem; color: #fbbf24; margin-top: 12px; }
+  code { font-family: 'Cascadia Code', 'Fira Code', monospace; background: #1e293b; padding: 1px 6px; border-radius: 4px; font-size: 0.82em; color: #93c5fd; }
+
+  /* colours per category */
+  .icon-setup    { background: #1e293b; color: #64748b; }
+  .icon-util     { background: #1a2e1a; color: #4ade80; }
+  .icon-stream   { background: #1e1a2e; color: #a78bfa; }
+  .icon-endpoint { background: #1a2020; color: #22d3ee; }
+  .icon-proxy    { background: #2e1a1a; color: #f87171; }
+
+  .big-block { background: #141921; border: 2px solid #1e3a5f; border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+  .big-block .block-header { background: #0f1e30; }
+  .big-block .block-name { color: #93c5fd; font-size: 1.05rem; }
+
+  .sub-section { margin-top: 16px; }
+  .sub-section h4 { font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #3b82f6; margin-bottom: 8px; }
+
+  footer { text-align: center; padding: 40px; color: #334155; font-size: 0.8rem; border-top: 1px solid #1e293b; margin-top: 40px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Garnet Privacy Proxy</h1>
+  <p>How <code>main.py</code> works — every function explained as a block. Click any block to expand it.</p>
+</header>
+
+<div class="flow-bar">
+  <div class="flow-step">Browser / OWU</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step">proxy() — catch-all route</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step">pseudonymize PII</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step">LLM (Ollama / OpenAI / Anthropic…)</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step">stream_with_depseudo()</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step">real names restored → browser</div>
+</div>
+
+<div class="container">
+
+  <!-- ── SETUP ── -->
+  <h2 class="section-label">1 · Setup &amp; globals</h2>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-setup">⚙️</div>
+      <div class="block-header-text">
+        <div class="block-name">Imports &amp; env vars</div>
+        <div class="block-line">main.py : 1–43</div>
+        <div class="block-summary">Loads all libraries and reads config from environment variables.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <ul>
+        <li><code>OLLAMA_URL</code> — where Ollama is running (default localhost:11434)</li>
+        <li><code>OPENAI_API_URL</code> — default OpenAI base (overridden per-request via header)</li>
+        <li><code>RESPONSES_API_MODELS</code> — GPT-5 models that need the newer <code>/v1/responses</code> endpoint</li>
+        <li><code>SYSTEM_PROMPT_MARKERS</code> — list of strings that identify OWU internal messages so they are skipped by pseudonymizer</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-setup">🗄️</div>
+      <div class="block-header-text">
+        <div class="block-name">MappingStore &amp; pseudo_cache</div>
+        <div class="block-line">main.py : 53–56</div>
+        <div class="block-summary">Two in-memory stores that remember what PII was replaced with what token.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <ul>
+        <li><code>store = MappingStore()</code> — the main session→token→real-value dictionary, optionally backed by Redis</li>
+        <li><code>pseudo_cache</code> — a secondary dict keyed by <code>session_id → md5(text)</code> so the same sentence isn't re-pseudonymized every turn</li>
+      </ul>
+      <div class="warn">⚠ Both are global and never evicted — known bugs P0-2 &amp; P0-8 in the improvement report.</div>
+    </div>
+  </div>
+
+  <!-- ── UTILITY FUNCTIONS ── -->
+  <h2 class="section-label">2 · Utility functions</h2>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-util">📄</div>
+      <div class="block-header-text">
+        <div class="block-name">extract_text_content(content)</div>
+        <div class="block-line">main.py : 59–68</div>
+        <div class="block-summary">Pulls plain text out of a message — handles both simple strings and OpenAI multi-part content arrays.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <p>A message <code>content</code> can be:</p>
+      <ul>
+        <li>A plain string → return as-is</li>
+        <li>A list of blocks like <code>[{"type":"text","text":"hello"}, {"type":"image_url",...}]</code> → join all <code>text</code> blocks</li>
+      </ul>
+      <div class="note">Used everywhere before calling pseudonymize — ensures we always pass a string, not a JSON array.</div>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-util">🔧</div>
+      <div class="block-header-text">
+        <div class="block-name">rebuild_content(original_content, pseudonymized_text)</div>
+        <div class="block-line">main.py : 71–82</div>
+        <div class="block-summary">Puts the pseudonymized text back into the original message structure without breaking image blocks.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <p>The reverse of <code>extract_text_content</code>. If the original was a list, it replaces only the <code>text</code> blocks and keeps image/file blocks untouched.</p>
+      <ul>
+        <li>string → returns pseudonymized string directly</li>
+        <li>list → rebuilds list, swapping text blocks for the new pseudonymized version</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-util">⚡</div>
+      <div class="block-header-text">
+        <div class="block-name">_pseudo_with_cache(text, session_id, enabled_types)</div>
+        <div class="block-line">main.py : 86–96</div>
+        <div class="block-summary">Runs pseudonymize() but skips re-running GLiNER/spaCy if the same text was already processed this session.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <ul>
+        <li>Computes <code>MD5(text)</code> as cache key</li>
+        <li>If found in <code>pseudo_cache[session_id]</code> → returns cached result instantly</li>
+        <li>If not → calls <code>pseudonymize()</code>, stores result, returns it</li>
+      </ul>
+      <div class="note">Used for history messages — conversation history is resent every turn, so this avoids re-scanning 10 previous messages with GLiNER each time.</div>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-util">✂️</div>
+      <div class="block-header-text">
+        <div class="block-name">split_at_safe_boundary(buffer)</div>
+        <div class="block-line">main.py : 99–115</div>
+        <div class="block-summary">Prevents a pseudo token like <code>PERSON_abc12</code> from being split across two SSE stream chunks.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <p>SSE streams arrive in arbitrary chunks. If a chunk ends mid-token like <code>"...PERSON_a"</code> and we replace it, we'd miss the full token <code>PERSON_abc123</code>.</p>
+      <ul>
+        <li>Checks if the buffer ends with a partial token prefix (<code>PERSON</code>, <code>ORGAN…</code>, etc.)</li>
+        <li>Returns <code>(safe_part, remainder)</code> — safe part is depseudo'd and yielded, remainder is held for next chunk</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-util">🔍</div>
+      <div class="block-header-text">
+        <div class="block-name">detect_internal_type(content)</div>
+        <div class="block-line">main.py : 118–127</div>
+        <div class="block-summary">Identifies OWU auto-generated system messages so the proxy skips pseudonymizing them.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <p>OWU sends many internal messages that are not user-written text — title generators, tag generators, follow-up generators. Pseudonymizing those would break them.</p>
+      <ul>
+        <li><code>"follow_ups"</code> → <code>follow_ups</code></li>
+        <li><code>"Generate a concise"</code> + <code>"title"</code> → <code>title_gen</code></li>
+        <li><code>"Generate 1-3 broad tags"</code> → <code>tags_gen</code></li>
+        <li><code>"search_query"</code> → <code>search_query</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── STREAMING ── -->
+  <h2 class="section-label">3 · Streaming depseudonymization</h2>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-stream">🌊</div>
+      <div class="block-header-text">
+        <div class="block-name">stream_with_depseudo(response_stream, mapping, …)</div>
+        <div class="block-line">main.py : 158–256</div>
+        <div class="block-summary">The heart of Garnet — reads LLM SSE chunks, replaces pseudo tokens with real names, and forwards to browser in real-time.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <div class="sub-section">
+        <h4>Step 1 — first yield (metadata)</h4>
+        <ul>
+          <li>Immediately sends a special <code>{"type":"pseudonymized_prompt",...}</code> JSON line with what the LLM will see — OWU reads this to show the Garnet badge</li>
+        </ul>
+      </div>
+      <div class="sub-section">
+        <h4>Step 2 — chunk loop</h4>
+        <ul>
+          <li>Receives raw bytes from LLM, splits on <code>\n</code>, strips <code>data: </code> prefix</li>
+          <li>Skips <code>[DONE]</code> sentinel and empty lines</li>
+          <li>Parses JSON to extract <code>choices[0].delta.content</code> text</li>
+          <li>Also captures token usage (input/output) from OpenAI, Anthropic native, and Anthropic OpenAI-compat formats</li>
+        </ul>
+      </div>
+      <div class="sub-section">
+        <h4>Step 3 — safe depseudo per chunk</h4>
+        <ul>
+          <li>Appends chunk text to a rolling <code>buffer</code></li>
+          <li>Calls <code>split_at_safe_boundary(buffer)</code> → gets safe part + remainder held back</li>
+          <li>Replaces all pseudo tokens in safe part using the session mapping (longest token first to avoid partial matches)</li>
+          <li>Yields <code>data: {"choices":[{"delta":{"content": safe}}]}\n\n</code> to browser</li>
+        </ul>
+      </div>
+      <div class="sub-section">
+        <h4>Step 4 — flush remainder + logs</h4>
+        <ul>
+          <li>Any leftover buffer is depseudo'd and sent after the stream ends</li>
+          <li>Logs chunk count, total chars, TTFT, total latency, token counts, privacy audit</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ENDPOINTS ── -->
+  <h2 class="section-label">4 · Small endpoints</h2>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-endpoint">❤️</div>
+      <div class="block-header-text">
+        <div class="block-name">GET /health</div>
+        <div class="block-line">main.py : 260–261</div>
+        <div class="block-summary">Returns <code>{"status":"ok"}</code>. Used by Docker health checks and k8s readiness probes.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <div class="warn">⚠ Known issue: GLiNER model loads lazily on first real request, so /health passes before the model is ready (P1-24).</div>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-endpoint">🔒</div>
+      <div class="block-header-text">
+        <div class="block-name">POST /vault/scan</div>
+        <div class="block-line">main.py : 265–313</div>
+        <div class="block-summary">Pseudonymizes an uploaded document and stores the mapping. Called when a user uploads a file to OWU.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <ul>
+        <li>Takes <code>{"text": "...", "file_id": "abc", "privacy_proxy": true}</code></li>
+        <li>If privacy off → returns text unchanged with zero entity count</li>
+        <li>Calls <code>pseudonymize()</code> with <code>session_id = "file:&lt;file_id&gt;"</code> — file mappings are stored separately from chat session mappings</li>
+        <li>Returns how many entities were found, breakdown by type (PERSON, ORG, etc.), and a before/after preview</li>
+      </ul>
+      <div class="note">The "file:" prefix on session_id is how the proxy knows to merge file mappings into chat depseudo — any session starting with "file:" is loaded as additional context.</div>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-endpoint">🔬</div>
+      <div class="block-header-text">
+        <div class="block-name">POST /analyze</div>
+        <div class="block-line">main.py : 317–332</div>
+        <div class="block-summary">Debug/inspection endpoint — detects entities in text and returns them without pseudonymizing.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <ul>
+        <li>Calls <code>detect_entities(text, language, enabled_types)</code></li>
+        <li>Returns <code>{"entities": [{type, value, start, end}, ...]}</code></li>
+        <li>Does NOT store any mapping — purely read-only inspection</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-endpoint">🏷️</div>
+      <div class="block-header-text">
+        <div class="block-name">GET /openai/api/tags</div>
+        <div class="block-line">main.py : 336–343</div>
+        <div class="block-summary">Proxies Ollama's model list endpoint so OWU can discover available local models.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <ul>
+        <li>Forwards to <code>OLLAMA_URL/api/tags</code> and returns the response as-is</li>
+        <li>No pseudonymization — model names are not PII</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── MAIN PROXY ── -->
+  <h2 class="section-label">5 · Main proxy handler — the big one</h2>
+
+  <div class="big-block">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-proxy">🚀</div>
+      <div class="block-header-text">
+        <div class="block-name">proxy(request, path)  ←  catches ALL routes</div>
+        <div class="block-line">main.py : 347–end</div>
+        <div class="block-summary">Every request that isn't /health, /vault/scan, /analyze goes here. This is the full Garnet pipeline in one function.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+
+      <div class="sub-section">
+        <h4>Block A — Route detection</h4>
+        <ul>
+          <li>Is the path <code>openai/…</code>? → flag <code>is_openai = True</code></li>
+          <li>Is it a chat endpoint? (<code>v1/chat/completions</code>, <code>api/chat</code>, etc.) → flag <code>is_chat = True</code></li>
+          <li>Non-chat requests (embeddings, model list, etc.) are passed through without any PII processing</li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h4>Block B — URL &amp; provider resolution</h4>
+        <ul>
+          <li>If the base URL in the header points back to the proxy itself (self-loop) → detect real provider from API key prefix (<code>sk-ant-</code>→Anthropic, <code>AIza</code>→Gemini, <code>gsk-</code>→Groq)</li>
+          <li>Sets <code>provider_label</code> used in logs: <code>openai / anthropic / groq / gemini / ollama</code></li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h4>Block C — Session ID</h4>
+        <ul>
+          <li>Tries in order: <code>body.chat_id</code> → <code>messages[0].id</code> → <code>MD5(first_message)[:12]</code></li>
+          <li>Session ID is the key that links all messages to their PII mapping store</li>
+        </ul>
+        <div class="warn">⚠ MD5 fallback means two users saying "Hi" share a session — known bug P0-9.</div>
+      </div>
+
+      <div class="sub-section">
+        <h4>Block D — Responses API remap (GPT-5 models only)</h4>
+        <ul>
+          <li>Converts <code>/v1/chat/completions</code> body format → <code>/v1/responses</code> format</li>
+          <li>Moves <code>system</code> messages into <code>instructions</code> field</li>
+          <li>Remaps <code>image_url</code> blocks to <code>input_image</code>, <code>text</code> to <code>input_text</code></li>
+          <li>Moves <code>response_format</code> into <code>text.format</code>, <code>reasoning_effort</code> into <code>reasoning.effort</code></li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h4>Block E — History pseudonymization</h4>
+        <ul>
+          <li>Loops over all messages except the last one</li>
+          <li>Skips empty messages, system-prompt messages (OWU internal), and already-pseudonymized messages</li>
+          <li>Calls <code>_pseudo_with_cache()</code> on each — GLiNER only runs on new text</li>
+          <li>Replaces <code>msg["content"]</code> in-place with pseudonymized version</li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h4>Block F — RAG / file context pseudonymization</h4>
+        <ul>
+          <li>Scans all messages for <code>&lt;context&gt;</code> / <code>&lt;source</code> / <code>{{CONTEXT}}</code> tags — these are RAG-injected document chunks</li>
+          <li>For large files (&gt;50 000 chars) → splits into 10k-char overlapping chunks, pseudonymizes each separately, rejoins</li>
+          <li>Merges file mapping with chat session mapping so depseudo works across both</li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h4>Block G — Last user message pseudonymization</h4>
+        <ul>
+          <li>Takes <code>messages[-1]</code> (the new user message)</li>
+          <li>Calls <code>pseudonymize()</code> directly (not cached — it's always new text)</li>
+          <li>Stores the pseudonymized version in <code>pseudonymized_user_message</code> — sent to OWU in the response metadata so the badge shows what the LLM saw</li>
+          <li>If nothing was replaced → logs "no PII detected"</li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h4>Block H — Forward to LLM (Ollama path, non-streaming)</h4>
+        <ul>
+          <li>Ollama returns a single JSON object (not SSE)</li>
+          <li>Fetches the response, extracts <code>message.content</code></li>
+          <li>Replaces all pseudo tokens with real values inline</li>
+          <li>Returns the modified JSON directly</li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h4>Block I — Forward to LLM (OpenAI/cloud path, streaming)</h4>
+        <ul>
+          <li>Opens a streaming HTTP request to the provider</li>
+          <li>Builds <code>session_mapping</code> = chat mapping + all file: mappings merged together</li>
+          <li>If <code>stream=False</code> was requested → does a regular request, depseudo's the full response, returns JSON</li>
+          <li>If streaming → passes the byte generator to <code>stream_with_depseudo()</code> and returns a <code>StreamingResponse</code></li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SUMMARY ── -->
+  <h2 class="section-label">6 · Full flow in one picture</h2>
+
+  <div class="block" style="border-color:#1e3a5f;">
+    <div class="block-header" onclick="toggle(this)">
+      <div class="block-icon icon-stream">🗺️</div>
+      <div class="block-header-text">
+        <div class="block-name">End-to-end: one user message</div>
+        <div class="block-summary">Trace of a single chat turn through all blocks.</div>
+      </div>
+      <div class="block-toggle">▸</div>
+    </div>
+    <div class="block-body">
+      <ul>
+        <li>OWU sends <code>POST /openai/v1/chat/completions</code> with user message + history</li>
+        <li><strong>proxy()</strong> — Block A/B: detect is_openai=true, is_chat=true, resolve provider URL</li>
+        <li><strong>proxy()</strong> — Block C: extract session_id from chat_id header</li>
+        <li><strong>proxy()</strong> — Block E: pseudonymize history messages via <code>_pseudo_with_cache()</code></li>
+        <li><strong>proxy()</strong> — Block F: find RAG chunks in messages, pseudonymize file content</li>
+        <li><strong>proxy()</strong> — Block G: pseudonymize last user message → <code>"Max" → "PERSON_cc75010d"</code></li>
+        <li><strong>proxy()</strong> — Block I: open stream to OpenAI with modified body</li>
+        <li><strong>stream_with_depseudo()</strong> — yield metadata line to OWU immediately</li>
+        <li><strong>stream_with_depseudo()</strong> — for each SSE chunk: buffer → split at safe boundary → replace tokens → yield to browser</li>
+        <li>Browser receives <code>"PERSON_cc75010d"</code> → replaced with <code>"Max"</code> before it ever reaches the user</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<footer>Generated 2026-08-23 · Garnet Privacy Proxy · branch demo1upgrade</footer>
+
+<script>
+function toggle(header) {
+  const body = header.nextElementSibling;
+  const arrow = header.querySelector('.block-toggle');
+  body.classList.toggle('open');
+  arrow.textContent = body.classList.contains('open') ? '▾' : '▸';
+}
+</script>
+</body>
+</html>

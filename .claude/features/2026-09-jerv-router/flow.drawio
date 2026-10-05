@@ -1,0 +1,169 @@
+<mxfile host="app.diagrams.net" modified="2026-09-27T00:00:00.000Z" agent="garnet-jev-auto" version="24.0.0">
+  <diagram name="JEV Auto Routing" id="jev-auto-flow">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="JEV Auto — one virtual model, best model per prompt (via TypeSafe Jev Router on OpenRouter)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=15;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="150" y="15" width="820" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="lg_title" value="Legend" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="120" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1" value="User / OWU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="20" y="85" width="130" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2" value="Existing proxy flow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="20" y="115" width="130" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3" value="NEW — jev rewrite" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="20" y="145" width="130" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg4" value="Decision" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="20" y="175" width="130" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lg5" value="External (OpenRouter / LLMs)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="20" y="210" width="180" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- 1. User -->
+        <mxCell id="user" value="User&#xa;types prompt" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13" vertex="1" parent="1">
+          <mxGeometry x="470" y="70" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- 2. OWU -->
+        <mxCell id="owu" value="OWU Frontend&#xa;model = &quot;jev/auto&quot;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="450" y="160" width="170" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- 3. Caddy -->
+        <mxCell id="caddy" value="Caddy (TLS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="475" y="240" width="120" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- 4. Proxy entry -->
+        <mxCell id="proxy" value="Privacy Proxy&#xa;proxy() — main.py:385" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="445" y="310" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- 5. Decision -->
+        <mxCell id="dec" value="body[&quot;model&quot;]&#xa;== &quot;jev/auto&quot; ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="445" y="390" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- No branch -->
+        <mxCell id="skip" value="Normal flow&#xa;(model as OWU sent it)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="710" y="405" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- 6. Rewrite (JEV logic — the ONLY code change) -->
+        <mxCell id="rewrite" value="Rewrite request  (2 lines)&#xa;body[&quot;model&quot;] = &quot;typesafe/jev-router&quot;&#xa;url = openrouter.ai/api/v1/chat/completions&#xa;Authorization = OPENROUTER_KEY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;align=left" vertex="1" parent="1">
+          <mxGeometry x="400" y="500" width="290" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- 7. Pseudonymize -->
+        <mxCell id="pseudo" value="Pseudonymize prompt&#xa;(existing PII flow)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="435" y="620" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- 8. Forward to OpenRouter -->
+        <mxCell id="or" value="OpenRouter API&#xa;POST /v1/chat/completions&#xa;model = typesafe/jev-router" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="425" y="700" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- 9. Jev Router internals (black-box container) -->
+        <mxCell id="jev_container" value="Jev Router (TypeSafe System One) — internal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#9673a6;dashed=1;verticalAlign=top;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="230" y="800" width="620" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="jev_score" value="Jev scores prompt&#xa;(complexity / reasoning / creativity / speed)&#xa;native noul + score types" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="255" y="840" width="230" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="jev_pick" value="Picks best model +&#xa;reasoning effort" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="520" y="840" width="150" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="jev_call" value="Calls chosen model" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="705" y="840" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="jev_note" value="Zero code on our side — this is Jev's job." style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=10;fontStyle=2;fontColor=#666" vertex="1" parent="1">
+          <mxGeometry x="255" y="930" width="580" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 10. Downstream models -->
+        <mxCell id="m1" value="gpt-4o-mini" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="180" y="1010" width="110" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="gpt-4o" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="310" y="1010" width="90" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="claude-opus" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="415" y="1010" width="110" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" value="llama3.1-70b" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="540" y="1010" width="110" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" value="gemini-2.5" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="665" y="1010" width="100" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" value="mistral-large" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="780" y="1010" width="110" height="34" as="geometry" />
+        </mxCell>
+
+        <!-- 11. Response back -->
+        <mxCell id="depseudo" value="Depseudonymize response → stream to user" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="400" y="1100" width="330" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="user_end" value="User sees answer" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13" vertex="1" parent="1">
+          <mxGeometry x="470" y="1180" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#333" edge="1" parent="1" source="user" target="owu"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#333" edge="1" parent="1" source="owu" target="caddy"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#333" edge="1" parent="1" source="caddy" target="proxy"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#333" edge="1" parent="1" source="proxy" target="dec"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="e5no" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#d79b00;fontSize=11" edge="1" parent="1" source="dec" target="skip"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5yes" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#d79b00;fontSize=11" edge="1" parent="1" source="dec" target="rewrite"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#333" edge="1" parent="1" source="rewrite" target="pseudo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6skip" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#82b366;dashed=1" edge="1" parent="1" source="skip" target="pseudo">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="800" y="645" /></Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#333" edge="1" parent="1" source="pseudo" target="or"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="or" target="jev_score"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="e_j1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="jev_score" target="jev_pick"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_j2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="jev_pick" target="jev_call"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="e_m1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="jev_call" target="m1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_m2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="jev_call" target="m2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_m3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="jev_call" target="m3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_m4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="jev_call" target="m4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_m5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="jev_call" target="m5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_m6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#9673a6" edge="1" parent="1" source="jev_call" target="m6"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="e_d1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#82b366" edge="1" parent="1" source="m1" target="depseudo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_d2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#82b366" edge="1" parent="1" source="m2" target="depseudo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_d3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#82b366" edge="1" parent="1" source="m3" target="depseudo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_d4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#82b366" edge="1" parent="1" source="m4" target="depseudo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_d5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#82b366" edge="1" parent="1" source="m5" target="depseudo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_d6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#82b366" edge="1" parent="1" source="m6" target="depseudo"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="e_final" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#333" edge="1" parent="1" source="depseudo" target="user_end"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

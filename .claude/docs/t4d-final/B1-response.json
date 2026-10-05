@@ -1,0 +1,143 @@
+
+data: {"choices":[{"delta":{"content":"{\""}}]}
+
+data: {"choices":[{"delta":{"content":"name"}}]}
+
+data: {"choices":[{"delta":{"content":"\":\""}}]}
+
+data: {"choices":[{"delta":{"content":"Anna"}}]}
+
+data: {"choices":[{"delta":{"content":" Müller"}}]}
+
+data: {"choices":[{"delta":{"content":"-"}}]}
+
+data: {"choices":[{"delta":{"content":"Ö"}}]}
+
+data: {"choices":[{"delta":{"content":"zt"}}]}
+
+data: {"choices":[{"delta":{"content":"ürk"}}]}
+
+data: {"choices":[{"delta":{"content":"\",\""}}]}
+
+data: {"choices":[{"delta":{"content":"email"}}]}
+
+data: {"choices":[{"delta":{"content":"\":\""}}]}
+
+data: {"choices":[{"delta":{"content":"a"}}]}
+
+data: {"choices":[{"delta":{"content":".mu"}}]}
+
+data: {"choices":[{"delta":{"content":"eller"}}]}
+
+data: {"choices":[{"delta":{"content":"@example"}}]}
+
+data: {"choices":[{"delta":{"content":".de"}}]}
+
+data: {"choices":[{"delta":{"content":"\",\""}}]}
+
+data: {"choices":[{"delta":{"content":"reference"}}]}
+
+data: {"choices":[{"delta":{"content":"_id"}}]}
+
+data: {"choices":[{"delta":{"content":"\":\""}}]}
+
+data: {"choices":[{"delta":{"content":"3"}}]}
+
+data: {"choices":[{"delta":{"content":"f"}}]}
+
+data: {"choices":[{"delta":{"content":"250"}}]}
+
+data: {"choices":[{"delta":{"content":"4"}}]}
+
+data: {"choices":[{"delta":{"content":"e"}}]}
+
+data: {"choices":[{"delta":{"content":"0"}}]}
+
+data: {"choices":[{"delta":{"content":"-"}}]}
+
+data: {"choices":[{"delta":{"content":"4"}}]}
+
+data: {"choices":[{"delta":{"content":"f"}}]}
+
+data: {"choices":[{"delta":{"content":"89"}}]}
+
+data: {"choices":[{"delta":{"content":"-"}}]}
+
+data: {"choices":[{"delta":{"content":"11"}}]}
+
+data: {"choices":[{"delta":{"content":"d"}}]}
+
+data: {"choices":[{"delta":{"content":"3"}}]}
+
+data: {"choices":[{"delta":{"content":"-"}}]}
+
+data: {"choices":[{"delta":{"content":"9"}}]}
+
+data: {"choices":[{"delta":{"content":"a"}}]}
+
+data: {"choices":[{"delta":{"content":"0"}}]}
+
+data: {"choices":[{"delta":{"content":"c"}}]}
+
+data: {"choices":[{"delta":{"content":"-"}}]}
+
+data: {"choices":[{"delta":{"content":"030"}}]}
+
+data: {"choices":[{"delta":{"content":"5"}}]}
+
+data: {"choices":[{"delta":{"content":"e"}}]}
+
+data: {"choices":[{"delta":{"content":"82"}}]}
+
+data: {"choices":[{"delta":{"content":"c"}}]}
+
+data: {"choices":[{"delta":{"content":"330"}}]}
+
+data: {"choices":[{"delta":{"content":"1"}}]}
+
+data: {"choices":[{"delta":{"content":"\",\""}}]}
+
+data: {"choices":[{"delta":{"content":"score"}}]}
+
+data: {"choices":[{"delta":{"content":"\":"}}]}
+
+data: {"choices":[{"delta":{"content":"7"}}]}
+
+data: {"choices":[{"delta":{"content":",\""}}]}
+
+data: {"choices":[{"delta":{"content":"active"}}]}
+
+data: {"choices":[{"delta":{"content":"\":"}}]}
+
+data: {"choices":[{"delta":{"content":"true"}}]}
+
+data: {"choices":[{"delta":{"content":",\""}}]}
+
+data: {"choices":[{"delta":{"content":"note"}}]}
+
+data: {"choices":[{"delta":{"content":"\":"}}]}
+
+data: {"choices":[{"delta":{"content":"null"}}]}
+
+data: {"choices":[{"delta":{"content":",\""}}]}
+
+data: {"choices":[{"delta":{"content":"nested"}}]}
+
+data: {"choices":[{"delta":{"content":"\":{\""}}]}
+
+data: {"choices":[{"delta":{"content":"city"}}]}
+
+data: {"choices":[{"delta":{"content":"\":\""}}]}
+
+data: {"choices":[{"delta":{"content":"M"}}]}
+
+data: {"choices":[{"delta":{"content":"ün"}}]}
+
+data: {"choices":[{"delta":{"content":"chen"}}]}
+
+data: {"choices":[{"delta":{"content":"\"}}"}}]}
+
+data: [DONE]
+
+data: {"pseudonymized_prompt": "Extract the fields from this JSON exactly as given, preserving every value verbatim: {\"name\":\"Anna PERSON_a7842989-\u00d6zt\u00fcrk\",\"email\":\"EMAIL_ADDRESS_ecdd41ef\",\"reference_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\",\"score\":7,\"active\":true,\"note\":null,\"nested\":{\"city\":\"M\u00fcnchen\"}}", "file_entity_count": 0, "garnet_breakdown": {}, "query_variants": []}
+

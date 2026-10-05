@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet — Pseudonymization Course</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0a0e1a; color: #e2e8f0; padding: 32px; max-width: 1100px; margin: 0 auto; }
+h1 { color: #7dd3fc; font-size: 1.8rem; margin-bottom: 6px; }
+.subtitle { color: #475569; margin-bottom: 48px; font-size: 0.88rem; }
+h2 { font-size: 0.85rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #64748b; margin: 52px 0 18px; border-left: 3px solid #1e3a5f; padding-left: 12px; }
+code { font-family: 'Fira Code', 'Consolas', monospace; }
+hr { border: none; border-top: 1px solid #1e2d45; margin: 44px 0; }
+
+/* STEP BLOCKS */
+.step { border-radius: 10px; border: 1px solid #1e3356; background: #060c18; margin-bottom: 18px; overflow: hidden; }
+.step-header { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #111d30; }
+.step-num { min-width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 700; flex-shrink: 0; }
+.step-title { font-size: 0.88rem; font-weight: 700; color: #e2e8f0; }
+.step-body { padding: 16px 18px; font-size: 0.8rem; color: #94a3b8; line-height: 1.8; }
+.step-body p { margin-bottom: 10px; }
+.step-body p:last-child { margin-bottom: 0; }
+.step-body code { background: #1e2433; border-radius: 3px; padding: 1px 6px; font-size: 0.75rem; color: #e2e8f0; }
+
+.n1  { background: #1d4ed8; color: #fff; }
+.n2  { background: #15803d; color: #fff; }
+.n3  { background: #6d28d9; color: #fff; }
+.n4  { background: #c2410c; color: #fff; }
+.n5  { background: #0f766e; color: #fff; }
+.n6  { background: #a16207; color: #fff; }
+.n7  { background: #b91c1c; color: #fff; }
+.n8  { background: #0e7490; color: #fff; }
+.n9  { background: #4d7c0f; color: #fff; }
+.n10 { background: #7c3aed; color: #fff; }
+.n11 { background: #be185d; color: #fff; }
+.n12 { background: #0369a1; color: #fff; }
+.n13 { background: #065f46; color: #fff; }
+
+/* CODE BLOCK */
+.cb { background: #030810; border: 1px solid #1e3356; border-radius: 8px; padding: 14px 18px; font-size: 0.76rem; line-height: 2; font-family: 'Fira Code', 'Consolas', monospace; overflow-x: auto; margin: 10px 0; }
+.cm { color: #475569; font-style: italic; }
+.cv { color: #4ade80; }
+.cs { color: #fbbf24; }
+.cf { color: #60a5fa; }
+.co { color: #fb923c; }
+.cr { color: #f87171; }
+.cp { color: #a78bfa; }
+
+/* NOTES */
+.note { border-radius: 8px; padding: 12px 16px; margin: 10px 0; font-size: 0.78rem; line-height: 1.7; }
+.note-warn { background: #1a0d00; border: 1px solid #c2410c; color: #fed7aa; }
+.note-warn strong { color: #fb923c; }
+.note-info { background: #071829; border: 1px solid #1d4ed8; color: #bfdbfe; }
+.note-info strong { color: #60a5fa; }
+.note-ok { background: #041810; border: 1px solid #15803d; color: #bbf7d0; }
+.note-ok strong { color: #4ade80; }
+
+/* DIAGRAM */
+.diagram { background: #030810; border: 1px solid #1e3356; border-radius: 8px; padding: 20px; font-family: 'Fira Code', monospace; font-size: 0.75rem; line-height: 2; color: #94a3b8; overflow-x: auto; margin: 10px 0; }
+.d-blue   { color: #60a5fa; }
+.d-green  { color: #4ade80; }
+.d-purple { color: #a78bfa; }
+.d-orange { color: #fb923c; }
+.d-red    { color: #f87171; }
+.d-yellow { color: #fbbf24; }
+.d-gray   { color: #475569; }
+.d-teal   { color: #2dd4bf; }
+
+/* PROGRESS BAR */
+.progress { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 40px; }
+.pb { padding: 4px 10px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px; }
+.pb-done { background: #041810; border: 1px solid #15803d; color: #4ade80; }
+.pb-next { background: #1a0d00; border: 1px solid #c2410c; color: #fb923c; }
+.pb-todo { background: #111827; border: 1px solid #374151; color: #475569; }
+</style>
+</head>
+<body>
+
+<h1>Pseudonymization — Full Course</h1>
+<p class="subtitle">Step by step · from raw body arriving at proxy → to clean text sent to LLM · built conversation by conversation</p>
+
+<!-- PROGRESS -->
+<div class="progress">
+  <div class="pb pb-done">1. Read body</div>
+  <div class="pb pb-done">2. Pop garnet fields</div>
+  <div class="pb pb-done">3. Extract messages + fix stream</div>
+  <div class="pb pb-done">4. Classify last message</div>
+  <div class="pb pb-done">5. OWU system prompts</div>
+  <div class="pb pb-done">6. Call pseudonymize()</div>
+  <div class="pb pb-done">7. Language detect</div>
+  <div class="pb pb-done">8. Regex pass</div>
+  <div class="pb pb-done">9. Strip markdown</div>
+  <div class="pb pb-done">10. spaCy NER</div>
+  <div class="pb pb-done">11. Filter overlaps</div>
+  <div class="pb pb-done">12. Generate tokens + replace</div>
+  <div class="pb pb-done">13. Rebuild content</div>
+  <div class="pb pb-done">14. Forward to LLM</div>
+  <div class="pb pb-next">15. LLM responds → depseudo ← NEXT</div>
+</div>
+
+<!-- EXAMPLE USED THROUGHOUT -->
+<div class="note note-info">
+  <strong>Example used throughout this course:</strong><br>
+  User types: <code>"what is Max Mustermann email max@enclaive.io?"</code><br>
+  Model: claude-opus-4-5 · Provider: Anthropic · chat_id: "abc123"
+</div>
+
+<hr>
+
+<!-- STEP 1 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n1">1</div>
+    <div class="step-title">Proxy reads the raw body</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">body = <span class="ck">await</span> request.json()</div>
+    <p>The entire JSON object is now in <code>body</code>. Nothing touched yet. Messages, model name, chat_id, privacy toggle — all raw exactly as OWU sent them.</p>
+    <div class="cb">
+{<br>
+&nbsp;&nbsp;<span class="cv">"model"</span>: <span class="cv">"claude-opus-4-5"</span>,<br>
+&nbsp;&nbsp;<span class="cv">"chat_id"</span>: <span class="cv">"abc123"</span>,<br>
+&nbsp;&nbsp;<span class="cv">"stream"</span>: <span class="cs">true</span>,<br>
+&nbsp;&nbsp;<span class="cv">"privacy_proxy"</span>: <span class="cs">true</span>,<br>
+&nbsp;&nbsp;<span class="cv">"messages"</span>: [<br>
+&nbsp;&nbsp;&nbsp;&nbsp;{ <span class="cv">"role"</span>: <span class="cv">"user"</span>, <span class="cv">"content"</span>: <span class="cv">"what is Max Mustermann email max@enclaive.io?"</span> }<br>
+&nbsp;&nbsp;]<br>
+}
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n2">2</div>
+    <div class="step-title">Pop Garnet-only fields out of body</div>
+  </div>
+  <div class="step-body">
+    <p>Two fields must be removed before forwarding — LLMs don't know them and would reject the request.</p>
+    <div class="cb">
+privacy_enabled = body.pop(<span class="cv">"privacy_proxy"</span>, <span class="cs">True</span>)&nbsp;&nbsp;<span class="cm">← True or False</span><br>
+<br>
+session_id = body.get(<span class="cv">"chat_id"</span>) <span class="ck">or</span> ...<span class="cm">  ← saved first</span><br>
+body.pop(<span class="cv">"chat_id"</span>, <span class="cs">None</span>)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">← then deleted</span>
+    </div>
+    <p><code>session_id = "abc123"</code> — lives as a variable for the whole request. Keys the MappingStore so the right token table is used.</p>
+    <div class="note note-warn"><strong>chat_id is read first, then deleted.</strong> It's not lost — it's in <code>session_id</code>. The body just no longer has it.</div>
+  </div>
+</div>
+
+<!-- STEP 3 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n3">3</div>
+    <div class="step-title">Extract messages array + fix stream mode</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+messages = body.get(<span class="cv">"messages"</span>, [])<br>
+<br>
+<span class="cm"># cloud (OpenAI path)</span><br>
+body[<span class="cv">"stream"</span>] = <span class="cs">True</span>&nbsp;&nbsp;&nbsp;<span class="cm">← always forced on</span><br>
+<br>
+<span class="cm"># Ollama path</span><br>
+body[<span class="cv">"stream"</span>] = <span class="cs">False</span>&nbsp;&nbsp;<span class="cm">← always forced off</span>
+    </div>
+    <p>Ollama streaming uses a different format (ndjson). Proxy forces it off, reads full response, depseudonymizes, then returns. Never remove this.</p>
+  </div>
+</div>
+
+<!-- STEP 4 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n4">4</div>
+    <div class="step-title">Classify the last message</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+last_message = messages[-1]<br>
+original_content = last_message[<span class="cv">"content"</span>]<br>
+original_content_text = extract_text_content(original_content)<br>
+<br>
+<span class="cm"># extract_text_content handles two cases:</span><br>
+<span class="cm"># string → return as-is</span><br>
+<span class="cm"># list of blocks → join only type:"text" blocks</span><br>
+<br>
+has_rag_context = <span class="cv">"&lt;context&gt;"</span> <span class="ck">in</span> text <span class="ck">or</span> <span class="cv">"&lt;source"</span> <span class="ck">in</span> text <span class="ck">or</span> <span class="cv">"{{CONTEXT}}"</span> <span class="ck">in</span> text<br>
+is_system_prompt = any(marker <span class="ck">in</span> text <span class="ck">for</span> marker <span class="ck">in</span> SYSTEM_PROMPT_MARKERS)
+    </div>
+    <p>This decides which branch runs next:<br>
+    <code>has_rag_context</code> → file pseudonymization pass first<br>
+    <code>is_system_prompt</code> → skip everything, forward raw<br>
+    neither → normal user message → full pipeline</p>
+  </div>
+</div>
+
+<!-- STEP 5 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n5">5</div>
+    <div class="step-title">OWU system prompts — what they are and why skipped</div>
+  </div>
+  <div class="step-body">
+    <p>After the LLM responds to the user, OWU automatically fires extra requests to the same model for UI features:</p>
+    <div class="diagram">
+User types: "what is Max Mustermann email?"<br>
+  ↓<br>
+<span class="d-blue">Request 1</span> — user prompt → full pseudonymization → LLM → user sees response<br>
+  ↓ (after response delivered)<br>
+<span class="d-gray">Request 2</span> — "Generate a concise title for this conversation" → skip pseudo → LLM → chat title set<br>
+<span class="d-gray">Request 3</span> — "Generate 1-3 broad tags categorizing the main themes" → skip pseudo → LLM → tags set<br>
+<span class="d-gray">Request 4</span> — "follow_ups: suggest 3 questions..." → skip pseudo → LLM → suggestions shown
+    </div>
+    <p>Proxy detects these by checking for markers:</p>
+    <div class="cb">
+SYSTEM_PROMPT_MARKERS = [<br>
+&nbsp;&nbsp;<span class="cv">"### Task:"</span>, <span class="cv">"### Guidelines:"</span>, <span class="cv">"### Output:"</span>,<br>
+&nbsp;&nbsp;<span class="cv">"JSON format:"</span>, <span class="cv">"follow_ups"</span>, <span class="cv">"Generate"</span>, <span class="cv">"Suggest"</span><br>
+]
+    </div>
+    <p>If any marker found → <code>is_system_prompt = True</code> → proxy skips pseudonymization and forwards raw. These messages contain no user PII.</p>
+    <div class="note note-info"><strong>The user's actual prompt always goes first.</strong> OWU internal requests fire only after the LLM already responded to the user.</div>
+  </div>
+</div>
+
+<!-- STEP 6 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n6">6</div>
+    <div class="step-title">Call pseudonymize() on the last message</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+<span class="ck">if</span> last_message.get(<span class="cv">"role"</span>) <span class="ck">in</span> (<span class="cv">"user"</span>, <span class="cv">"system"</span>, <span class="cv">"developer"</span>):<br>
+&nbsp;&nbsp;log_in_user(original_content_text)&nbsp;&nbsp;<span class="cm">← prints raw text to proxy console</span><br>
+&nbsp;&nbsp;pseudonymized_text = pseudonymize(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;original_content_text,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;session_id,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">← "abc123"</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;store.get_store(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;enabled_types=enabled_types&nbsp;&nbsp;<span class="cm">← optional PII filter from x-garnet-entities header</span><br>
+&nbsp;&nbsp;)
+    </div>
+    <p>Steps 7–12 happen inside <code>pseudonymize()</code>. It returns the text with all PII replaced by tokens.</p>
+  </div>
+</div>
+
+<!-- STEP 7 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n7">7</div>
+    <div class="step-title">Detect language</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+lang = detect(text)&nbsp;&nbsp;<span class="cm">← langdetect library</span><br>
+<span class="ck">if</span> lang <span class="ck">not in</span> [<span class="cv">"en"</span>, <span class="cv">"de"</span>]:<br>
+&nbsp;&nbsp;lang = <span class="cv">"en"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">← anything else defaults to english</span>
+    </div>
+    <p>Language decides which spaCy NLP model loads next:<br>
+    <code>"en"</code> → <code>en_core_web_md</code><br>
+    <code>"de"</code> → <code>de_core_news_md</code><br><br>
+    German and English have different grammar structures. "Mustermann" is better detected by the German model. Right model = more accurate entity detection.</p>
+  </div>
+</div>
+
+<!-- STEP 8 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n8">8</div>
+    <div class="step-title">Regex pass first — EMAIL + PHONE</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+EMAIL_REGEX = <span class="cv">r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'</span><br>
+PHONE_REGEX = <span class="cv">r'\+\d{1,3}[\s.-]?\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{0,5}'</span>
+    </div>
+    <p>Matches are temporarily replaced with tokens in a <strong>copy</strong> of the text before NLP runs:</p>
+    <div class="diagram">
+original:  "what is Max Mustermann email <span class="d-red">max@enclaive.io</span>?"<br>
+copy:      "what is Max Mustermann email <span class="d-purple">EMAIL_ADDRESS_bd3a68a5</span>?"
+    </div>
+    <p>Why? Without this, spaCy might read <code>max</code> in <code>max@enclaive.io</code> as a PERSON name → duplicate/wrong detection. The copy goes to spaCy. The original is kept for final replacement.</p>
+  </div>
+</div>
+
+<!-- STEP 9 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n9">9</div>
+    <div class="step-title">Strip markdown + build pos_map</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+stripped_text, pos_map = strip_markdown(text_copy)<br>
+<span class="cm"># removes: ** __ * _ `</span>
+    </div>
+    <div class="diagram">
+before: "what is **<span class="d-red">Max Mustermann</span>** email?"<br>
+after:  "what is <span class="d-red">Max Mustermann</span> email?"<br>
+<br>
+pos_map: [0,1,2,3,4,5,6,7,8,9,10,11,12 ...]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↑ each index = char position in original text
+    </div>
+    <p>spaCy will report "PERSON at position 9–23 in stripped text". The <code>pos_map</code> translates that back to the correct position in the original text so the replacement lands in the right place.</p>
+  </div>
+</div>
+
+<!-- STEP 10 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n10">10</div>
+    <div class="step-title">spaCy NER via Presidio</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+results = analyzer.analyze(<br>
+&nbsp;&nbsp;text=stripped_text,<br>
+&nbsp;&nbsp;language=lang,<br>
+&nbsp;&nbsp;entities=[<span class="cv">"IBAN_CODE"</span>, <span class="cv">"ORGANIZATION"</span>, <span class="cv">"PERSON"</span>, <span class="cv">"LOCATION"</span>, <span class="cv">"ID"</span>],<br>
+&nbsp;&nbsp;score_threshold=<span class="cs">0.5</span>&nbsp;&nbsp;<span class="cm">← below 0.5 = discarded</span><br>
+)
+    </div>
+    <p>On our example:</p>
+    <div class="diagram">
+stripped: "what is <span class="d-red">Max Mustermann</span> email EMAIL_ADDRESS_bd3a68a5?"<br>
+<br>
+spaCy finds:<br>
+&nbsp;&nbsp;PERSON → "Max Mustermann" → start=9, end=23, score=0.85 ✓
+    </div>
+    <p>Then translate positions back using pos_map:<br>
+    <code>pos_in_original = pos_map[r.start]</code></p>
+  </div>
+</div>
+
+<!-- STEP 11 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n11">11</div>
+    <div class="step-title">Filter overlaps</div>
+  </div>
+  <div class="step-body">
+    <p>Multiple detectors ran. Rules when two detections overlap the same span:</p>
+    <div class="cb">
+<span class="cm"># 1. Regex types beat NLP types</span><br>
+EMAIL_ADDRESS, PHONE_NUMBER, IBAN_CODE, ORGANIZATION, LOCATION > PERSON<br>
+<br>
+<span class="cm"># 2. Longest span wins</span><br>
+<br>
+<span class="cm"># 3. ORGANIZATION only kept if:</span><br>
+score > <span class="cs">0.85</span> <span class="ck">and</span> first_char.isupper()
+    </div>
+    <div class="diagram">
+text: "contact <span class="d-red">max@enclaive.io</span> for info"<br>
+<br>
+regex found:  EMAIL_ADDRESS → "max@enclaive.io" (pos 8–23)<br>
+spaCy found:  PERSON        → "max"             (pos 8–11)<br>
+<br>
+→ overlap → EMAIL_ADDRESS wins → PERSON discarded
+    </div>
+    <p>Result: clean list, no overlaps, each character belongs to at most one entity.</p>
+  </div>
+</div>
+
+<!-- STEP 12 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n12">12</div>
+    <div class="step-title">Generate tokens + replace right-to-left</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+<span class="cm"># sort entities by position, LAST first</span><br>
+entities = sorted(entities, key=<span class="ck">lambda</span> x: x[<span class="cv">"start"</span>], reverse=<span class="cs">True</span>)<br>
+<br>
+<span class="ck">for</span> entity <span class="ck">in</span> entities:<br>
+&nbsp;&nbsp;original = text[entity[<span class="cv">"start"</span>]:entity[<span class="cv">"end"</span>]]<br>
+&nbsp;&nbsp;token = <span class="cf">f"</span><span class="cp">{entity_type}</span><span class="cf">_</span><span class="cp">{sha256(original)[:8]}</span><span class="cf">"</span><br>
+&nbsp;&nbsp;mapping[token] = original&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">← stored in MappingStore</span><br>
+&nbsp;&nbsp;text = text[:start] + token + text[end:]
+    </div>
+    <div class="diagram">
+text: "what is <span class="d-red">Max Mustermann</span> email <span class="d-red">max@enclaive.io</span>?"<br>
+<br>
+entities sorted right to left:<br>
+&nbsp;&nbsp;EMAIL_ADDRESS at pos 23–38 → "max@enclaive.io"<br>
+&nbsp;&nbsp;PERSON        at pos 9–23  → "Max Mustermann"<br>
+<br>
+replace EMAIL first (rightmost):<br>
+&nbsp;&nbsp;"what is Max Mustermann email <span class="d-purple">EMAIL_ADDRESS_bd3a68a5</span>?"<br>
+<br>
+replace PERSON next:<br>
+&nbsp;&nbsp;"what is <span class="d-purple">PERSON_cc75010d</span> email <span class="d-purple">EMAIL_ADDRESS_bd3a68a5</span>?"<br>
+<br>
+MappingStore["abc123"] = {<br>
+&nbsp;&nbsp;"PERSON_cc75010d":        "Max Mustermann",<br>
+&nbsp;&nbsp;"EMAIL_ADDRESS_bd3a68a5": "max@enclaive.io"<br>
+}
+    </div>
+    <p>Right-to-left because replacing a span changes string length. Replacing from the end means earlier positions never shift.</p>
+  </div>
+</div>
+
+<!-- STEP 13 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n13">13</div>
+    <div class="step-title">Rebuild content + body ready to forward</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+last_message[<span class="cv">"content"</span>] = rebuild_content(original_content, pseudonymized_text)<br>
+<br>
+<span class="cm"># rebuild_content handles two cases:</span><br>
+<span class="cm"># string → return pseudonymized_text directly</span><br>
+<span class="cm"># list of blocks → replace only type:"text" blocks, leave image blocks untouched</span>
+    </div>
+    <p>Body is now clean:</p>
+    <div class="cb">
+{<br>
+&nbsp;&nbsp;<span class="cv">"model"</span>: <span class="cv">"claude-opus-4-5"</span>,<br>
+&nbsp;&nbsp;<span class="cv">"stream"</span>: <span class="cs">true</span>,<br>
+&nbsp;&nbsp;<span class="cv">"messages"</span>: [<br>
+&nbsp;&nbsp;&nbsp;&nbsp;{ <span class="cv">"role"</span>: <span class="cv">"user"</span>, <span class="cv">"content"</span>: <span class="cv">"what is PERSON_cc75010d email EMAIL_ADDRESS_bd3a68a5?"</span> }<br>
+&nbsp;&nbsp;]<br>
+}&nbsp;&nbsp;<span class="cm">← no chat_id · no privacy_proxy · no real names</span>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 14 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num n4">14</div>
+    <div class="step-title">Forward to LLM</div>
+  </div>
+  <div class="step-body">
+    <div class="cb">
+forward_headers = {<br>
+&nbsp;&nbsp;<span class="cv">"authorization"</span>: request.headers.get(<span class="cv">"authorization"</span>),<br>
+&nbsp;&nbsp;<span class="cv">"content-type"</span>:  <span class="cv">"application/json"</span><br>
+}&nbsp;&nbsp;<span class="cm">← only these two forwarded, all Garnet headers stripped</span><br>
+<br>
+<span class="cm"># Anthropic special case:</span><br>
+forward_headers[<span class="cv">"x-api-key"</span>] = api_key&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">← Anthropic rejects Bearer</span><br>
+forward_headers[<span class="cv">"anthropic-version"</span>] = <span class="cv">"2023-06-01"</span><br>
+<span class="ck">del</span> forward_headers[<span class="cv">"authorization"</span>]
+    </div>
+    <div class="diagram">
+POST https://api.anthropic.com/v1/chat/completions<br>
+x-api-key: sk-ant-api03-...<br>
+anthropic-version: 2023-06-01<br>
+Content-Type: application/json<br>
+<br>
+{ "messages": [{"role":"user","content":"what is <span class="d-purple">PERSON_cc75010d</span> email <span class="d-purple">EMAIL_ADDRESS_bd3a68a5</span>?"}] }<br>
+<br>
+<span class="d-gray">← LLM never sees real names</span>
+    </div>
+  </div>
+</div>
+
+<!-- NEXT -->
+<hr>
+<div class="note note-ok">
+  <strong>Where we stopped — next session continues from here:</strong><br><br>
+  Step 15 — LLM responds with tokens → proxy receives the stream → safe boundary split → depseudonymization → real names streamed back to user.
+</div>
+
+</body>
+</html>

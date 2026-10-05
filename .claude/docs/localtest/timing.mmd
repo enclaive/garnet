@@ -1,0 +1,50 @@
+gantt
+    title Garnet Proxy vs Known Chatbots - Request Timing (seconds)
+    dateFormat X
+    axisFormat %Ss
+
+    section S1 Garnet Normal PII 19.7s
+    Garnet pseudo 0.9s   :crit,   0, 1
+    LLM wait 1.4s        :        1, 2
+    LLM gen 17.4s        :active, 2, 20
+
+    section S2 Garnet No PII 2.9s
+    Garnet pseudo 1.2s   :crit,   0, 1
+    LLM wait 1.5s        :        1, 3
+    LLM gen 0.2s         :active, 3, 3
+
+    section S3t2 Garnet History re-pseudo 14s
+    Garnet pseudo 2.8s   :crit,   0, 3
+    LLM wait 1.7s        :        3, 5
+    LLM gen 9.4s         :active, 5, 14
+
+    section S4 Garnet Web search 10.6s
+    Garnet pseudo 2.0s   :crit,   0, 2
+    LLM wait 1.3s        :        2, 4
+    LLM gen 7.3s         :active, 4, 11
+
+    section S5 Garnet File upload 5.5s
+    Garnet pseudo 1.7s   :crit,   0, 2
+    LLM wait 0.8s        :        2, 3
+    LLM gen 3.0s         :active, 3, 5
+
+    section S7 Garnet File and Web and Multi 26.2s
+    Garnet pseudo 2.0s   :crit,   0, 2
+    LLM wait 5.3s        :        2, 7
+    LLM gen 18.9s        :active, 7, 26
+
+    section S8 Garnet Privacy OFF 2.3s
+    LLM wait 1.2s        :        0, 1
+    LLM gen 1.1s         :active, 1, 2
+
+    section Claude ai direct approx 18-22s
+    LLM wait 1.5s        :        0, 2
+    LLM gen 18.5s        :active, 2, 20
+
+    section ChatGPT GPT-4o direct approx 15-20s
+    LLM wait 1.0s        :        0, 1
+    LLM gen 16.0s        :active, 1, 17
+
+    section Gemini Pro direct approx 12-18s
+    LLM wait 0.8s        :        0, 1
+    LLM gen 13.2s        :active, 1, 14

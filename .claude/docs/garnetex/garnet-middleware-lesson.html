@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet Middleware — How It Works</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; line-height: 1.7; }
+  .hero { background: linear-gradient(135deg, #1a1f2e, #2d3748); padding: 60px 40px; text-align: center; border-bottom: 1px solid #2d3748; }
+  .hero h1 { font-size: 2.4rem; font-weight: 700; color: #63b3ed; margin-bottom: 12px; }
+  .hero p { color: #a0aec0; font-size: 1.1rem; max-width: 600px; margin: 0 auto; }
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 24px; }
+  h2 { font-size: 1.5rem; color: #63b3ed; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid #2d3748; }
+  h3 { font-size: 1.1rem; color: #90cdf4; margin: 24px 0 10px; }
+  p { color: #cbd5e0; margin-bottom: 14px; }
+  .flow { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px; padding: 28px; margin: 24px 0; font-family: monospace; font-size: 0.9rem; }
+  .flow .step { display: flex; align-items: flex-start; margin: 10px 0; }
+  .flow .num { background: #3182ce; color: white; border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; flex-shrink: 0; margin-right: 14px; margin-top: 2px; }
+  .flow .text { color: #e2e8f0; }
+  .flow .text span { color: #68d391; }
+  .flow .arrow { color: #4a5568; margin: 4px 0 4px 40px; }
+  .code { background: #1a202c; border: 1px solid #2d3748; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Courier New', monospace; font-size: 0.85rem; overflow-x: auto; }
+  .code .comment { color: #68d391; }
+  .code .key { color: #63b3ed; }
+  .code .val { color: #fbb6ce; }
+  .code .fn { color: #f6ad55; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; margin: 2px; }
+  .badge-blue { background: #2b4c7e; color: #90cdf4; }
+  .badge-green { background: #1c4532; color: #68d391; }
+  .badge-yellow { background: #744210; color: #f6e05e; }
+  .badge-red { background: #742a2a; color: #feb2b2; }
+  .card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 10px; padding: 20px; margin: 16px 0; }
+  .card-title { font-weight: 700; color: #90cdf4; margin-bottom: 8px; font-size: 0.95rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .highlight { background: #2d3748; border-left: 3px solid #63b3ed; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; color: #e2e8f0; }
+  .file-tag { background: #2d3748; color: #fbb6ce; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  th { background: #2d3748; color: #90cdf4; padding: 10px 14px; text-align: left; font-size: 0.85rem; }
+  td { padding: 10px 14px; border-bottom: 1px solid #2d3748; color: #cbd5e0; font-size: 0.88rem; }
+  tr:last-child td { border-bottom: none; }
+  .timeline { position: relative; margin: 24px 0; }
+  .timeline-item { display: flex; margin-bottom: 24px; }
+  .timeline-dot { width: 12px; height: 12px; background: #3182ce; border-radius: 50%; flex-shrink: 0; margin-top: 6px; margin-right: 20px; position: relative; }
+  .timeline-dot::after { content: ''; position: absolute; top: 12px; left: 5px; width: 2px; height: calc(100% + 12px); background: #2d3748; }
+  .timeline-item:last-child .timeline-dot::after { display: none; }
+  .timeline-content { flex: 1; }
+  .timeline-label { font-weight: 600; color: #90cdf4; font-size: 0.9rem; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>🔐 Garnet Middleware</h1>
+  <p>How <code>middleware.py</code> bridges the WebUI, Privacy Proxy, and LLM — making Garnet's pseudonymization invisible to the user.</p>
+</div>
+
+<div class="container">
+
+  <h2>What is middleware.py?</h2>
+  <p>
+    <span class="file-tag">backend/open_webui/utils/middleware.py</span> is the biggest file in the project (~4700 lines). It's the <strong>heart of Open WebUI's request pipeline</strong> — every chat message flows through it.
+  </p>
+  <p>
+    Garnet adds about <strong>20 lines of custom code</strong> into this file to capture privacy metadata (pseudonymized prompt, entity breakdown) from the Privacy Proxy's SSE stream and forward it to the frontend.
+  </p>
+
+  <div class="highlight">
+    Think of middleware.py as the <strong>traffic controller</strong>: it receives your message from the browser, sends it to the LLM, and streams the response back. Garnet hooks into this flow to grab extra data the Privacy Proxy injects.
+  </div>
+
+  <h2>How Model Selection Reaches the Proxy</h2>
+  <p>Before diving into the stream, it helps to understand how the model you pick in the UI determines where the request goes — and why the Privacy Proxy sits in the middle.</p>
+
+  <div class="flow">
+    <div class="step">
+      <div class="num">1</div>
+      <div class="text">User selects <span>"gpt-4o"</span> in the model dropdown</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">2</div>
+      <div class="text"><span>Chat.svelte</span> → POST <span>/api/chat/completions</span> to WebUI backend</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">3</div>
+      <div class="text"><span>middleware.py</span> runs auth + filters, prepares body, routes to <span>openai.py</span> router (because model is OpenAI)</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">4</div>
+      <div class="text"><span>openai.py</span> reads <span>OPENAI_API_BASE_URL</span> env var — but this points to the <strong>Privacy Proxy</strong>, not api.openai.com!</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">5</div>
+      <div class="text"><span>Privacy Proxy</span> receives the request:<br>
+        • reads <span>x-openai-base-url</span> header → knows the real destination (api.openai.com)<br>
+        • reads <span>Authorization</span> header → has the real API key<br>
+        • <strong>pseudonymizes</strong> the message body
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">6</div>
+      <div class="text">Proxy forwards <span>pseudonymized text</span> to real OpenAI with original credentials</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">7</div>
+      <div class="text">Response streams back: Proxy → <span>openai.py</span> → <span>middleware.py</span>, with extra metadata chunks injected</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">8</div>
+      <div class="text"><span>middleware.py</span> captures <span>pseudonymized_prompt</span> + <span>garnet_breakdown</span> from the stream</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">9</div>
+      <div class="text">Final done event sent to browser — UI shows (i) tooltip + entity bars</div>
+    </div>
+  </div>
+
+  <div class="highlight">
+    <strong>Key insight:</strong> The model selection doesn't put anything in x-headers. WebUI just overrides the base URL via env var to always hit the Privacy Proxy. The proxy then uses <code>x-openai-base-url</code> (forwarded by <code>openai.py</code>) to know where to actually send the pseudonymized request. middleware.py only handles the <strong>response stream</strong> — it captures Garnet metadata, it doesn't build or route the request.
+  </div>
+
+  <h2>The Full Garnet Flow</h2>
+
+  <div class="flow">
+    <div class="step">
+      <div class="num">1</div>
+      <div class="text">User types <span>"Max Mustermann at Enclaive"</span> and clicks Send</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">2</div>
+      <div class="text"><span>Chat.svelte</span> sends message to <span>/api/chat/completions</span></div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">3</div>
+      <div class="text"><span>middleware.py</span> intercepts the request — runs filter functions, prepares the body</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">4</div>
+      <div class="text">Request goes to <span>Privacy Proxy (FastAPI :8080)</span> instead of directly to Ollama/OpenAI</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">5</div>
+      <div class="text">Privacy Proxy <span>pseudonymizes</span> → sends <span>"PERSON_cc75010d at ORGANIZATION_bd3a68a5"</span> to LLM</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">6</div>
+      <div class="text">Privacy Proxy returns SSE stream with <strong>extra metadata chunks</strong>: <span>pseudonymized_prompt</span>, <span>garnet_breakdown</span></div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">7</div>
+      <div class="text"><span>middleware.py</span> reads the stream — captures those metadata chunks, stores them in variables</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">8</div>
+      <div class="text">At end of stream, middleware <span>appends metadata</span> to the final SSE done event</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="step">
+      <div class="num">9</div>
+      <div class="text"><span>Chat.svelte</span> receives done event → shows <span>(i) tooltip</span> with pseudonymized prompt + entity bars</div>
+    </div>
+  </div>
+
+  <h2>The 4 Garnet Variables</h2>
+  <p>These 4 variables are initialized at the start of each stream and filled as the SSE chunks arrive:</p>
+
+  <div class="code">
+<span class="comment"># Initialized per-request (line ~3485)</span>
+<span class="key">pseudonymized_prompt</span> = <span class="val">None</span>        <span class="comment"># "PERSON_cc75010d at ORGANIZATION_bd3a68a5"</span>
+<span class="key">file_entity_count</span>    = <span class="val">0</span>            <span class="comment"># How many PII entities found in uploaded file</span>
+<span class="key">garnet_breakdown</span>     = <span class="val">{}</span>           <span class="comment"># {"PERSON": 2, "ORGANIZATION": 1, ...}</span>
+<span class="key">query_variants</span>       = <span class="val">[]</span>           <span class="comment"># Query expansion variants (HyDE)</span>
+  </div>
+
+  <h2>How the SSE Stream is Read</h2>
+  <p>Inside <span class="file-tag">stream_body_handler()</span>, middleware reads every SSE line from the Privacy Proxy:</p>
+
+  <div class="code">
+<span class="comment"># For each line in the streaming response (line ~3556)</span>
+<span class="fn">async for</span> line <span class="fn">in</span> response.body_iterator:
+
+    <span class="comment"># Parse the JSON data from "data: {...}"</span>
+    data = json.loads(data)
+
+    <span class="comment"># 🔑 Garnet's hook — capture privacy metadata</span>
+    <span class="fn">if</span> <span class="val">'pseudonymized_prompt'</span> <span class="fn">in</span> data:
+        pseudonymized_prompt = data[<span class="val">'pseudonymized_prompt'</span>]
+
+    <span class="fn">if</span> <span class="val">'file_entity_count'</span> <span class="fn">in</span> data:
+        file_entity_count = data[<span class="val">'file_entity_count'</span>]
+
+    <span class="fn">if</span> <span class="val">'garnet_breakdown'</span> <span class="fn">in</span> data:
+        garnet_breakdown = data[<span class="val">'garnet_breakdown'</span>]
+
+    <span class="fn">if</span> <span class="val">'query_variants'</span> <span class="fn">in</span> data:
+        query_variants = data[<span class="val">'query_variants'</span>]
+
+    <span class="comment"># ... then forwards the normal LLM tokens to the browser</span>
+  </div>
+
+  <h2>How Metadata Gets Back to the Browser</h2>
+  <p>At the END of the stream, middleware appends the captured metadata to the final done event:</p>
+
+  <div class="code">
+<span class="comment"># Appended to final SSE event (line ~4648)</span>
+done_data = {
+    <span class="val">"done"</span>: <span class="val">True</span>,
+    <span class="val">"content"</span>: full_response,
+    <span class="comment"># Garnet additions ↓</span>
+    **({<span class="val">'pseudonymized_prompt'</span>: pseudonymized_prompt}
+       <span class="fn">if</span> pseudonymized_prompt <span class="fn">else</span> {}),
+    **({<span class="val">'garnet_breakdown'</span>: garnet_breakdown}
+       <span class="fn">if</span> garnet_breakdown <span class="fn">else</span> {}),
+}
+  </div>
+
+  <h2>What the Privacy Proxy Injects</h2>
+  <p>The Privacy Proxy (<span class="file-tag">backend/privacy_proxy/app/main.py</span>) sends normal LLM tokens PLUS extra metadata chunks:</p>
+
+  <div class="code">
+<span class="comment"># Normal LLM token (passes through to browser unchanged)</span>
+data: {"choices": [{"delta": {"content": "Hello "}}]}
+
+<span class="comment"># Garnet metadata chunk (captured by middleware, NOT shown to user directly)</span>
+data: {"pseudonymized_prompt": "PERSON_cc75010d works at ORGANIZATION_bd3a68a5"}
+data: {"garnet_breakdown": {"PERSON": 1, "ORGANIZATION": 1}}
+data: {"file_entity_count": 3}
+
+<span class="comment"># Stream end</span>
+data: [DONE]
+  </div>
+
+  <h2>What the Frontend Does With It</h2>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">ℹ️ (i) Button Tooltip</div>
+      <p style="font-size:0.88rem">Shows <code>pseudonymized_prompt</code> — the masked version of what was sent to the LLM. Lets users see exactly what the AI saw.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Entity Breakdown Bars</div>
+      <p style="font-size:0.88rem">Shows <code>garnet_breakdown</code> — a count per entity type (PERSON, ORG, LOCATION) shown as bars in the vault card.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📎 File Entity Counter</div>
+      <p style="font-size:0.88rem">Shows <code>file_entity_count</code> — how many PII entities were found in an uploaded file before chunking.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔍 Query Variants</div>
+      <p style="font-size:0.88rem">Shows <code>query_variants</code> — expanded query versions for RAG (HyDE), shown in the (i) tooltip.</p>
+    </div>
+  </div>
+
+  <h2>Why middleware.py is a Conflicted File</h2>
+  <p>Both Garnet AND upstream open-webui modified this file heavily:</p>
+
+  <table>
+    <tr>
+      <th>Garnet changed</th>
+      <th>Upstream changed</th>
+    </tr>
+    <tr>
+      <td>Added 4 Garnet variables + capture logic in SSE loop</td>
+      <td>Renamed <code>CHAT_RESPONSE_MAX_TOOL_CALL_RETRIES</code> → <code>CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS</code></td>
+    </tr>
+    <tr>
+      <td>Appends <code>pseudonymized_prompt</code> + <code>garnet_breakdown</code> to done event</td>
+      <td>Added new streaming features, tool call handling, OTEL tracing</td>
+    </tr>
+    <tr>
+      <td>Wires <code>file_entity_count</code> through the pipeline</td>
+      <td>Added <code>process_tool_result</code> function + new imports</td>
+    </tr>
+  </table>
+
+  <p>Since we kept our version ("Accept Current"), the file has Garnet's logic but is missing some variable names upstream renamed — like <code>CHAT_RESPONSE_MAX_TOOL_CALL_RETRIES</code>.</p>
+
+  <h2>The Current Fix Needed</h2>
+  <div class="highlight">
+    <strong>Problem:</strong> Our <code>middleware.py</code> imports <code>CHAT_RESPONSE_MAX_TOOL_CALL_RETRIES</code> from <code>env.py</code>, but upstream's <code>env.py</code> (which we just replaced with) renamed it to <code>CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS</code>.<br><br>
+    <strong>Fix:</strong> Add a one-line alias in <code>env.py</code>:<br>
+    <code>CHAT_RESPONSE_MAX_TOOL_CALL_RETRIES = CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS</code>
+  </div>
+
+  <h2>Summary</h2>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-label">User sends message</div>
+        <p style="font-size:0.88rem">Browser → Chat.svelte → POST /api/chat/completions</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-label">middleware.py intercepts</div>
+        <p style="font-size:0.88rem">Runs auth, filter functions, routes to Privacy Proxy</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-label">Privacy Proxy pseudonymizes</div>
+        <p style="font-size:0.88rem">Replaces PII → sends to LLM → streams back tokens + metadata chunks</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-label">middleware.py captures metadata</div>
+        <p style="font-size:0.88rem">Reads pseudonymized_prompt, garnet_breakdown, file_entity_count from stream</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-label">Done event sent to browser</div>
+        <p style="font-size:0.88rem">Final SSE event contains full response + Garnet metadata</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-label">UI updates</div>
+        <p style="font-size:0.88rem">(i) tooltip shows pseudonymized prompt, entity bars show breakdown</p>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center; margin-top:48px; padding-top:24px; border-top: 1px solid #2d3748; color:#4a5568; font-size:0.85rem;">
+    Garnet — Privacy-Preserving Chatbot · enclaive.io
+  </div>
+
+</div>
+</body>
+</html>

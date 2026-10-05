@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Garnet Proxy — Provider & Model Routing Course</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0d13;
+    color: #e2e8f0;
+    padding: 2.5rem 3rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    line-height: 1.65;
+  }
+  h1 {
+    font-size: 2rem;
+    color: #f1f5f9;
+    margin-bottom: .3rem;
+    letter-spacing: -.02em;
+  }
+  .subtitle {
+    color: #64748b;
+    font-size: .95rem;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #1e293b;
+  }
+  h2 {
+    font-size: 1.35rem;
+    color: #22c55e;
+    margin: 2.5rem 0 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #1e293b;
+  }
+  h3 {
+    font-size: 1.05rem;
+    color: #93c5fd;
+    margin: 1.5rem 0 .5rem;
+  }
+  p { margin-bottom: .8rem; color: #cbd5e1; }
+  code {
+    background: #1e293b;
+    color: #fbbf24;
+    padding: .1rem .35rem;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: .85em;
+  }
+  pre {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-left: 3px solid #22c55e;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: .8rem 0 1.5rem;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: .82rem;
+    line-height: 1.6;
+  }
+  pre code { background: none; color: #e2e8f0; padding: 0; }
+  .cmt { color: #64748b; font-style: italic; }
+  .kw  { color: #c084fc; }
+  .str { color: #86efac; }
+  .fn  { color: #60a5fa; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    font-size: .88rem;
+  }
+  th {
+    background: #1e293b;
+    color: #93c5fd;
+    text-align: left;
+    padding: .6rem .8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    font-size: .75rem;
+  }
+  td {
+    background: #0f172a;
+    padding: .6rem .8rem;
+    border-bottom: 1px solid #1e293b;
+    vertical-align: top;
+  }
+  td code { font-size: .8em; }
+  .tag {
+    display: inline-block;
+    padding: .1rem .5rem;
+    border-radius: 4px;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+  }
+  .tag-local { background: #052e16; color: #4ade80; }
+  .tag-ext { background: #431407; color: #fb923c; }
+  .tag-warn { background: #422006; color: #facc15; }
+  .box {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+  }
+  .box-warn { border-left: 3px solid #f59e0b; background: #1c1408; }
+  .box-info { border-left: 3px solid #3b82f6; background: #0d1728; }
+  .box-good { border-left: 3px solid #22c55e; background: #0a1f13; }
+  ul { padding-left: 1.5rem; margin-bottom: 1rem; }
+  li { margin-bottom: .3rem; color: #cbd5e1; }
+  .flow {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 1.25rem;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: .78rem;
+    line-height: 1.8;
+    color: #94a3b8;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  .flow .u { color: #60a5fa; }
+  .flow .p { color: #22c55e; }
+  .flow .l { color: #fb923c; }
+  .flow .r { color: #c084fc; }
+  a { color: #60a5fa; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .toc {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .toc ol { padding-left: 1.5rem; }
+  .toc li { margin: .2rem 0; }
+</style>
+</head>
+<body>
+
+<h1>Garnet Proxy — Provider &amp; Model Routing</h1>
+<div class="subtitle">How incoming requests are classified, routed, transformed, and streamed. Covers every provider (OpenAI, Anthropic, Groq, Gemini, Mistral, Ollama) and every model exception (image, base, reasoning). Reflects <code>main.py</code> as of commit <code>842c01790</code>.</div>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#overview">Overview &amp; big picture</a></li>
+    <li><a href="#path">Step 1: Incoming path detection</a></li>
+    <li><a href="#provider">Step 2: Provider detection (URL substring)</a></li>
+    <li><a href="#local-vs-ext">Local vs external providers</a></li>
+    <li><a href="#exceptions">Step 3: Model-based exceptions</a></li>
+    <li><a href="#transforms">Step 4: Body transformations</a></li>
+    <li><a href="#stream">Step 5: Streaming vs non-streaming</a></li>
+    <li><a href="#depseudo">Step 6: Depseudonymization</a></li>
+    <li><a href="#tree">Complete decision tree</a></li>
+    <li><a href="#refs">Code references</a></li>
+  </ol>
+</div>
+
+<!-- ===================================================== -->
+<h2 id="overview">1. Overview &amp; big picture</h2>
+
+<p>The Garnet proxy sits between OWU and every LLM provider. It has <strong>one HTTP handler</strong> that receives every request and routes it based on three signals:</p>
+
+<ol>
+  <li><strong>Incoming path</strong> — <code>/openai/*</code>, <code>/ollama/*</code>, etc. → tells us which provider bucket.</li>
+  <li><strong>URL substring match</strong> — <code>api.openai.com</code>, <code>anthropic.com</code>, <code>groq.com</code>, etc. → provider-specific handling.</li>
+  <li><strong>Model name</strong> — <code>gpt-image-1</code>, <code>gpt-5.5-pro</code>, etc. → model-specific exceptions.</li>
+</ol>
+
+<div class="flow">
+<span class="u">Browser</span>  →  <span class="p">OWU (chat/completions)</span>  →  <span class="p">Garnet Proxy</span>  →  <span class="l">Provider</span>
+                                          │
+                                          ├─ pseudonymize PII
+                                          ├─ classify path + provider + model
+                                          ├─ transform body per provider/model
+                                          ├─ stream response
+                                          └─ depseudonymize on the way back
+</div>
+
+<!-- ===================================================== -->
+<h2 id="path">2. Step 1: Incoming path detection</h2>
+
+<p>The proxy strips the <code>openai/</code> prefix (added by OWU) and inspects what remains:</p>
+
+<pre><code><span class="kw">actual_path</span> = path[<span class="fn">len</span>(<span class="str">"openai/"</span>):] <span class="kw">if</span> is_openai <span class="kw">else</span> path
+<span class="kw">is_chat</span> = actual_path <span class="kw">in</span> (
+    <span class="str">"v1/chat/completions"</span>,
+    <span class="str">"api/chat"</span>,
+    <span class="str">"v1/completions"</span>,
+    <span class="str">"chat/completions"</span>,
+)</code></pre>
+
+<table>
+  <tr><th>Incoming path</th><th>Classification</th><th>Handler branch</th></tr>
+  <tr><td><code>openai/v1/chat/completions</code></td><td>Chat</td><td>Full pseudonymize + stream</td></tr>
+  <tr><td><code>openai/v1/images/generations</code></td><td>Image direct</td><td>Path B — JSON pass-through</td></tr>
+  <tr><td><code>openai/v1/models</code></td><td>Passthrough</td><td>Forward as-is</td></tr>
+  <tr><td><code>ollama/api/chat</code></td><td>Chat (local)</td><td>Non-streaming depseudo</td></tr>
+  <tr><td><code>/analyze</code></td><td>Internal</td><td>Pseudonymizer NLP endpoint</td></tr>
+</table>
+
+<!-- ===================================================== -->
+<h2 id="provider">3. Step 2: Provider detection (URL substring)</h2>
+
+<p>After the path is classified, the proxy determines which provider the request is going to by URL substring:</p>
+
+<pre><code><span class="kw">if</span> <span class="str">"groq"</span> <span class="kw">in</span> url:               provider_label = <span class="str">"groq"</span>
+<span class="kw">elif</span> <span class="str">"gemini"</span> <span class="kw">in</span> url:          provider_label = <span class="str">"gemini"</span>
+<span class="kw">elif</span> <span class="str">"ollama"</span> <span class="kw">in</span> url:          provider_label = <span class="str">"ollama"</span>
+<span class="kw">elif</span> <span class="str">"anthropic"</span> <span class="kw">in</span> url:       provider_label = <span class="str">"anthropic"</span>
+<span class="kw">else</span>:                              provider_label = <span class="str">"openai"</span>  <span class="cmt"># catch-all</span></code></pre>
+
+<table>
+  <tr><th>Provider</th><th>URL contains</th><th>Base URL env</th><th>Type</th></tr>
+  <tr><td>OpenAI</td><td><code>api.openai.com</code></td><td><code>OPENAI_API_URL</code></td><td><span class="tag tag-ext">EXTERNAL</span></td></tr>
+  <tr><td>Anthropic</td><td><code>anthropic.com</code></td><td>(via URL in request)</td><td><span class="tag tag-ext">EXTERNAL</span></td></tr>
+  <tr><td>Groq</td><td><code>groq</code></td><td>(via URL in request)</td><td><span class="tag tag-ext">EXTERNAL</span></td></tr>
+  <tr><td>Gemini</td><td><code>gemini</code>, <code>googleapis</code></td><td>(via URL in request)</td><td><span class="tag tag-ext">EXTERNAL</span></td></tr>
+  <tr><td>Mistral</td><td>(routed as generic OpenAI-compatible)</td><td>Custom base URL</td><td><span class="tag tag-ext">EXTERNAL</span></td></tr>
+  <tr><td>Ollama</td><td><code>ollama</code>, <code>11434</code></td><td><code>OLLAMA_URL</code></td><td><span class="tag tag-local">LOCAL</span></td></tr>
+</table>
+
+<!-- ===================================================== -->
+<h2 id="local-vs-ext">4. Local vs external providers</h2>
+
+<h3>Local (Ollama)</h3>
+<p>Ollama runs in the same Docker network as the proxy (<code>garnet-ollama-1</code>, port <code>11434</code>). Key characteristics:</p>
+<ul>
+  <li>Uses <code>OLLAMA_URL</code> env var (default <code>http://localhost:11434</code>).</li>
+  <li>Response format is different from OpenAI — Ollama returns <code>{message:{content}}</code> not <code>{choices:[{message:{content}}]}</code>.</li>
+  <li>Forced to <strong>non-streaming</strong> for the depseudo path: <code>body["stream"] = False</code> when not OpenAI.</li>
+  <li>Response body is inspected as a single JSON blob; PII tokens replaced in <code>message.content</code>.</li>
+</ul>
+
+<h3>External (OpenAI, Anthropic, Groq, Gemini, Mistral)</h3>
+<ul>
+  <li>Uses HTTPS to the provider's public API.</li>
+  <li>Streaming with <code>aiter_bytes()</code> — arbitrary byte chunks yielded through so line-length limits don't trigger.</li>
+  <li>Depseudonymization done on-the-fly by parsing SSE events.</li>
+  <li>Each provider has its own auth header (Anthropic gets <code>anthropic-version: 2023-06-01</code>).</li>
+</ul>
+
+<div class="box box-info">
+<strong>Why <code>aiter_bytes</code> for all providers?</strong> Older code used <code>aiter_lines()</code> which has a 131072-byte line limit and rejects Mistral's chunked encoding. Switching to <code>aiter_bytes()</code> fixed Mistral <code>TransferEncodingError</code> and image gen line-length crashes in one change.
+</div>
+
+<!-- ===================================================== -->
+<h2 id="exceptions">5. Step 3: Model-based exceptions</h2>
+
+<p>Some models can't use the standard chat/completions path. The proxy checks the model name and reroutes.</p>
+
+<h3>5.1 Image models</h3>
+<pre><code>IMAGE_MODELS = [<span class="str">"dall-e-3"</span>, <span class="str">"dall-e-2"</span>, <span class="str">"gpt-image-1"</span>]
+
+<span class="cmt"># Path A: chat request with image model → convert to image generation call</span>
+<span class="kw">if</span> body <span class="kw">and</span> body.get(<span class="str">"model"</span>) <span class="kw">in</span> IMAGE_MODELS \
+   <span class="kw">and</span> <span class="str">"images/generations"</span> <span class="kw">not in</span> actual_path:
+    url = f<span class="str">"{openai_url}/images/generations"</span>
+    <span class="cmt"># Call OpenAI images API, wrap result as SSE chat response</span></code></pre>
+
+<div class="box box-warn">
+<strong>Guard:</strong> <code>"images/generations" not in actual_path</code> — added in <code>842c01790</code>. Prevents intercepting OWU's direct call to <code>/v1/images/generations</code>. Without this guard, OWU expected JSON but got SSE → aiohttp crashed on 131072-byte lines.
+</div>
+
+<h3>5.2 Responses API models (gpt-5.5-pro)</h3>
+<p>Base models like <code>gpt-5.5-pro</code> don't support <code>/v1/chat/completions</code>. The proxy reroutes them to <code>/v1/responses</code>:</p>
+
+<pre><code>RESPONSES_API_MODELS = {<span class="str">"gpt-5.5-pro"</span>}
+
+<span class="kw">if</span> is_openai <span class="kw">and</span> model <span class="kw">in</span> RESPONSES_API_MODELS:
+    url = url.replace(<span class="str">"/v1/chat/completions"</span>, <span class="str">"/v1/responses"</span>)
+    <span class="cmt"># Body conversion: messages → input, system → instructions</span>
+    <span class="cmt"># max_tokens → max_output_tokens</span>
+    <span class="cmt"># Strip: stream_options, top_p, freq/pres penalty, logprobs, tools, tool_choice</span>
+    <span class="cmt"># SSE adapter converts response.output_text.delta → chat/completions format</span></code></pre>
+
+<h3>5.3 OpenAI-specific body cleanups</h3>
+<pre><code><span class="kw">if</span> is_openai <span class="kw">and</span> <span class="str">"api.openai.com"</span> <span class="kw">in</span> url:
+    <span class="kw">if</span> <span class="str">"max_tokens"</span> <span class="kw">in</span> body:
+        body[<span class="str">"max_completion_tokens"</span>] = body.pop(<span class="str">"max_tokens"</span>)
+    <span class="kw">if</span> body.get(<span class="str">"tools"</span>) <span class="kw">and</span> <span class="str">"reasoning_effort"</span> <span class="kw">in</span> body:
+        body.pop(<span class="str">"reasoning_effort"</span>)</code></pre>
+
+<ul>
+  <li><code>max_tokens → max_completion_tokens</code> — required for reasoning models (o1, o3, o4) and newer chat models.</li>
+  <li><code>reasoning_effort</code> stripped when <code>tools</code> present — gpt-5.6-luna and similar reject this combo on chat/completions with error <em>"Function tools with reasoning_effort are not supported"</em>.</li>
+</ul>
+
+<!-- ===================================================== -->
+<h2 id="transforms">6. Step 4: Body transformations per provider</h2>
+
+<table>
+  <tr><th>Provider / Model</th><th>Transformation</th><th>Why</th></tr>
+  <tr><td>OpenAI (all)</td><td><code>max_tokens → max_completion_tokens</code></td><td>New OpenAI API convention</td></tr>
+  <tr><td>OpenAI (with tools)</td><td>Strip <code>reasoning_effort</code></td><td>Incompatible combo on chat/completions</td></tr>
+  <tr><td>OpenAI / gpt-5.5-pro</td><td>Reroute to <code>/v1/responses</code>, convert body shape</td><td>Base model, no chat/completions support</td></tr>
+  <tr><td>OpenAI / gpt-image-1</td><td>Chat request → images API call, wrap as SSE</td><td>Image gen from chat UX</td></tr>
+  <tr><td>OpenAI / <code>images/generations</code></td><td>Strip <code>response_format</code></td><td>gpt-image-1 rejects response_format</td></tr>
+  <tr><td>Anthropic</td><td>Add <code>anthropic-version: 2023-06-01</code> header</td><td>Required by Anthropic API</td></tr>
+  <tr><td>Non-OpenAI (all)</td><td>Force <code>stream = False</code></td><td>Non-streaming depseudo path</td></tr>
+  <tr><td>All</td><td>Pop <code>chat_id</code>, extract session ID first</td><td>Session tracking, not a provider param</td></tr>
+</table>
+
+<!-- ===================================================== -->
+<h2 id="stream">7. Step 5: Streaming vs non-streaming</h2>
+
+<h3>Streaming path (default for OpenAI)</h3>
+<pre><code><span class="kw">async def</span> <span class="fn">response_stream</span>():
+    <span class="kw">async with</span> httpx.AsyncClient() <span class="kw">as</span> client:
+        <span class="kw">async with</span> client.stream(method=request.method, url=url, ...) <span class="kw">as</span> resp:
+            <span class="kw">async for</span> chunk <span class="kw">in</span> resp.aiter_bytes():   <span class="cmt"># bytes, not lines!</span>
+                <span class="kw">yield</span> chunk
+
+<span class="kw">return</span> <span class="fn">StreamingResponse</span>(
+    <span class="fn">stream_with_depseudo</span>(<span class="fn">response_stream</span>(), session_mapping, ...),
+    media_type=<span class="str">"text/event-stream"</span>,
+)</code></pre>
+
+<h3>Non-streaming path</h3>
+<p>Triggered when <code>body["stream"] == False</code> — used by OWU for query generation, title generation, tag generation, and Ollama chat:</p>
+
+<pre><code><span class="kw">if not</span> body.get(<span class="str">"stream"</span>, <span class="kw">True</span>):
+    _resp = <span class="kw">await</span> client.request(url=url, json=body, ...)
+    result = _resp.json()
+    content = result[<span class="str">"choices"</span>][0][<span class="str">"message"</span>][<span class="str">"content"</span>]
+    <span class="cmt"># PII token → real value replacement</span>
+    <span class="kw">for</span> token <span class="kw">in</span> <span class="fn">sorted</span>(session_mapping.keys(), key=<span class="fn">len</span>, reverse=<span class="kw">True</span>):
+        content = content.replace(token, session_mapping[token])
+    result[<span class="str">"choices"</span>][0][<span class="str">"message"</span>][<span class="str">"content"</span>] = content
+    <span class="kw">return</span> <span class="fn">ORJSONResponse</span>(content=result)</code></pre>
+
+<!-- ===================================================== -->
+<h2 id="depseudo">8. Step 6: Depseudonymization</h2>
+
+<p>Every response passes through <code>stream_with_depseudo()</code> which:</p>
+<ul>
+  <li>Parses SSE events (<code>data: {...}\n\n</code>) from the raw byte stream.</li>
+  <li>Extracts <code>choices[0].delta.content</code>.</li>
+  <li>Replaces every PII token (<code>PERSON_abc123</code>) with the real value from <code>session_mapping</code>.</li>
+  <li>Re-emits the SSE event with the depseudonymized content.</li>
+  <li>Passes non-content events (tool calls, deltas without content) through unchanged.</li>
+</ul>
+
+<div class="box box-good">
+<strong>Session isolation:</strong> Each user session has its own <code>session_mapping</code>. Tokens generated in session A can't be leaked into session B, because depseudo only uses the current session's map.
+</div>
+
+<!-- ===================================================== -->
+<h2 id="tree">9. Complete decision tree</h2>
+
+<div class="flow">
+POST /openai/v1/chat/completions with body { model, messages, stream }
+                     │
+                     ▼
+      ┌──────────────────────────────────┐
+      │  actual_path = "v1/chat/completions"  │
+      │  is_chat = True                       │
+      └──────────────────────────────────┘
+                     │
+                     ▼
+      ┌──────────────────────────────────┐
+      │  provider detection by URL       │
+      │  → openai / anthropic / groq /   │
+      │     gemini / mistral / ollama    │
+      └──────────────────────────────────┘
+                     │
+                     ▼
+   ┌─────────── Model check ────────────┐
+   │                                    │
+   │  model in IMAGE_MODELS?  ──yes──▶ Path A: OpenAI images API → wrap as SSE
+   │       (and not /images/generations)
+   │                                    │
+   │  model in RESPONSES_API_MODELS?  ──yes──▶ Reroute /v1/responses + convert body
+   │                                    │
+   │  is_openai and api.openai.com?  ──yes──▶ Rename max_tokens, strip reasoning_effort if tools
+   │                                    │
+   │  is_anthropic?  ──yes──▶ Add anthropic-version header
+   └────────────────────────────────────┘
+                     │
+                     ▼
+      ┌──────────────────────────────────┐
+      │  Pseudonymize messages (PII → tokens)  │
+      └──────────────────────────────────┘
+                     │
+                     ▼
+      ┌──────────────────────────────────┐
+      │  stream=False? → non-streaming JSON path
+      │  else → StreamingResponse + depseudo
+      └──────────────────────────────────┘
+                     │
+                     ▼
+                Send to provider
+                     │
+                     ▼
+           Response comes back
+                     │
+                     ▼
+       Depseudo (token → real PII value)
+                     │
+                     ▼
+                To user
+</div>
+
+<!-- ===================================================== -->
+<h2 id="refs">10. Code references</h2>
+
+<table>
+  <tr><th>Line</th><th>Purpose</th></tr>
+  <tr><td><code>main.py:29</code></td><td><code>IMAGE_MODELS</code> constant</td></tr>
+  <tr><td><code>main.py:30</code></td><td><code>RESPONSES_API_MODELS</code> constant</td></tr>
+  <tr><td><code>main.py:388</code></td><td><code>actual_path</code> parsing</td></tr>
+  <tr><td><code>main.py:389</code></td><td><code>is_chat</code> detection</td></tr>
+  <tr><td><code>main.py:439–457</code></td><td>OpenAI body cleanup + Responses API rewrite</td></tr>
+  <tr><td><code>main.py:445–454</code></td><td>Provider label detection</td></tr>
+  <tr><td><code>main.py:694</code></td><td>Path A — chat with image model</td></tr>
+  <tr><td><code>main.py:751</code></td><td><code>response_stream()</code> generator</td></tr>
+  <tr><td><code>main.py:782</code></td><td>Non-streaming path</td></tr>
+  <tr><td><code>main.py:802</code></td><td>StreamingResponse + depseudo</td></tr>
+  <tr><td><code>main.py:854</code></td><td>Path B — direct /images/generations</td></tr>
+</table>
+
+<div class="subtitle" style="border-top: 1px solid #1e293b; border-bottom: none; margin-top: 3rem; padding-top: 1.5rem;">
+  Garnet Router · commit <code>842c01790</code> · branch <code>demo1</code>
+</div>
+
+</body>
+</html>

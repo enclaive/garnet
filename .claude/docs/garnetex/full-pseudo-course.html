@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Garnet — Full Pseudonymization Course</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px;
+    line-height: 1.6;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  h1 { color: #6b0f1a; border-bottom: 3px solid #6b0f1a; padding-bottom: 8px; }
+  h2 { color: #6b0f1a; margin-top: 40px; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }
+  h3 { color: #333; margin-top: 24px; }
+  code, pre { font-family: "SF Mono", Menlo, monospace; }
+  code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+  pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.85em;
+    line-height: 1.4;
+  }
+  pre .keyword { color: #569cd6; }
+  pre .string  { color: #ce9178; }
+  pre .comment { color: #6a9955; }
+  pre .fn      { color: #dcdcaa; }
+  pre .token   { color: #f0c674; font-weight: bold; }
+  pre .real    { color: #ff8080; font-weight: bold; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    background: white;
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 0.9em;
+  }
+  th { background: #6b0f1a; color: white; }
+  tr:nth-child(even) { background: #f9f9f9; }
+  .callout {
+    padding: 12px 16px;
+    border-left: 4px solid #6b0f1a;
+    background: #fdf4f6;
+    margin: 16px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .callout.good { border-left-color: #2e7d32; background: #f0f9f0; }
+  .callout.warn { border-left-color: #f57c00; background: #fff8e1; }
+  .flow {
+    background: white;
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    margin: 16px 0;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.75em;
+    font-weight: bold;
+    vertical-align: middle;
+  }
+  .badge.chat-a { background: #1976d2; color: white; }
+  .badge.chat-b { background: #7b1fa2; color: white; }
+  .toc {
+    background: white;
+    padding: 16px 24px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    margin: 20px 0;
+  }
+  .toc ol { margin: 0; padding-left: 20px; }
+  .toc a { color: #6b0f1a; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .key { font-family: monospace; background: #eee; padding: 1px 4px; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<h1>Garnet — Full Pseudonymization</h1>
+<p><em>A short course on how Garnet protects PII across an entire conversation, not just the last message.</em></p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#what">What "full pseudonymization" means</a></li>
+    <li><a href="#pieces">The 4 moving pieces</a></li>
+    <li><a href="#core">The core insight — deterministic hashing</a></li>
+    <li><a href="#scenario1">Scenario 1 — two turns in the same chat</a></li>
+    <li><a href="#scenario2">Scenario 2 — two different chats</a></li>
+    <li><a href="#redis">What's actually inside Redis</a></li>
+    <li><a href="#failure">What happens when things go wrong</a></li>
+    <li><a href="#takeaways">Key takeaways</a></li>
+  </ol>
+</div>
+
+<h2 id="what">1. What "full pseudonymization" means</h2>
+
+<p>A naive privacy filter cleans <strong>only the newest user message</strong> before sending to the LLM. That leaks in every conversation past turn 2, because the LLM sees the full history — and older turns still contain the raw PII.</p>
+
+<p><strong>Full pseudonymization</strong> means every message in the payload — user turns, assistant replies, retrieved documents, system prompts — is checked and rewritten before leaving the confidential VM. Same PII value always becomes the same anonymous token, so the LLM has a coherent conversation while never seeing the real names.</p>
+
+<div class="callout">
+Concretely: if turn 1 mentioned "Max Mustermann" and turn 5 asks "what was that person's email?", the LLM at turn 5 sees <code>PERSON_dddfab9b</code> in the history — the <em>same</em> token as turn 1. It answers the question from context, and the proxy restores "Max Mustermann" only for the user's screen.
+</div>
+
+<h2 id="pieces">2. The 4 moving pieces</h2>
+
+<table>
+  <tr><th>Piece</th><th>Where it lives</th><th>Job</th></tr>
+  <tr><td><strong>Session ID</strong></td><td>Sent by Open WebUI (<code>chat_id</code>)</td><td>Groups all messages of one conversation. Redis key uses it.</td></tr>
+  <tr><td><strong>Mapping</strong></td><td>Redis + in-memory dict</td><td>Reverse lookup: <code>token → original</code>. Used to restore the LLM's response.</td></tr>
+  <tr><td><strong>Token generator</strong></td><td><code>pseudonymizer.py:54</code></td><td>Pure hash of the value → same input, same output, forever.</td></tr>
+  <tr><td><strong>Pseudonymize function</strong></td><td><code>pseudonymizer.py:198</code></td><td>Detect PII, replace with tokens, apply fallback re-scan.</td></tr>
+</table>
+
+<h2 id="core">3. The core insight — deterministic hashing</h2>
+
+<p>This is the single line that makes everything else work:</p>
+
+<pre><span class="keyword">def</span> <span class="fn">generate_token</span>(entity_type, value):
+    h = hashlib.sha256(value.encode()).hexdigest()[:8]
+    <span class="keyword">return</span> <span class="string">f"{entity_type}_{h}"</span></pre>
+
+<p>It only takes the entity <em>type</em> and the <em>value</em>. No timestamp, no session ID, no random salt. That means:</p>
+
+<ul>
+  <li><strong>Same value → same token, always.</strong> "Max Mustermann" always becomes <span class="token">PERSON_dddfab9b</span>, whether it's turn 1, turn 50, chat A, or chat B.</li>
+  <li>No Redis lookup is needed to <em>generate</em> a token — it's a pure function.</li>
+  <li>Two different pods can pseudonymize independently and land on the same tokens.</li>
+</ul>
+
+<div class="callout warn">
+This is a <strong>design choice</strong>. Tokens are portable — collision-free is not the design goal, privacy is. The mapping in Redis lets you go <em>backwards</em> (token → original) only for a session that has permission to restore. If a token accidentally ended up in the wrong session, that session couldn't reverse it — no reverse lookup entry.
+</div>
+
+<h2 id="scenario1">4. Scenario 1 — two turns in the <em>same</em> chat</h2>
+
+<p>Chat A, session ID <code>189798b8</code>. User sends two messages.</p>
+
+<div class="flow">┌─ Turn 1 ──────────────────────────────────────────────────────────┐
+│ User types:    "Hi, I'm Max Mustermann at Enclaive."              │
+│                                                                    │
+│ Proxy receives → session=189798b8, messages=[user_1]              │
+│                                                                    │
+│ Presidio detects: PERSON="Max Mustermann", ORG="Enclaive"         │
+│                                                                    │
+│ Hash:  sha256("Max Mustermann")[:8] = dddfab9b                    │
+│        sha256("Enclaive")[:8]       = bd3a68a5                    │
+│                                                                    │
+│ Redis SET  garnet:mapping:189798b8 = {                            │
+│              "PERSON_dddfab9b"       : "Max Mustermann",          │
+│              "ORGANIZATION_bd3a68a5" : "Enclaive"                 │
+│            }  (TTL 1h)                                            │
+│                                                                    │
+│ LLM sees: "Hi, I'm PERSON_dddfab9b at ORGANIZATION_bd3a68a5."     │
+│ LLM replies: "OK"                                                 │
+│ User sees:   "OK"  (no tokens to restore)                         │
+└────────────────────────────────────────────────────────────────────┘
+
+┌─ Turn 2 ──────────────────────────────────────────────────────────┐
+│ User types:    "What was my email again?"                         │
+│                                                                    │
+│ Proxy receives full history:                                       │
+│   messages = [                                                    │
+│     turn_1_user       (still says "Max Mustermann at Enclaive"),  │
+│     turn_1_assistant  ("OK"),                                     │
+│     turn_2_user       ("What was my email...")                    │
+│   ]                                                                │
+│                                                                    │
+│ Proxy fetches mapping for 189798b8 from Redis:                    │
+│   { PERSON_dddfab9b: "Max Mustermann",                            │
+│     ORGANIZATION_bd3a68a5: "Enclaive" }                           │
+│                                                                    │
+│ For EACH message in history, run pseudonymize():                  │
+│                                                                    │
+│   turn_1_user:                                                     │
+│     • Presidio may re-detect PERSON/ORG → hash → same tokens      │
+│     • Fallback re-scan applies existing mapping too               │
+│     • Result: fully tokenized, identical to turn 1's output       │
+│                                                                    │
+│   turn_1_assistant ("OK"):                                        │
+│     • No PII → no change                                          │
+│                                                                    │
+│   turn_2_user ("What was my email again?"):                       │
+│     • No PII → no change                                          │
+│                                                                    │
+│ LLM sees the FULL history with same tokens as turn 1.             │
+│ LLM replies (from context): "It was max.mustermann@enclaive.io"   │
+│                                                                    │
+│ Wait — no EMAIL token yet! Turn 1 didn't include email.           │
+│ The LLM invented one from context? No — it's replying from        │
+│ what the USER told it. In our real test, turn 1 also had          │
+│ the email, so EMAIL_2162ce1b was already in the mapping           │
+│ and the LLM's response contained EMAIL_2162ce1b, which the        │
+│ proxy restored on the way back.                                   │
+└────────────────────────────────────────────────────────────────────┘</div>
+
+<div class="callout good">
+<strong>Why tokens stay stable across turns:</strong> two mechanisms, working together —
+<ol>
+  <li><strong>Deterministic hashing</strong> — every fresh Presidio detection produces the same token as before.</li>
+  <li><strong>Fallback re-scan</strong> (<code>pseudonymizer.py:222-227</code>) — even if Presidio's NER misses "Max" on a later turn, the proxy iterates the session mapping and applies each known original → token substitution via regex, longest-first. So no drift.</li>
+</ol>
+</div>
+
+<h2 id="scenario2">5. Scenario 2 — two <em>different</em> chats</h2>
+
+<p><span class="badge chat-a">Chat A</span> session = <code>189798b8</code> — user Alice writes "I'm Max Mustermann."</p>
+<p><span class="badge chat-b">Chat B</span> session = <code>74963c5b</code> — user Bob independently writes "I'm Max Mustermann."</p>
+
+<p>What happens?</p>
+
+<table>
+  <tr><th></th><th>Chat A (Alice)</th><th>Chat B (Bob)</th></tr>
+  <tr>
+    <td><strong>Presidio detects</strong></td>
+    <td>PERSON = "Max Mustermann"</td>
+    <td>PERSON = "Max Mustermann"</td>
+  </tr>
+  <tr>
+    <td><strong>Token generated</strong></td>
+    <td><span class="token">PERSON_dddfab9b</span></td>
+    <td><span class="token">PERSON_dddfab9b</span> ← same!</td>
+  </tr>
+  <tr>
+    <td><strong>Redis key</strong></td>
+    <td><code>garnet:mapping:189798b8</code></td>
+    <td><code>garnet:mapping:74963c5b</code></td>
+  </tr>
+  <tr>
+    <td><strong>Redis value</strong></td>
+    <td><code>{ PERSON_dddfab9b: "Max Mustermann" }</code></td>
+    <td><code>{ PERSON_dddfab9b: "Max Mustermann" }</code></td>
+  </tr>
+  <tr>
+    <td><strong>LLM sees</strong></td>
+    <td>"I'm PERSON_dddfab9b."</td>
+    <td>"I'm PERSON_dddfab9b."</td>
+  </tr>
+  <tr>
+    <td><strong>Response depseudo</strong></td>
+    <td>Uses Alice's session mapping → restores "Max Mustermann" for Alice</td>
+    <td>Uses Bob's session mapping → restores "Max Mustermann" for Bob</td>
+  </tr>
+</table>
+
+<div class="callout">
+<strong>Tokens are the same, but the reverse-lookup tables are separate.</strong>
+Bob's chat cannot restore a token that Alice's session generated — even though the token string is identical — because depseudonymization uses the <em>caller's</em> session ID as the Redis key. Alice writing "Max" doesn't leak anything about Bob, and vice versa.
+</div>
+
+<div class="callout warn">
+<strong>What if we wanted DIFFERENT tokens per session too?</strong>
+The change would be one line — add <code>session_id</code> as a hash input:
+<pre><span class="keyword">def</span> <span class="fn">generate_token</span>(entity_type, value, session_id):
+    h = hashlib.sha256(<span class="string">f"{session_id}:{value}"</span>.encode()).hexdigest()[:8]
+    <span class="keyword">return</span> <span class="string">f"{entity_type}_{h}"</span></pre>
+Trade-off: you'd lose easy debuggability (the same name would look different in each chat's logs) but gain perfect visual isolation. Today Garnet chose portability + readability of debug logs.
+</div>
+
+<h2 id="redis">6. What's actually inside Redis</h2>
+
+<p>After the scenario above, if you did <code>redis-cli KEYS 'garnet:*'</code> inside the confidential VM, you'd see:</p>
+
+<pre><span class="fn">$&gt; redis-cli KEYS 'garnet:mapping:*'</span>
+<span class="string">1) "garnet:mapping:189798b8"</span>
+<span class="string">2) "garnet:mapping:74963c5b"</span>
+
+<span class="fn">$&gt; redis-cli GET 'garnet:mapping:189798b8'</span>
+<span class="string">"{\"PERSON_dddfab9b\":\"Max Mustermann\",
+   \"ORGANIZATION_bd3a68a5\":\"Enclaive\",
+   \"EMAIL_ADDRESS_2162ce1b\":\"max.mustermann@enclaive.io\"}"</span>
+
+<span class="fn">$&gt; redis-cli TTL 'garnet:mapping:189798b8'</span>
+<span class="string">(integer) 3542   # seconds remaining, resets to 3600 on each write</span></pre>
+
+<div class="callout warn">
+<strong>Sensitive: the plaintext originals live inside Redis.</strong> That's why Redis runs <em>inside</em> the Enclaive confidential VM with attestation — nobody outside the cVM can read it, and even the cloud provider can't inspect memory.
+</div>
+
+<h2 id="failure">7. What happens when things go wrong</h2>
+
+<table>
+  <tr><th>Failure</th><th>Effect</th></tr>
+  <tr>
+    <td>Redis is unreachable</td>
+    <td>Fall back to <strong>in-memory only</strong> (per pod). Restart = mapping lost = old messages can't be depseudo'd. New messages work.</td>
+  </tr>
+  <tr>
+    <td>Session TTL (1h) expires mid-conversation</td>
+    <td>Redis key gone. Next turn: Presidio re-detects, deterministic hash → <strong>same tokens</strong> reconstructed. Depseudo still works because the new tokens equal the old ones.</td>
+  </tr>
+  <tr>
+    <td>Presidio misses a name on turn 5 that it caught on turn 1</td>
+    <td>Fallback re-scan (<code>pseudonymizer.py:222</code>) applies the session mapping via regex — the miss is caught and replaced.</td>
+  </tr>
+  <tr>
+    <td>LLM invents a "PERSON_xyz" that isn't in the mapping</td>
+    <td>Depseudo leaves it as-is (no reverse entry). User sees the raw token — a signal that the LLM hallucinated something.</td>
+  </tr>
+  <tr>
+    <td>Very long conversation (100+ turns)</td>
+    <td>Every request scans full history — cost grows linearly. Observed ~4-5s pseudo overhead at ~5 turns. Optimization scheduled: skip already-tokenized messages via a flag.</td>
+  </tr>
+</table>
+
+<h2 id="takeaways">8. Key takeaways</h2>
+
+<ol>
+  <li><strong>Session ID is the boundary.</strong> Everything private is scoped by <code>chat_id</code>. Two chats never share reverse-lookup tables.</li>
+  <li><strong>Tokens are deterministic hashes.</strong> Same value → same token, always. No random state, no drift.</li>
+  <li><strong>Full history is rewritten on every request.</strong> The proxy doesn't trust cached client-side pseudonyms — it re-runs Presidio + fallback re-scan on the whole payload.</li>
+  <li><strong>Redis stores the reverse map, not the tokens themselves.</strong> The tokens are derivable; the reverse map is what you need to restore the LLM's response.</li>
+  <li><strong>Confidential VM is the perimeter.</strong> Redis holds plaintext originals — safe because the whole VM is encrypted memory attested by Enclaive Nitride.</li>
+  <li><strong>Fallback re-scan is the safety net.</strong> Even if Presidio's NER model wobbles, the regex re-application of the session mapping keeps tokens consistent turn-to-turn.</li>
+</ol>
+
+<hr>
+<p style="text-align: center; color: #999; font-size: 0.85em; margin-top: 40px;">
+  Garnet · Enclaive · demo-1.garnet.enclaive.cloud · Generated 2026-07-25
+</p>
+
+</body>
+</html>

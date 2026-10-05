@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garnet — Mapping Store Deep Dive</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; line-height: 1.7; padding: 40px 20px; }
+.container { max-width: 960px; margin: 0 auto; }
+
+h1 { font-size: 2rem; color: #f0f6fc; margin-bottom: 6px; }
+.subtitle { color: #8b949e; font-size: 1rem; margin-bottom: 40px; }
+h2 { font-size: 1.2rem; color: #58a6ff; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #21262d; }
+h3 { font-size: 0.95rem; color: #79c0ff; margin: 16px 0 8px; }
+p { margin-bottom: 10px; color: #c9d1d9; font-size: 0.9rem; }
+
+.section { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 26px 30px; margin-bottom: 24px; }
+
+pre { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 16px; overflow-x: auto; font-size: 0.78rem; font-family: 'Courier New', monospace; margin: 10px 0; line-height: 1.6; }
+code { font-family: 'Courier New', monospace; background: #1e293b; padding: 1px 6px; border-radius: 4px; font-size: 0.82em; color: #d2a8ff; }
+.kw  { color: #ff7b72; }
+.fn  { color: #d2a8ff; }
+.str { color: #a5d6ff; }
+.cm  { color: #8b949e; font-style: italic; }
+.num { color: #79c0ff; }
+
+.callout { border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-size: 0.86rem; }
+.callout.info    { background: #0c2d6b; border-left: 3px solid #58a6ff; }
+.callout.warn    { background: #3d2500; border-left: 3px solid #f59e0b; color: #fcd34d; }
+.callout.tip     { background: #052e16; border-left: 3px solid #10b981; }
+.callout b       { display: block; margin-bottom: 4px; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+@media(max-width:640px) { .grid2 { grid-template-columns: 1fr; } }
+
+.card { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 16px; }
+.card.blue   { border-left: 3px solid #58a6ff; }
+.card.green  { border-left: 3px solid #10b981; }
+.card.yellow { border-left: 3px solid #f59e0b; }
+.card.red    { border-left: 3px solid #ef4444; }
+.card-title  { font-size: 0.82rem; font-weight: 700; color: #f0f6fc; margin-bottom: 6px; font-family: monospace; }
+.card p      { font-size: 0.8rem; color: #8b949e; }
+
+.flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+.fbox { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px 14px; font-size: 0.8rem; color: #e2e8f0; text-align: center; }
+.fbox.blue   { border-color: #3b82f6; background: #1e3a5f; color: #93c5fd; }
+.fbox.green  { border-color: #10b981; background: #064e3b; color: #6ee7b7; }
+.fbox.yellow { border-color: #f59e0b; background: #451a03; color: #fcd34d; }
+.farrow { color: #58a6ff; font-size: 1.2rem; padding: 0 2px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 10px; }
+th { background: #0d1117; color: #8b949e; text-align: left; padding: 8px 12px; border-bottom: 1px solid #21262d; }
+td { padding: 8px 12px; border-bottom: 1px solid #21262d; vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+
+.pill { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-right: 4px; }
+.pill.blue   { background: #1d4ed8; color: #bfdbfe; }
+.pill.green  { background: #065f46; color: #6ee7b7; }
+.pill.yellow { background: #78350f; color: #fde68a; }
+.pill.red    { background: #7f1d1d; color: #fca5a5; }
+
+.navbar { position: sticky; top: 0; z-index: 100; background: #010409; border-bottom: 1px solid #21262d; margin: -40px -20px 40px; display: flex; overflow-x: auto; }
+.nav-btn { padding: 14px 22px; font-size: 0.84rem; font-weight: 600; color: #8b949e; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+.nav-btn:hover { color: #c9d1d9; }
+.nav-btn.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+.page { display: none; }
+.page.active { display: block; }
+
+.step-row { display: flex; gap: 10px; margin: 10px 0; }
+.step-num { width: 26px; height: 26px; border-radius: 50%; background: #58a6ff; color: #0d1117; font-weight: 700; font-size: 0.78rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+.step-content { flex: 1; font-size: 0.86rem; color: #c9d1d9; }
+.step-content b { color: #f0f6fc; }
+</style>
+</head>
+<body>
+<div class="navbar">
+  <button class="nav-btn active" onclick="go('p1',this)">Overview</button>
+  <button class="nav-btn" onclick="go('p2',this)">Classes &amp; Code</button>
+  <button class="nav-btn" onclick="go('p3',this)">Redis</button>
+  <button class="nav-btn" onclick="go('p4',this)">Proxy Usage</button>
+  <button class="nav-btn" onclick="go('p5',this)">Known Bugs</button>
+</div>
+<div class="container">
+
+<!-- ═══════════════════ PAGE 1 — OVERVIEW ═══════════════════ -->
+<div class="page active" id="p1">
+  <div style="display:inline-flex;align-items:center;gap:8px;background:#10b981;color:#0d1117;font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:14px;text-transform:uppercase">🗄️ Garnet Lesson</div>
+  <h1>Mapping Store — Deep Dive</h1>
+  <p class="subtitle">How the proxy remembers which token replaced which real value — memory, Redis, and the full write/read lifecycle.</p>
+
+  <div class="section">
+    <h2>What is it?</h2>
+    <p>The mapping store is the <strong>memory of reversibility</strong>. When the proxy replaces "Max Mustermann" with <code>PERSON_cc75010d</code>, it must remember that relationship so it can swap it back in the LLM response. The mapping store holds that dictionary.</p>
+
+    <div class="flow">
+      <div class="fbox blue">User: "Max Mustermann"</div>
+      <span class="farrow">→</span>
+      <div class="fbox">pseudonymize()</div>
+      <span class="farrow">→</span>
+      <div class="fbox green">LLM: "PERSON_cc75010d"</div>
+      <span class="farrow">→</span>
+      <div class="fbox">mapping store lookup</div>
+      <span class="farrow">→</span>
+      <div class="fbox blue">User sees: "Max Mustermann"</div>
+    </div>
+
+    <pre><span class="cm"># What the store looks like at runtime</span>
+store._store = {
+  <span class="str">"chat-abc123"</span>: {
+    <span class="str">"PERSON_cc75010d"</span>:       <span class="str">"Max Mustermann"</span>,
+    <span class="str">"ORGANIZATION_bd3a68a5"</span>: <span class="str">"Enclaive GmbH"</span>,
+    <span class="str">"IBAN_CODE_f4e21a"</span>:      <span class="str">"DE89 3704 0044 0532 0130 00"</span>,
+  },
+  <span class="str">"file:doc-xyz"</span>: {
+    <span class="str">"PERSON_9f3b21c0"</span>: <span class="str">"Anna Schmidt"</span>,
+  }
+}</pre>
+
+    <div class="callout tip"><b>Key design</b>One dict per session. Sessions are isolated — two users never share tokens. File uploads get their own <code>file:</code>-prefixed session so they don't mix with chat sessions.</div>
+  </div>
+
+  <div class="section">
+    <h2>Three classes, one job</h2>
+    <div class="grid2">
+      <div class="card blue">
+        <div class="card-title">MappingStore</div>
+        <p>Top-level object. Created once at proxy startup. Owns the in-memory dict and the TTL/cleanup logic. Thread-safe via a lock.</p>
+      </div>
+      <div class="card green">
+        <div class="card-title">_RedisAwareStore</div>
+        <p>Returned by <code>get_store()</code>. Adds Redis read/write on top of the memory dict. Memory is always checked first — Redis is the fallback.</p>
+      </div>
+      <div class="card yellow">
+        <div class="card-title">_TrackedDict</div>
+        <p>A dict subclass. Every time pseudonymize() adds a new token via <code>dict[key] = value</code>, it auto-syncs back to <code>_memory</code>. The link between pseudonymizer and store.</p>
+      </div>
+      <div class="card red">
+        <div class="card-title">_redis_client (module-level)</div>
+        <p>A <code>redis.from_url()</code> client created once at import time. <code>None</code> if <code>REDIS_URL</code> is not set or Redis is unreachable. All three classes share it.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Two backends, one interface</h2>
+    <div class="grid2">
+      <div class="card yellow">
+        <div class="card-title">Memory only (default)</div>
+        <p>No config needed. Fast. Lost on proxy restart — active chats would see raw tokens in responses after a redeploy. Fine for short sessions.</p>
+      </div>
+      <div class="card green">
+        <div class="card-title">Memory + Redis</div>
+        <p>Set <code>REDIS_URL</code> env var. Memory is the fast cache. Redis is the durable backup. Survives restarts. TTL = 1 hour (configurable).</p>
+      </div>
+    </div>
+    <div class="callout info"><b>Rule</b>Read: memory first, Redis on miss. Write: memory always, Redis if available. The two stay in sync via <code>flush()</code>.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE 2 — CLASSES ═══════════════════ -->
+<div class="page" id="p2">
+  <h1 style="margin-bottom:6px">Classes &amp; Code</h1>
+  <p class="subtitle">Every method explained line by line.</p>
+
+  <!-- MappingStore -->
+  <div class="section">
+    <h2>MappingStore — the container</h2>
+    <pre><span class="kw">class</span> <span class="fn">MappingStore</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, ttl: int = <span class="num">3600</span>):
+        self._store      = {}           <span class="cm"># session_id → {token: real_value}</span>
+        self._timestamps = {}           <span class="cm"># session_id → last_access time</span>
+        self._ttl        = ttl          <span class="cm"># seconds before a session expires</span>
+        self._lock       = threading.Lock()  <span class="cm"># one writer at a time</span></pre>
+
+    <h3>get_mapping(session_id)</h3>
+    <pre><span class="kw">def</span> <span class="fn">get_mapping</span>(self, session_id):
+    <span class="kw">with</span> self._lock:
+        self._cleanup(session_id)               <span class="cm"># evict if expired</span>
+        <span class="kw">return</span> self._store.setdefault(session_id, {})</pre>
+    <p>Direct access — returns the raw dict. Only used internally. Most callers go through <code>get_store()</code> instead.</p>
+
+    <h3>get_store()</h3>
+    <pre><span class="kw">def</span> <span class="fn">get_store</span>(self):
+    <span class="kw">return</span> _RedisAwareStore(self._store, self._ttl)</pre>
+    <p>Creates a new <code>_RedisAwareStore</code> wrapper on every call (known inefficiency — P2-29 in the improvement report). The wrapper holds a reference to <code>self._store</code>, so writes through the wrapper go into the same dict.</p>
+
+    <div class="callout warn"><b>Bug P2-29</b><code>get_store()</code> allocates a new <code>_RedisAwareStore</code> object on every call to <code>proxy()</code>. This is harmless but wasteful — it should cache the instance.</div>
+
+    <h3>_cleanup(session_id)</h3>
+    <pre><span class="kw">def</span> <span class="fn">_cleanup</span>(self, session_id):
+    now = time.time()
+    <span class="kw">if</span> session_id <span class="kw">in</span> self._timestamps:
+        <span class="kw">if</span> now - self._timestamps[session_id] > self._ttl:
+            <span class="kw">del</span> self._store[session_id]
+            <span class="kw">del</span> self._timestamps[session_id]
+    self._timestamps[session_id] = now     <span class="cm"># refresh access time</span></pre>
+    <div class="callout warn"><b>Bug P0-8</b>Only checks expiry for the session currently being accessed. Dead sessions from other users accumulate forever until they happen to be accessed again. Under traffic, this leaks memory unboundedly.</div>
+  </div>
+
+  <!-- _RedisAwareStore -->
+  <div class="section">
+    <h2>_RedisAwareStore — the smart wrapper</h2>
+    <p>This is the object <code>proxy()</code> actually works with. It looks like a dict but transparently adds Redis reads and writes.</p>
+
+    <h3>get(session_id) — read with Redis fallback</h3>
+    <pre><span class="kw">def</span> <span class="fn">get</span>(self, session_id, default=<span class="kw">None</span>):
+    <span class="cm"># 1. check memory first — fastest path</span>
+    <span class="kw">if</span> session_id <span class="kw">in</span> self._memory:
+        <span class="kw">return</span> self._memory[session_id]
+
+    <span class="cm"># 2. memory miss → try Redis</span>
+    <span class="kw">if</span> _redis_client:
+        raw = _redis_client.get(<span class="str">f"garnet:mapping:{session_id}"</span>)
+        <span class="kw">if</span> raw:
+            mapping = json.loads(raw)
+            self._memory[session_id] = mapping   <span class="cm"># warm the cache</span>
+            <span class="kw">return</span> mapping
+
+    <span class="kw">return</span> default</pre>
+
+    <h3>__setitem__(session_id, mapping) — write to both</h3>
+    <pre><span class="kw">def</span> <span class="fn">__setitem__</span>(self, session_id, mapping):
+    self._memory[session_id] = mapping          <span class="cm"># always write memory</span>
+    <span class="kw">if</span> _redis_client:
+        _redis_client.setex(
+            <span class="str">f"garnet:mapping:{session_id}"</span>,
+            self._ttl,                           <span class="cm"># TTL in seconds</span>
+            json.dumps(mapping)
+        )</pre>
+
+    <h3>setdefault(session_id) — get or create, return TrackedDict</h3>
+    <pre><span class="kw">def</span> <span class="fn">setdefault</span>(self, session_id, default=<span class="kw">None</span>):
+    existing = self.get(session_id)
+    <span class="kw">if</span> existing <span class="kw">is not None</span>:
+        <span class="kw">return</span> _TrackedDict(session_id, existing, self)  <span class="cm"># wrap existing</span>
+    value = default <span class="kw">if</span> default <span class="kw">is not None else</span> {}
+    self[session_id] = value
+    <span class="kw">return</span> _TrackedDict(session_id, value, self)         <span class="cm"># wrap new</span></pre>
+    <p>Called by <code>pseudonymize()</code> internally to get a writable dict for the session. Returns a <code>_TrackedDict</code> so every token write auto-syncs back to memory.</p>
+
+    <h3>flush(session_id) — force sync to Redis</h3>
+    <pre><span class="kw">def</span> <span class="fn">flush</span>(self, session_id):
+    <span class="kw">if</span> _redis_client <span class="kw">and</span> session_id <span class="kw">in</span> self._memory:
+        _redis_client.setex(
+            <span class="str">f"garnet:mapping:{session_id}"</span>,
+            self._ttl,
+            json.dumps(self._memory[session_id])
+        )</pre>
+    <p>Called by <code>proxy()</code> explicitly after pseudonymization is done to make sure Redis has the latest snapshot. <code>__setitem__</code> also writes to Redis, but <code>flush()</code> is the guaranteed "everything is settled now" sync.</p>
+  </div>
+
+  <!-- _TrackedDict -->
+  <div class="section">
+    <h2>_TrackedDict — the auto-sync wrapper</h2>
+    <pre><span class="kw">class</span> <span class="fn">_TrackedDict</span>(dict):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, session_id, data, store):
+        super().__init__(data)
+        self._session_id = session_id
+        self._store = store
+
+    <span class="kw">def</span> <span class="fn">__setitem__</span>(self, key, value):
+        super().__setitem__(key, value)
+        self._store._memory[self._session_id] = dict(self)  <span class="cm"># sync to memory</span>
+
+    <span class="kw">def</span> <span class="fn">flush</span>(self):
+        self._store.flush(self._session_id)  <span class="cm"># push to Redis</span></pre>
+
+    <p><code>_TrackedDict</code> is what <code>pseudonymize()</code> writes into. Every time it does <code>mapping["PERSON_abc"] = "Max"</code>, the <code>__setitem__</code> override also updates <code>_memory[session_id]</code>. This is the glue between the pseudonymizer and the store.</p>
+
+    <div class="callout warn"><b>Bug P1-18</b>Line <code>self._store._memory[self._session_id] = dict(self)</code> allocates a full new dict copy on every single token write. Since <code>_memory[session_id]</code> and <code>self</code> already point to the same underlying data, this is redundant. It's dead-weight allocation on every entity found.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE 3 — REDIS ═══════════════════ -->
+<div class="page" id="p3">
+  <h1 style="margin-bottom:6px">Redis — How It Fits In</h1>
+  <p class="subtitle">When it connects, what keys it uses, when it reads and writes, and what happens without it.</p>
+
+  <div class="section">
+    <h2>Connection — module load time</h2>
+    <pre><span class="cm"># mapping_store.py — runs once when the module is imported</span>
+<span class="kw">try</span>:
+    <span class="kw">import</span> redis
+    REDIS_URL = os.getenv(<span class="str">"REDIS_URL"</span>)
+    _redis_client = redis.from_url(REDIS_URL) <span class="kw">if</span> REDIS_URL <span class="kw">else None</span>
+    <span class="kw">if</span> _redis_client:
+        _redis_client.ping()
+        print(<span class="str">"[MAPPING STORE] Redis connected"</span>)
+<span class="kw">except</span> Exception <span class="kw">as</span> e:
+    print(<span class="str">f"[MAPPING STORE] Redis unavailable: {e}"</span>)
+    _redis_client = <span class="kw">None</span>   <span class="cm"># silently degrade to memory-only</span></pre>
+
+    <div class="callout tip"><b>Graceful degradation</b>If Redis is down or <code>REDIS_URL</code> is not set, <code>_redis_client = None</code> and every Redis path is skipped. The proxy runs fine in memory-only mode — you only lose persistence across restarts.</div>
+
+    <div class="callout warn"><b>Bug P0-1</b><code>redis.from_url()</code> returns a <strong>synchronous</strong> client. Every <code>.get()</code> / <code>.setex()</code> call blocks the asyncio event loop. Under load (or Redis latency), this freezes all in-flight requests until the Redis round-trip completes. Fix: swap to <code>redis.asyncio.from_url()</code>.</div>
+  </div>
+
+  <div class="section">
+    <h2>Key naming convention</h2>
+    <table>
+      <thead><tr><th>Session type</th><th>Redis key pattern</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Chat session</td><td><code>garnet:mapping:{session_id}</code></td><td><code>garnet:mapping:chat-abc123</code></td></tr>
+        <tr><td>Uploaded file</td><td><code>garnet:mapping:file:{file_id}</code></td><td><code>garnet:mapping:file:doc-xyz</code></td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:10px">The value is <code>json.dumps({"PERSON_cc75010d": "Max Mustermann", ...})</code> — the full token→real-value dict stored as a JSON string.</p>
+    <p>TTL is set on every write via <code>SETEX</code> (set + expire). Default: 3600 seconds (1 hour). Every write resets the clock.</p>
+  </div>
+
+  <div class="section">
+    <h2>When Redis is read</h2>
+    <p>Only on a memory miss inside <code>_RedisAwareStore.get()</code>:</p>
+    <pre><span class="cm"># Scenario: proxy restarts → memory is empty → user sends a message in an old chat</span>
+session_id = <span class="str">"chat-abc123"</span>
+
+<span class="cm"># memory check fails (empty after restart)</span>
+<span class="kw">if</span> session_id <span class="kw">in</span> self._memory:   <span class="cm"># → False</span>
+    ...
+
+<span class="cm"># Redis fallback</span>
+raw = _redis_client.get(<span class="str">"garnet:mapping:chat-abc123"</span>)
+<span class="cm"># → b'{"PERSON_cc75010d": "Max Mustermann", ...}'</span>
+
+mapping = json.loads(raw)
+self._memory[session_id] = mapping   <span class="cm"># restore to memory cache</span>
+<span class="cm"># next call hits memory — Redis not touched again for this session</span></pre>
+
+    <div class="callout info"><b>Memory as cache</b>After one Redis read, the mapping lives in memory. Subsequent requests for the same session never touch Redis again (unless the proxy restarts).</div>
+  </div>
+
+  <div class="section">
+    <h2>When Redis is written</h2>
+    <p>Two paths write to Redis:</p>
+
+    <h3>1 — __setitem__ (immediate write)</h3>
+    <pre><span class="cm"># triggered when proxy does: store.get_store()[session_id] = mapping</span>
+_redis_client.setex(<span class="str">f"garnet:mapping:{session_id}"</span>, ttl, json.dumps(mapping))</pre>
+
+    <h3>2 — flush() (explicit sync after pseudonymization)</h3>
+    <pre><span class="cm"># called in proxy() after pseudonymize() finishes writing tokens</span>
+store.get_store().flush(session_id)
+<span class="cm"># → setex("garnet:mapping:chat-abc123", 3600, '{"PERSON_cc75010d":"Max",...}')</span></pre>
+
+    <div class="callout tip"><b>Why two write paths?</b><code>__setitem__</code> fires when the whole mapping dict is assigned at once. <code>flush()</code> fires after individual token writes through <code>_TrackedDict</code> — those go to memory only, so flush() is needed to push the final snapshot to Redis.</div>
+  </div>
+
+  <div class="section">
+    <h2>Without Redis — what breaks</h2>
+    <table>
+      <thead><tr><th>Scenario</th><th>Without Redis</th><th>With Redis</th></tr></thead>
+      <tbody>
+        <tr><td>Proxy restarts mid-session</td><td>Tokens visible in chat — "PERSON_cc75010d" not restored</td><td>Mapping reloaded from Redis on next request</td></tr>
+        <tr><td>Multiple proxy replicas (k8s)</td><td>Each replica has its own memory — wrong replica can't depseudo</td><td>All replicas share the same Redis — any can depseudo</td></tr>
+        <tr><td>File upload then chat</td><td>Works (same process, same memory)</td><td>Works (same Redis key)</td></tr>
+        <tr><td>Session after 1 hour idle</td><td>Lost (no memory eviction notice)</td><td>Redis TTL deletes it automatically</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE 4 — PROXY USAGE ═══════════════════ -->
+<div class="page" id="p4">
+  <h1 style="margin-bottom:6px">How proxy() Uses the Store</h1>
+  <p class="subtitle">Exact call sequence on every request — where the store is read, written, and merged.</p>
+
+  <div class="section">
+    <h2>Step-by-step: one chat turn</h2>
+
+    <div class="step-row">
+      <div class="step-num">1</div>
+      <div class="step-content"><b>Proxy starts</b> — <code>store = MappingStore()</code> created once at startup. Same object for every request.</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">2</div>
+      <div class="step-content"><b>Request arrives</b> — <code>session_id</code> extracted from <code>body.chat_id</code> (or fallback).</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">3</div>
+      <div class="step-content"><b>Snapshot before</b> — proxy records what keys exist already:
+        <pre style="margin-top:6px"><span class="cm"># main.py:536</span>
+existing_keys_before = <span class="fn">set</span>(store.get_store().get(session_id, {}).keys())</pre>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">4</div>
+      <div class="step-content"><b>Pseudonymize RAG content</b> — file/context blocks are pseudonymized first. New tokens land in <code>store._store["file:..."]</code> via <code>_TrackedDict.__setitem__</code>. Then:
+        <pre style="margin-top:6px">store.get_store().flush(session_id)  <span class="cm"># push to Redis</span></pre>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">5</div>
+      <div class="step-content"><b>Pseudonymize user message</b> — same pattern, tokens for names in the user's text added to <code>store._store[session_id]</code>. Then another flush.</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">6</div>
+      <div class="step-content"><b>Count new entities</b>:
+        <pre style="margin-top:6px">new_keys = <span class="fn">set</span>(store.get_store().get(session_id, {}).keys()) - existing_keys_before
+file_entity_count = <span class="fn">len</span>(new_keys)   <span class="cm"># shown in privacy sidebar</span></pre>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">7</div>
+      <div class="step-content"><b>Build merged mapping for depseudo</b> — chat session + all file: sessions combined:
+        <pre style="margin-top:6px"><span class="cm"># main.py:729</span>
+session_mapping = <span class="fn">dict</span>(store.get_store().get(session_id, {}))
+<span class="kw">for</span> key, mapping <span class="kw">in</span> store._store.items():
+    <span class="kw">if</span> key.startswith(<span class="str">"file:"</span>):
+        session_mapping.update(mapping)   <span class="cm"># merge file tokens in</span></pre>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">8</div>
+      <div class="step-content"><b>Depseudo LLM response</b> — <code>session_mapping</code> passed to <code>stream_with_depseudo()</code>. Each SSE chunk: replace tokens longest-first.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>File upload vs chat session — how they merge</h2>
+    <p>When a user uploads a file, OWU calls <code>POST /vault/scan</code>. The proxy pseudonymizes the file with <code>session_id = "file:{file_id}"</code>. That mapping is stored separately.</p>
+    <p>Later, when the user chats about the file, the proxy merges both:</p>
+    <pre><span class="cm"># Chat session has: {"PERSON_cc75": "Max"}</span>
+<span class="cm"># File session has: {"ORGANIZATION_bd3a": "Enclaive GmbH", "IBAN_CODE_f4": "DE89..."}</span>
+
+session_mapping = {<span class="str">"PERSON_cc75"</span>: <span class="str">"Max"</span>}          <span class="cm"># from chat session</span>
+session_mapping.update({
+    <span class="str">"ORGANIZATION_bd3a"</span>: <span class="str">"Enclaive GmbH"</span>,        <span class="cm"># from file:doc-xyz</span>
+    <span class="str">"IBAN_CODE_f4"</span>: <span class="str">"DE89 3704..."</span>,
+})
+<span class="cm"># now depseudo can restore everything in the LLM response</span></pre>
+
+    <div class="callout info"><b>Why separate?</b>File mappings are permanent for the file's lifetime. Chat mappings expire per session. Keeping them separate means a reuploaded file doesn't reset a chat session's TTL.</div>
+  </div>
+
+  <div class="section">
+    <h2>How pseudonymize() writes tokens</h2>
+    <p>Inside <code>pseudonymizer.py</code>, the store is passed as a plain dict reference. Every entity found gets written like:</p>
+    <pre><span class="cm"># pseudonymizer.py (simplified)</span>
+mapping = store.setdefault(session_id, {})   <span class="cm"># returns _TrackedDict</span>
+token = <span class="str">f"PERSON_{hashlib.md5(original.encode()).hexdigest()[:8]}"</span>
+mapping[token] = original                    <span class="cm"># _TrackedDict.__setitem__ fires</span>
+<span class="cm"># → self._store._memory[session_id] updated immediately</span></pre>
+    <p>The <code>_TrackedDict</code> is the bridge — pseudonymizer thinks it's writing to a plain dict, but every write auto-propagates to the store's memory layer.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE 5 — BUGS ═══════════════════ -->
+<div class="page" id="p5">
+  <h1 style="margin-bottom:6px">Known Bugs in the Store</h1>
+  <p class="subtitle">All open issues from the 2026-08-22 improvement report that touch mapping_store.py.</p>
+
+  <div class="section">
+    <h2>P0 — Critical</h2>
+
+    <div class="card red" style="margin-bottom:12px">
+      <div class="card-title"><span class="pill red">P0-1</span> Sync Redis client blocks async event loop</div>
+      <p><code>redis.from_url()</code> returns a synchronous client. Every <code>.get()</code> / <code>.setex()</code> blocks the uvicorn event loop for the full Redis round-trip. With <code>--workers 1</code>, one slow Redis call freezes every other in-flight request. Root cause of the "stuck after 5 prompts" symptom.</p>
+      <p style="margin-top:8px;color:#fca5a5"><strong>Fix:</strong> swap to <code>redis.asyncio.from_url()</code>, make <code>get()</code> / <code>flush()</code> / <code>__setitem__</code> <code>async</code>.</p>
+    </div>
+
+    <div class="card red" style="margin-bottom:12px">
+      <div class="card-title"><span class="pill red">P0-8</span> MappingStore memory leak — dead sessions never swept</div>
+      <p><code>_cleanup(session_id)</code> only checks expiry for the session being accessed right now. Sessions from other users accumulate in <code>self._store</code> forever. Under sustained traffic, the proxy OOMKills on k8s.</p>
+      <p style="margin-top:8px;color:#fca5a5"><strong>Fix:</strong> in <code>_cleanup</code>, sweep all expired sessions, not just the current one:
+      <pre style="margin-top:6px">now = time.time()
+expired = [sid <span class="kw">for</span> sid, ts <span class="kw">in</span> self._timestamps.items() <span class="kw">if</span> now - ts > self._ttl]
+<span class="kw">for</span> sid <span class="kw">in</span> expired:
+    <span class="kw">del</span> self._store[sid]; <span class="kw">del</span> self._timestamps[sid]</pre></p>
+    </div>
+
+    <div class="card red" style="margin-bottom:12px">
+      <div class="card-title"><span class="pill red">P0-10</span> Redis stores plaintext PII + swallows write errors silently</div>
+      <p><code>json.dumps(mapping)</code> written raw to Redis — a Redis breach = full PII disclosure. All Redis errors are caught by bare <code>except Exception</code> and printed — a failed write means depseudo will fail later but the proxy doesn't know it.</p>
+      <p style="margin-top:8px;color:#fca5a5"><strong>Fix:</strong> Fernet-encrypt before <code>setex</code>. Narrow <code>except</code> to <code>redis.RedisError</code> and re-raise or flag.</p>
+    </div>
+
+    <div class="card red">
+      <div class="card-title"><span class="pill red">P0-12</span> KEYS command on Redis every chat turn</div>
+      <p><code>_redis_client.keys("garnet:mapping:file:*")</code> called in <code>proxy()</code> on every follow-up message. <code>KEYS</code> is O(N over all keys in Redis) and blocks Redis itself. With any real user load, this causes Redis stalls visible as "stuck" to all users simultaneously.</p>
+      <p style="margin-top:8px;color:#fca5a5"><strong>Fix (quick):</strong> replace with <code>scan_iter(match=..., count=200)</code> — non-blocking. <strong>Fix (proper):</strong> maintain a Redis SET <code>garnet:file_sessions</code> and do a single <code>SMEMBERS</code>.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>P1 / P2 — Worth fixing</h2>
+
+    <div class="card yellow" style="margin-bottom:12px">
+      <div class="card-title"><span class="pill yellow">P1-18</span> _TrackedDict.__setitem__ copies whole dict on every token write</div>
+      <p><code>self._store._memory[self._session_id] = dict(self)</code> — a full dict copy on every entity. Since <code>_memory[session_id]</code> and <code>self</code> are already the same object (set via <code>setdefault</code>), this is both redundant and slow. An entity-heavy document triggers dozens of copies.</p>
+      <p style="margin-top:8px;color:#fde68a"><strong>Fix:</strong> delete lines 110–111. The sync is already implicit — <code>_memory[session_id]</code> IS <code>self</code>.</p>
+    </div>
+
+    <div class="card yellow" style="margin-bottom:12px">
+      <div class="card-title"><span class="pill yellow">P2-29</span> get_store() allocates new _RedisAwareStore per call</div>
+      <p>Called from every code path in <code>proxy()</code> — typically 3-5 times per request. Each call creates a new wrapper object for no reason.</p>
+      <p style="margin-top:8px;color:#fde68a"><strong>Fix:</strong> cache the instance in <code>__init__</code>.</p>
+    </div>
+
+    <div class="card yellow">
+      <div class="card-title"><span class="pill yellow">P1-16</span> session_mapping scan for file: sessions on every request</div>
+      <p><code>for key, mapping in store._store.items(): if key.startswith("file:")</code> — iterates every in-memory session on every chat message. As dead sessions accumulate (P0-8 unfixed), this is O(n_sessions) per request.</p>
+      <p style="margin-top:8px;color:#fde68a"><strong>Fix:</strong> maintain a <code>file_session_index: set[str]</code> on MappingStore, updated on file scan / eviction. Iterate only that set.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Fix order (by impact/effort)</h2>
+    <table>
+      <thead><tr><th>#</th><th>Fix</th><th>Effort</th><th>Impact</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>P0-8: sweep all expired sessions in _cleanup</td><td>S (~5 lines)</td><td>Stops OOM on k8s</td></tr>
+        <tr><td>2</td><td>P1-18: delete the dict(self) copy in _TrackedDict</td><td>S (delete 1 line)</td><td>Perf improvement</td></tr>
+        <tr><td>3</td><td>P0-12: replace KEYS with scan_iter</td><td>S (~3 lines)</td><td>Stops Redis stall</td></tr>
+        <tr><td>4</td><td>P0-1: async Redis client</td><td>M (touches all call sites)</td><td>Fixes "stuck after 5"</td></tr>
+        <tr><td>5</td><td>P0-10: encrypt + narrow except</td><td>M</td><td>Security</td></tr>
+        <tr><td>6</td><td>P2-29: cache get_store() instance</td><td>S (1 line)</td><td>Minor perf</td></tr>
+        <tr><td>7</td><td>P1-16: file_session_index set</td><td>S</td><td>Perf at scale</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /container -->
+<script>
+function go(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>
