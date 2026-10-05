@@ -57,6 +57,12 @@
 				'Automatically inject system tools in native function calling mode (e.g., timestamps, memory, chat history, notes, etc.)'
 			)
 		},
+		privacy_enforce: {
+			label: $i18n.t('Privacy Mode (enforced)'),
+			description: $i18n.t(
+				'Force Garnet privacy proxy ON for this model. Users cannot disable the toggle.'
+			)
+		},
 		smart_router: {
 			label: $i18n.t('Smart Router'),
 			description: $i18n.t(
@@ -77,6 +83,7 @@
 		citations?: boolean;
 		status_updates?: boolean;
 		builtin_tools?: boolean;
+		privacy_enforce?: boolean;
 		smart_router?: boolean;
 	} = {};
 
