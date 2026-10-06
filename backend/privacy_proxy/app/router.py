@@ -4,36 +4,99 @@ import random
 import httpx
 
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
-JEV_MODEL = os.getenv("JEV_ROUTER_MODEL", "typesafe/jev-router")
+LAYA_URL = os.getenv("LAYA_URL", "http://laya:8000")
+ROUTER_URL = os.getenv("ROUTER_URL", "https://openrouter.ai/api/v1/systemone")
+ROUTER_MODEL = os.getenv("ROUTER_MODEL", "typesafe/jev-1.13")
 OPEN_WEBUI_URL = os.getenv("OPEN_WEBUI_URL", "http://open-webui:8080")
 OPEN_WEBUI_API_KEY = os.getenv("OPEN_WEBUI_API_KEY", "")
 
-_smart_router_cache: list[str] = []
+# ponytail: skip the router for OWU-internal chat completions (title/tags/follow-ups) — they would waste calls
+_INTERNAL_MARKERS = ("### Task:\nGenerate", "### Task:\nSuggest", "### Guidelines:", "concise, 3-5 word title", "1-3 broad tags")
+_INTERNAL_FALLBACK = os.getenv("ROUTER_INTERNAL_MODEL", "")  # if set, forced for internal calls; else first pool entry
+
+_smart_router_cache: dict[str, str] = {}  # {id: description}
 _smart_router_cache_ts: float = 0.0
 _SMART_ROUTER_TTL = 300  # refresh every 5 min
 
 _openrouter_cache: list[str] = []
 
+_owu_connections_cache: list[tuple[str, str]] = []
+_owu_connections_ts: float = 0.0
+_OWU_CONN_TTL = 300
 
-async def _fetch_smart_router_pool(client: httpx.AsyncClient) -> list[str]:
-    """Fetch models with smart_router capability from OWU."""
+# ponytail: anthropic excluded — their API uses /v1/messages not /v1/chat/completions
+_DIRECT_PROVIDER_HINTS = {
+    "openai": "openai.com",
+    "mistral": "mistral.ai",
+    "deepseek": "deepseek.com",
+}
+
+
+async def _fetch_owu_connections(client: httpx.AsyncClient) -> list[tuple[str, str]]:
+    global _owu_connections_cache, _owu_connections_ts
+    now = time.monotonic()
+    if _owu_connections_cache and now - _owu_connections_ts < _OWU_CONN_TTL:
+        return _owu_connections_cache
+    if not OPEN_WEBUI_API_KEY:
+        return []
+    try:
+        r = await client.get(
+            f"{OPEN_WEBUI_URL}/openai/config",
+            headers={"Authorization": f"Bearer {OPEN_WEBUI_API_KEY}"},
+            timeout=5.0,
+        )
+        data = r.json()
+        urls = data.get("OPENAI_API_BASE_URLS") or []
+        keys = data.get("OPENAI_API_KEYS") or []
+        _owu_connections_cache = [(u.strip(), k.strip()) for u, k in zip(urls, keys)]
+        _owu_connections_ts = now
+    except Exception as e:
+        print(f"[ROUTER CONN] fetch failed: {e}", flush=True)
+    return _owu_connections_cache
+
+
+async def resolve_provider(model_id: str, client: httpx.AsyncClient) -> tuple[str, str] | None:
+    """Jev picked model_id — find its direct OWU connection, skipping OR and Anthropic.
+    Returns (base_url, api_key) or None (caller falls back to OR)."""
+    connections = await _fetch_owu_connections(client)
+    # bare model id (no slash) → OpenAI connection
+    if "/" not in model_id:
+        for base_url, key in connections:
+            if "openai.com" in base_url and key:
+                print(f"[ROUTER RESOLVE] {model_id} → {base_url} (bare id)", flush=True)
+                return base_url, key
+        return None
+    provider = model_id.split("/")[0]
+    hint = _DIRECT_PROVIDER_HINTS.get(provider)
+    if not hint:
+        return None  # anthropic/* and others stay on OR
+    for base_url, key in connections:
+        if hint in base_url and key:
+            print(f"[ROUTER RESOLVE] {model_id} → {base_url}", flush=True)
+            return base_url, key
+    return None
+
+
+async def _fetch_smart_router_pool(client: httpx.AsyncClient) -> dict[str, str]:
+    """Fetch models with smart_router capability from OWU, returning {id: description|id}."""
     global _smart_router_cache, _smart_router_cache_ts
     now = time.monotonic()
     if _smart_router_cache and now - _smart_router_cache_ts < _SMART_ROUTER_TTL:
         return _smart_router_cache
     if not OPEN_WEBUI_API_KEY:
-        return []
+        return {}
     try:
         r = await client.get(
-            f"{OPEN_WEBUI_URL}/api/models",
+            f"{OPEN_WEBUI_URL}/api/v1/models/base",
             headers={"Authorization": f"Bearer {OPEN_WEBUI_API_KEY}"},
             timeout=5.0,
         )
-        models = r.json().get("data", [])
-        _smart_router_cache = [
-            m["id"] for m in models
-            if m.get("meta", {}).get("capabilities", {}).get("smart_router")
-        ]
+        models = r.json()
+        _smart_router_cache = {
+            m["id"]: ((m.get("meta") or {}).get("description") or m["id"])
+            for m in models
+            if (m.get("meta") or {}).get("capabilities") and m["meta"]["capabilities"].get("smart_router")
+        }
         _smart_router_cache_ts = now
     except Exception:
         pass
@@ -55,42 +118,69 @@ async def _fetch_openrouter_pool(client: httpx.AsyncClient) -> list[str]:
     data = r.json().get("data", [])
     _openrouter_cache = [
         m["id"] for m in data
-        if m.get("id") and m["id"] != JEV_MODEL and ":batch" not in m["id"]
+        if m.get("id") and ":batch" not in m["id"]
     ]
     return _openrouter_cache
 
 
-async def _fetch_pool(client: httpx.AsyncClient) -> list[str]:
+async def _fetch_pool(client: httpx.AsyncClient) -> dict[str, str]:
     pool = await _fetch_smart_router_pool(client)
     if pool:
         return pool
-    return await _fetch_openrouter_pool(client)
+    return {m: m for m in await _fetch_openrouter_pool(client)}
 
 
-async def laya_pick(messages: list, client: httpx.AsyncClient, pool: list[str] | None = None) -> str:
-    if not pool:
-        pool = await _fetch_pool(client)
-    if not pool:
-        raise RuntimeError("Laya pool empty — enable Smart Router on models in OWU or check OPENROUTER_API_KEY")
+async def laya_pick(messages: list, client: httpx.AsyncClient, pool=None) -> str:
     smart_pool = await _fetch_smart_router_pool(client)
-    shortlist = pool if smart_pool else random.sample(pool, min(6, len(pool)))
+    if pool is None:
+        pool_dict = smart_pool or await _fetch_pool(client)
+    elif isinstance(pool, list):
+        pool_dict = {m: smart_pool.get(m, m) for m in pool}
+    else:
+        pool_dict = pool
+    if not pool_dict:
+        raise RuntimeError("Laya pool empty — enable Smart Router on models in OWU or check OPENROUTER_API_KEY")
+    # ponytail: use OWU model description as semantic criteria for Laya (not opaque ids)
+    ids = list(pool_dict.keys())
+    if not smart_pool:
+        ids = random.sample(ids, min(6, len(ids)))
+    criteria = {i: pool_dict[i] for i in ids}
     last = messages[-1] if messages else {}
     content = last.get("content", "")
     if isinstance(content, list):
         content = " ".join(b.get("text", "") for b in content if isinstance(b, dict))
-    q = (
-        f"Question: Which model best fits this user prompt? "
-        f"Options: {', '.join(shortlist)}. Answer only with the exact option name.\n"
-        f"Prompt: {str(content)[:2000]}"
-    )
+
+    # skip router for OWU-internal calls (title/tags/follow-ups)
+    if any(m in content for m in _INTERNAL_MARKERS):
+        fallback = _INTERNAL_FALLBACK if _INTERNAL_FALLBACK in criteria else ids[0]
+        print(f"[ROUTER PICK] internal call detected → {fallback} (no router call)", flush=True)
+        return fallback
+
+    body = {
+        "state": {"body": str(content)[:2000]},
+        "questions": {
+            "model": {
+                "type": "choice",
+                "instructions": "Which model handles this task?",
+                "criteria": criteria,
+            }
+        },
+    }
+    headers = {}
+    if "openrouter.ai" in ROUTER_URL:
+        headers["Authorization"] = f"Bearer {OPENROUTER_KEY}"
+        body["model"] = ROUTER_MODEL
+    else:
+        body["lang"] = "en"  # local Laya hint
+    print(f"[ROUTER PICK] via={ROUTER_MODEL or 'laya-local'} prompt={str(content)[:80]!r} options={len(criteria)}", flush=True)
     try:
-        r = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {OPENROUTER_KEY}"},
-            json={"model": JEV_MODEL, "messages": [{"role": "user", "content": q}]},
-            timeout=10.0,
-        )
-        ans = r.json()["choices"][0]["message"]["content"].strip()
-        return ans if ans in shortlist else shortlist[0]
-    except Exception:
-        return shortlist[0]
+        r = await client.post(ROUTER_URL, headers=headers, json=body, timeout=10.0)
+        ans = r.json()["answers"]["model"]
+        choice = ans["choice"]
+        probs = ans.get("probabilities", {})
+        picked = choice if choice in criteria else ids[0]
+        print(f"[ROUTER PICK] → {picked} (conf={ans.get('confidence', 0):.2f}, answer_conf={ans.get('answer_confidence', 0):.2f})", flush=True)
+        return picked
+    except Exception as e:
+        print(f"[ROUTER PICK] FAILED fallback={ids[0]} err={e}", flush=True)
+        return ids[0]

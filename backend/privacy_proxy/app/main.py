@@ -391,6 +391,7 @@ async def proxy(request: Request, path: str):
     privacy_enabled = True
     pseudonymized_user_message = None
     session_id = "default"
+    _laya_provider_key = None
     file_entity_count = 0
     garnet_breakdown = {}
     query_expand = request.headers.get("x-garnet-queryexpand", "").lower() == "true"
@@ -430,11 +431,21 @@ async def proxy(request: Request, path: str):
         model = body.get("model", "unknown")
         laya_selected_model = None
         if model in ("auto", "openrouter/auto"):
-            from app.router import laya_pick
+            from app.router import laya_pick, resolve_provider
             router_pool = body.pop("router_pool", None)
-            model = await laya_pick(messages, _http_client, pool=router_pool)
+            async with httpx.AsyncClient() as _rc:
+                model = await laya_pick(messages, _rc, pool=router_pool)
+                provider_conn = await resolve_provider(model, _rc)
             laya_selected_model = model
-            body["model"] = model
+            if provider_conn:
+                _provider_base, _laya_provider_key = provider_conn
+                body["model"] = model.split("/", 1)[1] if "/" in model else model
+                url = f"{_provider_base.rstrip('/')}/{actual_path}"
+            else:
+                body["model"] = model
+                # ponytail: stay on OR — cap max_tokens to avoid 402
+                _or_max = int(os.getenv("OPENROUTER_MAX_TOKENS", "4096"))
+                body["max_tokens"] = min(body.get("max_tokens") or _or_max, _or_max)
         first_msg = extract_text_content(messages[0].get("content", "")) if messages else ""
 
         session_id = (
@@ -690,6 +701,8 @@ async def proxy(request: Request, path: str):
             k: v for k, v in request.headers.items()
             if k.lower() in ("authorization", "content-type", "openai-organization", "x-openai-base-url")
         }
+        if _laya_provider_key:
+            forward_headers["authorization"] = f"Bearer {_laya_provider_key}"
         if "anthropic.com" in url:
             auth = forward_headers.pop("authorization", "")
             api_key = auth.removeprefix("Bearer ").strip()
