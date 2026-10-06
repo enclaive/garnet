@@ -1076,7 +1076,7 @@ async def process_tool_result(
                                 pass
                         tool_response.append(text)
                     elif item.get('type') in ['image', 'audio']:
-                        file_url = get_file_url_from_base64(
+                        file_url = await get_file_url_from_base64(
                             request,
                             f'data:{item.get("mimeType")};base64,{item.get("data", item.get("blob", ""))}',
                             {
@@ -1603,7 +1603,7 @@ def get_images_from_messages(message_list):
     return images
 
 
-def get_image_urls(delta_images, request, metadata, user) -> list[str]:
+async def get_image_urls(delta_images, request, metadata, user) -> list[str]:
     if not isinstance(delta_images, list):
         return []
 
@@ -1617,7 +1617,7 @@ def get_image_urls(delta_images, request, metadata, user) -> list[str]:
             continue
 
         if url.startswith('data:image/png;base64'):
-            url = get_image_url_from_base64(request, url, metadata, user)
+            url = await get_image_url_from_base64(request, url, metadata, user)
 
         image_urls.append(url)
 
@@ -2185,7 +2185,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     system_message = get_system_message(form_data.get('messages', []))
     if system_message:  # Chat Controls/User Settings
         try:
-            form_data = apply_system_prompt_to_body(
+            form_data = await apply_system_prompt_to_body(
                 system_message.get('content'), form_data, metadata, user, replace=True
             )  # Required to handle system prompt variables
         except Exception:
@@ -2243,7 +2243,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
         if folder and folder.data:
             if 'system_prompt' in folder.data:
-                form_data = apply_system_prompt_to_body(folder.data['system_prompt'], form_data, metadata, user)
+                form_data = await apply_system_prompt_to_body(folder.data['system_prompt'], form_data, metadata, user)
             if 'files' in folder.data:
                 if metadata.get('params', {}).get('function_calling') != 'native':
                     form_data['files'] = [
@@ -3783,7 +3783,7 @@ async def streaming_chat_response_handler(response, ctx):
                                                 }
                                             )
 
-                                    image_urls = get_image_urls(delta.get('images', []), request, metadata, user)
+                                    image_urls = await get_image_urls(delta.get('images', []), request, metadata, user)
                                     if image_urls:
                                         image_file_list = [{'type': 'image', 'url': url} for url in image_urls]
                                         message_files = await Chats.add_message_files_by_id_and_message_id(

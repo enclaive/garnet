@@ -10,6 +10,7 @@ on:
       - deploy/prod
       - garnet-privacy-proxy
       - demo1
+      - demo1upgrade
   pull_request:
     branches:
       - garnet-privacy-proxy

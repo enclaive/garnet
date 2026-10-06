@@ -71,9 +71,10 @@ async def get_image_base64_from_url(url: str, user=None) -> Optional[str]:
                     content_type = response.headers.get('Content-Type', 'image/png')
                     return f'data:{content_type};base64,{encoded_string}'
         else:
-            # Non-URL string — treat as file_id. Delegate to the canonical
-            # file-ID resolver which enforces ownership/access checks.
-            return await get_image_base64_from_file_id(url, user=user)
+            # Non-URL: extract UUID from /api/v1/files/{id}/content paths,
+            # then delegate to canonical file-ID resolver.
+            file_id = url.split("/api/v1/files/")[1].split("/")[0] if "/api/v1/files/" in url else url
+            return await get_image_base64_from_file_id(file_id, user=user)
 
     except Exception as e:
         return None
