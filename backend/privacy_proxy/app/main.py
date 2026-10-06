@@ -30,7 +30,8 @@ from app.logs import (
     log_reasoning_effort,
 )
 
-RESPONSES_API_MODELS = {"gpt-5", "gpt-5.5-pro", "gpt-5.6-luna", "gpt-5.6-sol"}
+# ponytail: regex covers gpt-5.x, gpt-6.x, ... automatically — no manual updates needed
+_RESPONSES_API_RE = re.compile(r"^gpt-[5-9]")
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
@@ -447,11 +448,22 @@ async def proxy(request: Request, path: str):
         messages = body.get("messages", [])
         model = body.get("model", "unknown")
         laya_selected_model = None
+
+        # ponytail: resolve session_id BEFORE laya_pick so Jev gets the real conversation id
+        session_id = (
+            body.get("chat_id")
+            or (messages[0].get("id") if messages else None)
+            or f"anon-{secrets.token_hex(6)}"
+        )
+        body.pop("chat_id", None)
+
+        _auto_fallbacks: list[str] = []
+        _or_fallback_url: str = url  # used by quota-retry to rebuild attempt for fallbacks
         if model in ("auto", "openrouter/auto"):
             from app.router import laya_pick, resolve_provider
             router_pool = body.pop("router_pool", None)
             async with httpx.AsyncClient() as _rc:
-                model = await laya_pick(messages, _rc, pool=router_pool)
+                model, _auto_fallbacks = await laya_pick(messages, _rc, pool=router_pool, session_id=session_id)
                 provider_conn = await resolve_provider(model, _rc)
             laya_selected_model = model
             if provider_conn:
@@ -465,20 +477,13 @@ async def proxy(request: Request, path: str):
                 body["max_tokens"] = min(body.get("max_tokens") or _or_max, _or_max)
         first_msg = extract_text_content(messages[0].get("content", "")) if messages else ""
 
-        session_id = (
-            body.get("chat_id")
-            or (messages[0].get("id") if messages else None)
-            or f"anon-{secrets.token_hex(6)}"
-        )
-        body.pop("chat_id", None)
-
         if is_openai and "api.openai.com" in url:
             if "max_tokens" in body:
                 body["max_completion_tokens"] = body.pop("max_tokens")
             if body.get("tools") and "reasoning_effort" in body:
                 body.pop("reasoning_effort")
 
-        use_responses_api = is_openai and "api.openai.com" in url and any(model.startswith(m) for m in RESPONSES_API_MODELS)
+        use_responses_api = is_openai and "api.openai.com" in url and bool(_RESPONSES_API_RE.match(model))
         if use_responses_api:
             url = url.replace("/v1/chat/completions", "/v1/responses")
             msgs = body.pop("messages", [])
@@ -592,10 +597,12 @@ async def proxy(request: Request, path: str):
 
             if not privacy_enabled:
                 log_privacy_off()
+                print(f"[PSEUDO VERDICT] ❌ SKIPPED — privacy=OFF | preview={original_content_text[:160]!r}", flush=True)
 
             elif is_system_prompt:
                 internal_type = detect_internal_type(original_content_text)
                 log_internal(internal_type)
+                print(f"[PSEUDO VERDICT] ❌ SKIPPED — classified as INTERNAL ({internal_type}) | preview={original_content_text[:200]!r}", flush=True)
                 pseudonymized_user_message = original_content_text
 
             elif last_message.get("role") in ("user", "system", "developer"):
@@ -619,6 +626,7 @@ async def proxy(request: Request, path: str):
                         continue
 
                     log_in_file(role, len(content_text), content_text)
+                    print(f"[FILE INPUT] role={role} chars={len(content_text)} | preview={content_text[:200]!r}", flush=True)
 
                     if len(content_text) > 50000:
                         chunk_size = 10000
@@ -644,9 +652,27 @@ async def proxy(request: Request, path: str):
                         msg["content"] = rebuild_content(content, pseudonymized_text)
                         log_out_file(pseudonymized_text)
                         log_file_delta(len(content_text), len(pseudonymized_text))
+                        changed = pseudonymized_text != content_text
+                        verdict = "✅ APPLIED" if changed else "⚪ NO PII FOUND"
+                        print(f"[FILE PSEUDO VERDICT] {verdict} chars={len(content_text)}→{len(pseudonymized_text)}", flush=True)
+                        # ponytail: show every line that got rewritten so pseudo is visible, not just template header
+                        if changed:
+                            orig_lines = content_text.splitlines()
+                            new_lines  = pseudonymized_text.splitlines()
+                            print(f"[FILE PSEUDO VERDICT] diff (lines with PII replaced):", flush=True)
+                            shown = 0
+                            for i, (o, n) in enumerate(zip(orig_lines, new_lines)):
+                                if o != n:
+                                    print(f"  L{i:3d} BEFORE: {o[:200]}", flush=True)
+                                    print(f"  L{i:3d} AFTER : {n[:200]}", flush=True)
+                                    shown += 1
+                                    if shown >= 10:
+                                        print(f"  (… +{sum(1 for a,b in zip(orig_lines, new_lines) if a!=b)-shown} more changed lines)", flush=True)
+                                        break
                         file_msgs_scanned += 1
                     except Exception as e:
                         log_error(f"file pseudonymization failed: {e} — skipping chunk")
+                        print(f"[FILE PSEUDO VERDICT] ❌ FAILED | err={e}", flush=True)
                         continue
 
                 if file_msgs_scanned > 0:
@@ -679,8 +705,11 @@ async def proxy(request: Request, path: str):
                         _n_replaced = sum(1 for t in store.get_store().get(session_id, {}) if t in pseudonymized_user_message)
                         _types = list({t.rsplit("_", 1)[0] for t in store.get_store().get(session_id, {}) if t in pseudonymized_user_message})
                         log_pseudo_diff(len(original_content_text), len(pseudonymized_user_message), _n_replaced, _types)
+                        print(f"[USER PSEUDO VERDICT] ✅ APPLIED | before[:200]={original_content_text[:200]!r}", flush=True)
+                        print(f"[USER PSEUDO VERDICT] after[:200]={pseudonymized_user_message[:200]!r}", flush=True)
                     else:
                         log_no_pii()
+                        print(f"[USER PSEUDO VERDICT] ⚪ NO PII in user msg | preview={original_content_text[:160]!r}", flush=True)
                     await store.get_store().flush(session_id)
                 except Exception as e:
                     log_error(f"user pseudonymization failed: {e} — forwarding raw")
@@ -695,6 +724,18 @@ async def proxy(request: Request, path: str):
             _msgs = body.get("messages", [])
             _total_chars = sum(len(extract_text_content(m.get("content", ""))) for m in _msgs)
             log_context_size(len(_msgs), _total_chars)
+            # ponytail: dump what actually goes to LLM — proves pseudo at the wire
+            print(f"[→ LLM PAYLOAD] model={body.get('model')} messages={len(_msgs)} total={_total_chars} chars", flush=True)
+            for _i, _m in enumerate(_msgs):
+                _c = extract_text_content(_m.get("content", ""))
+                _role = _m.get("role", "?")
+                # show first 400 chars + any line containing a pseudo token
+                print(f"  msg[{_i}] role={_role} len={len(_c)} preview={_c[:400]!r}", flush=True)
+                token_lines = [l for l in _c.splitlines() if any(t in l for t in ("PERSON_", "EMAIL_ADDRESS_", "PHONE_NUMBER_", "IBAN_CODE_", "LOCATION_", "ORGANIZATION_"))]
+                if token_lines:
+                    print(f"  msg[{_i}] pseudo-tokens found on {len(token_lines)} line(s):", flush=True)
+                    for _tl in token_lines[:5]:
+                        print(f"    → {_tl[:220]}", flush=True)
         log_to_llm(url, model, int((time.perf_counter() - t0) * 1000))
 
     if is_openai:
@@ -746,25 +787,64 @@ async def proxy(request: Request, path: str):
             return Response(content=response.content, status_code=response.status_code)
 
     if is_chat and body:
+        _QUOTA_CODES = {402, 429}
         async def response_stream():
-            async with _http_client.stream(
-                method=request.method,
-                url=url,
-                json=body,
-                headers=forward_headers,
-                timeout=120.0
-            ) as resp:
+            attempts = [(url, dict(body), dict(forward_headers), model)]
+            # queue fallback attempts for auto-router if primary hits quota
+            if _auto_fallbacks:
+                from app.router import resolve_provider
+                async with httpx.AsyncClient() as _rc:
+                    for fb_model in _auto_fallbacks[:3]:  # try up to 3 fallbacks
+                        fb_body = dict(body)
+                        fb_headers = dict(forward_headers)
+                        provider_conn = await resolve_provider(fb_model, _rc)
+                        if provider_conn:
+                            fb_base, fb_key = provider_conn
+                            fb_body["model"] = fb_model.split("/", 1)[1] if "/" in fb_model else fb_model
+                            fb_url = f"{fb_base.rstrip('/')}/{actual_path}"
+                            fb_headers["authorization"] = f"Bearer {fb_key}"
+                        else:
+                            fb_body["model"] = fb_model
+                            _or_max = int(os.getenv("OPENROUTER_MAX_TOKENS", "4096"))
+                            fb_body["max_tokens"] = min(fb_body.get("max_tokens") or _or_max, _or_max)
+                            fb_url = _or_fallback_url
+                        attempts.append((fb_url, fb_body, fb_headers, fb_model))
+
+            for i, (att_url, att_body, att_headers, att_model) in enumerate(attempts):
+                async with _http_client.stream(
+                    method=request.method,
+                    url=att_url,
+                    json=att_body,
+                    headers=att_headers,
+                    timeout=120.0
+                ) as resp:
+                    if resp.status_code in _QUOTA_CODES and i < len(attempts) - 1:
+                        err_body = await resp.aread()
+                        log_error(f"[QUOTA FALLBACK] {att_model} → status={resp.status_code} body={err_body[:200]} | retrying next candidate")
+                        continue
                     if resp.status_code != 200:
                         err_body = await resp.aread()
-                        log_error(f"status={resp.status_code} provider={url} body={err_body[:500]}")
-                    if "anthropic.com" in url:
-                        async for chunk in resp.aiter_bytes():
-                            if chunk:
-                                yield chunk
-                    else:
-                        async for chunk in resp.aiter_bytes():
-                            if chunk:
-                                yield chunk
+                        log_error(f"status={resp.status_code} provider={att_url} body={err_body[:500]}")
+                        # ponytail: surface upstream error as SSE chunk so OWU shows it instead of silence
+                        try:
+                            parsed = orjson.loads(err_body)
+                            msg = (parsed.get("error") or {}).get("message") or err_body.decode()[:300]
+                        except Exception:
+                            msg = err_body.decode(errors="replace")[:300]
+                        err_payload = orjson.dumps({"error": {
+                            "message": f"upstream {resp.status_code}: {msg}",
+                            "type":    "upstream_error",
+                            "code":    resp.status_code,
+                        }})
+                        yield b"data: " + err_payload + b"\n\n"
+                        yield b"data: [DONE]\n\n"
+                        return
+                    if i > 0:
+                        print(f"[QUOTA FALLBACK] succeeded with {att_model} after {i} failure(s)", flush=True)
+                    async for chunk in resp.aiter_bytes():
+                        if chunk:
+                            yield chunk
+                    return
 
         session_mapping = dict(store.get_store().get(session_id, {}))
         if privacy_enabled:

@@ -6,7 +6,7 @@ import httpx
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 LAYA_URL = os.getenv("LAYA_URL", "http://laya:8000")
 ROUTER_URL = os.getenv("ROUTER_URL", "https://openrouter.ai/api/v1/systemone")
-ROUTER_MODEL = os.getenv("ROUTER_MODEL", "typesafe/jev-1.13")
+ROUTER_MODEL = os.getenv("ROUTER_MODEL", "~typesafe/jev-latest")
 OPEN_WEBUI_URL = os.getenv("OPEN_WEBUI_URL", "http://open-webui:8080")
 OPEN_WEBUI_API_KEY = os.getenv("OPEN_WEBUI_API_KEY", "")
 
@@ -130,7 +130,8 @@ async def _fetch_pool(client: httpx.AsyncClient) -> dict[str, str]:
     return {m: m for m in await _fetch_openrouter_pool(client)}
 
 
-async def laya_pick(messages: list, client: httpx.AsyncClient, pool=None) -> str:
+async def laya_pick(messages: list, client: httpx.AsyncClient, pool=None, session_id: str = "") -> tuple[str, list[str]]:
+    """Return (picked_model, fallback_candidates sorted by Jev probability desc)."""
     smart_pool = await _fetch_smart_router_pool(client)
     if pool is None:
         pool_dict = smart_pool or await _fetch_pool(client)
@@ -154,10 +155,10 @@ async def laya_pick(messages: list, client: httpx.AsyncClient, pool=None) -> str
     if any(m in content for m in _INTERNAL_MARKERS):
         fallback = _INTERNAL_FALLBACK if _INTERNAL_FALLBACK in criteria else ids[0]
         print(f"[ROUTER PICK] internal call detected → {fallback} (no router call)", flush=True)
-        return fallback
+        return fallback, [m for m in ids if m != fallback]
 
     body = {
-        "state": {"body": str(content)[:2000]},
+        "state": {"body": str(content)[:2000], "chars": len(content), "turns": len(messages)},
         "questions": {
             "model": {
                 "type": "choice",
@@ -166,6 +167,8 @@ async def laya_pick(messages: list, client: httpx.AsyncClient, pool=None) -> str
             }
         },
     }
+    if session_id:
+        body["session_id"] = session_id[:256]
     headers = {}
     if "openrouter.ai" in ROUTER_URL:
         # ponytail: prefer OR key from OWU connections (single source of truth); fall back to env var
@@ -186,8 +189,14 @@ async def laya_pick(messages: list, client: httpx.AsyncClient, pool=None) -> str
         choice = ans["choice"]
         probs = ans.get("probabilities", {})
         picked = choice if choice in criteria else ids[0]
-        print(f"[ROUTER PICK] → {picked} (conf={ans.get('confidence', 0):.2f}, answer_conf={ans.get('answer_confidence', 0):.2f})", flush=True)
-        return picked
+        # fallbacks: all other candidates sorted by Jev probability (highest next-best first)
+        fallbacks = [m for m, _ in sorted(probs.items(), key=lambda kv: kv[1], reverse=True) if m != picked and m in criteria]
+        # include any pool model Jev didn't rank, at the end
+        for m in ids:
+            if m != picked and m not in fallbacks:
+                fallbacks.append(m)
+        print(f"[ROUTER PICK] → {picked} (conf={ans.get('confidence', 0):.2f}) fallbacks={fallbacks[:3]}", flush=True)
+        return picked, fallbacks
     except Exception as e:
         print(f"[ROUTER PICK] FAILED fallback={ids[0]} err={e}", flush=True)
-        return ids[0]
+        return ids[0], [m for m in ids if m != ids[0]]
