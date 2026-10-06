@@ -168,7 +168,14 @@ async def laya_pick(messages: list, client: httpx.AsyncClient, pool=None) -> str
     }
     headers = {}
     if "openrouter.ai" in ROUTER_URL:
-        headers["Authorization"] = f"Bearer {OPENROUTER_KEY}"
+        # ponytail: prefer OR key from OWU connections (single source of truth); fall back to env var
+        or_key = OPENROUTER_KEY
+        connections = await _fetch_owu_connections(client)
+        for base_url, key in connections:
+            if "openrouter.ai" in base_url and key:
+                or_key = key
+                break
+        headers["Authorization"] = f"Bearer {or_key}"
         body["model"] = ROUTER_MODEL
     else:
         body["lang"] = "en"  # local Laya hint

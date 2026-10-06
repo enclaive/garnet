@@ -26,7 +26,7 @@ from app.logs import (
     log_privacy_audit, log_file_delta,
 )
 
-RESPONSES_API_MODELS = {"gpt-5.5-pro", "gpt-5.6-luna"}
+RESPONSES_API_MODELS = {"gpt-5.5-pro", "gpt-5.6-luna", "gpt-5.6-sol"}
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
@@ -92,6 +92,17 @@ def _pseudo_with_cache(text: str, session_id: str, enabled_types) -> str:
     out = pseudonymize(text, session_id, store.get_store(), enabled_types=enabled_types)
     session_cache[h] = out
     return out
+
+
+def _depseudo(text: str, mapping: dict) -> str:
+    for token in sorted(mapping.keys(), key=len, reverse=True):
+        text = text.replace(token, mapping[token])
+        # ponytail: gpt-4 drops or escapes the separator underscore — match both variants
+        parts = token.rsplit("_", 1)
+        if len(parts) == 2:
+            text = text.replace("".join(parts), mapping[token])
+            text = text.replace(f"{parts[0]}\\_{parts[1]}", mapping[token])
+    return text
 
 
 def split_at_safe_boundary(buffer: str):
@@ -254,8 +265,7 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
             safe, remainder = split_at_safe_boundary(buffer)
 
             if safe:
-                for token in sorted(mapping.keys(), key=len, reverse=True):
-                    safe = safe.replace(token, mapping[token])
+                safe = _depseudo(safe, mapping)
                 chunk_count += 1
                 total_out_chars += len(safe)
                 if first_out:
@@ -268,8 +278,7 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
             buffer = remainder
 
     if buffer:
-        for token in sorted(mapping.keys(), key=len, reverse=True):
-            buffer = buffer.replace(token, mapping[token])
+        buffer = _depseudo(buffer, mapping)
         chunk_count += 1
         total_out_chars += len(buffer)
         if first_out:
@@ -730,8 +739,7 @@ async def proxy(request: Request, path: str):
                     if key.startswith("file:"):
                         session_mapping.update(mapping)
 
-            for token in sorted(session_mapping.keys(), key=len, reverse=True):
-                content = content.replace(token, session_mapping[token])
+            content = _depseudo(content, session_mapping)
 
             result["message"]["content"] = content
             result["pseudonymized_prompt"] = pseudonymized_user_message or ""
@@ -789,8 +797,7 @@ async def proxy(request: Request, path: str):
                 result = _resp.json()
                 try:
                     content = result["choices"][0]["message"]["content"] or ""
-                    for token in sorted(session_mapping.keys(), key=len, reverse=True):
-                        content = content.replace(token, session_mapping[token])
+                    content = _depseudo(content, session_mapping)
                     result["choices"][0]["message"]["content"] = content
                 except (KeyError, IndexError, TypeError):
                     pass
