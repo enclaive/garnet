@@ -24,11 +24,15 @@ _owu_connections_cache: list[tuple[str, str]] = []
 _owu_connections_ts: float = 0.0
 _OWU_CONN_TTL = 300
 
-# ponytail: anthropic excluded — their API uses /v1/messages not /v1/chat/completions
+# ponytail: anthropic/groq/gemini all expose OpenAI-compat /v1/chat/completions — same shape, just route to their native base
 _DIRECT_PROVIDER_HINTS = {
     "openai": "openai.com",
     "mistral": "mistral.ai",
     "deepseek": "deepseek.com",
+    "anthropic": "anthropic.com",
+    "groq": "groq.com",
+    "gemini": "googleapis.com",
+    "google": "googleapis.com",
 }
 
 
