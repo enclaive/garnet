@@ -59,25 +59,54 @@ async def _fetch_owu_connections(client: httpx.AsyncClient) -> list[tuple[str, s
     return _owu_connections_cache
 
 
+_model_conn_cache: dict[str, tuple[str, str]] = {}
+_model_conn_ts: float = 0.0
+
+
+async def _fetch_model_connection_map(client: httpx.AsyncClient) -> dict[str, tuple[str, str]]:
+    """model_id → (base_url, api_key) using OWU's own per-model urlIdx. Single source of truth."""
+    global _model_conn_cache, _model_conn_ts
+    now = time.monotonic()
+    if _model_conn_cache and now - _model_conn_ts < _OWU_CONN_TTL:
+        return _model_conn_cache
+    conns = await _fetch_owu_connections(client)
+    if not conns or not OPEN_WEBUI_API_KEY:
+        return {}
+    try:
+        r = await client.get(
+            f"{OPEN_WEBUI_URL}/api/models",
+            headers={"Authorization": f"Bearer {OPEN_WEBUI_API_KEY}"},
+            timeout=5.0,
+        )
+        out: dict[str, tuple[str, str]] = {}
+        for m in r.json().get("data", []):
+            mid, idx = m.get("id"), m.get("urlIdx")
+            if mid and isinstance(idx, int) and 0 <= idx < len(conns) and conns[idx][1]:
+                out[mid] = conns[idx]
+        _model_conn_cache = out
+        _model_conn_ts = now
+    except Exception as e:
+        print(f"[ROUTER MODELS] fetch failed: {e}", flush=True)
+    return _model_conn_cache
+
+
 async def resolve_provider(model_id: str, client: httpx.AsyncClient) -> tuple[str, str] | None:
-    """Jev picked model_id — find its direct OWU connection, skipping OR and Anthropic.
+    """Jev picked model_id — route to its real OWU-configured provider.
     Returns (base_url, api_key) or None (caller falls back to OR)."""
+    model_map = await _fetch_model_connection_map(client)
+    if model_id in model_map:
+        base_url, key = model_map[model_id]
+        print(f"[ROUTER RESOLVE] {model_id} → {base_url} (owu urlIdx)", flush=True)
+        return base_url, key
+    # fallback: hint-based match for ids not in OWU's model list
     connections = await _fetch_owu_connections(client)
-    # bare model id (no slash) → OpenAI connection
-    if "/" not in model_id:
-        for base_url, key in connections:
-            if "openai.com" in base_url and key:
-                print(f"[ROUTER RESOLVE] {model_id} → {base_url} (bare id)", flush=True)
-                return base_url, key
-        return None
-    provider = model_id.split("/")[0]
-    hint = _DIRECT_PROVIDER_HINTS.get(provider)
-    if not hint:
-        return None  # anthropic/* and others stay on OR
-    for base_url, key in connections:
-        if hint in base_url and key:
-            print(f"[ROUTER RESOLVE] {model_id} → {base_url}", flush=True)
-            return base_url, key
+    if "/" in model_id:
+        hint = _DIRECT_PROVIDER_HINTS.get(model_id.split("/")[0])
+        if hint:
+            for base_url, key in connections:
+                if hint in base_url and key:
+                    print(f"[ROUTER RESOLVE] {model_id} → {base_url} (hint fallback)", flush=True)
+                    return base_url, key
     return None
 
 
