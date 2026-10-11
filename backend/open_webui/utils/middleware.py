@@ -4565,7 +4565,7 @@ async def streaming_chat_response_handler(response, ctx):
                                         stdoutLines = stdout.split('\n')
                                         for idx, line in enumerate(stdoutLines):
                                             if re.match(r'data:image/\w+;base64', line):
-                                                image_url = get_image_url_from_base64(
+                                                image_url = await get_image_url_from_base64(
                                                     request,
                                                     line,
                                                     metadata,
@@ -4582,13 +4582,14 @@ async def streaming_chat_response_handler(response, ctx):
                                         resultLines = result.split('\n')
                                         for idx, line in enumerate(resultLines):
                                             if re.match(r'data:image/\w+;base64', line):
-                                                image_url = get_image_url_from_base64(
+                                                image_url = await get_image_url_from_base64(
                                                     request,
                                                     line,
                                                     metadata,
                                                     user,
                                                 )
-                                                resultLines[idx] = f'![Output Image]({image_url})'
+                                                if image_url:
+                                                    resultLines[idx] = f'![Output Image]({image_url})'
                                         ci_output['result'] = '\n'.join(resultLines)
                         except Exception as e:
                             ci_output = str(e)
