@@ -12,3 +12,5 @@ jaraco.context>=6.1.0
 orjson==3.11.6
 cryptography>=50.0.0
 gliner
+pytesseract
+pillow

@@ -8,6 +8,7 @@ RUN apt-get update && \
       libcap2 \
       libsystemd0 \
       libudev1 && \
+    apt-get install -y --no-install-recommends tesseract-ocr && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     pip install --no-cache-dir wheel==0.46.2 "jaraco.context>=6.1.0" && \
     pip install --no-cache-dir -r requirements.txt && \

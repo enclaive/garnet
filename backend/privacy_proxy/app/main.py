@@ -72,6 +72,31 @@ def extract_text_content(content) -> str:
     return str(content)
 
 
+def ocr_scan(data_url, session_id=""):
+    # ponytail: observation only — Tesseract reads the image, we log, we don't mutate.
+    try:
+        import base64, io
+        import pytesseract
+        from PIL import Image
+    except Exception as e:
+        print("[IMG OCR] import_fail=" + repr(e), flush=True)
+        return
+    if not isinstance(data_url, str) or not data_url.startswith("data:image/"):
+        return
+    try:
+        _, b64 = data_url.split(",", 1)
+        img = Image.open(io.BytesIO(base64.b64decode(b64)))
+        data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+    except Exception as e:
+        print("[IMG OCR] fail=" + repr(e), flush=True)
+        return
+    words = [w for w in data.get("text", []) if w and w.strip()]
+    confs = [int(c) for c, w in zip(data.get("conf", []), data.get("text", [])) if w and w.strip() and str(c).lstrip("-").isdigit()]
+    flat = " ".join(words)[:300]
+    avg = (sum(confs) // len(confs)) if confs else 0
+    print("[IMG OCR] session=" + str(session_id) + " words=" + str(len(words)) + " conf_avg=" + str(avg) + " text=" + repr(flat), flush=True)
+
+
 def rebuild_content(original_content, pseudonymized_text: str):
     if isinstance(original_content, str):
         return pseudonymized_text
@@ -500,6 +525,7 @@ async def proxy(request: Request, path: str):
                         out.append({**block, "type": "input_text"})
                     elif t == "image_url":
                         url = block.get("image_url", {}).get("url", "")
+                        ocr_scan(url, session_id)
                         out.append({"type": "input_image", "image_url": url})
                     else:
                         out.append(block)
