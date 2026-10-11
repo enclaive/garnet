@@ -171,6 +171,73 @@
 		await init();
 	};
 
+	// ponytail: one-shot catalog fetch, cached per page load. OpenRouter /models is public.
+	let openRouterCatalog: Record<string, { description?: string; context_length?: number }> | null =
+		null;
+	const getOpenRouterCatalog = async () => {
+		if (openRouterCatalog) return openRouterCatalog;
+		const res = await fetch('https://openrouter.ai/api/v1/models');
+		const json = await res.json();
+		const map: Record<string, { description?: string; context_length?: number }> = {};
+		for (const m of json?.data ?? []) {
+			map[m.id] = { description: m.description, context_length: m.context_length };
+		}
+		openRouterCatalog = map;
+		return map;
+	};
+
+	const fillDescriptionHandler = async (model) => {
+		try {
+			const cat = await getOpenRouterCatalog();
+			const slug = Object.keys(cat).find((id) => model.id === id || model.id.endsWith(id));
+			if (!slug) {
+				toast.error($i18n.t('Not found on OpenRouter: {{id}}', { id: model.id }));
+				return;
+			}
+			const desc = cat[slug].description;
+			if (!desc) {
+				toast.error($i18n.t('No description on OpenRouter for {{id}}', { id: slug }));
+				return;
+			}
+			model.meta = { ...model.meta, description: desc };
+			models = models;
+			await upsertModelHandler(model, { meta: { ...model.meta } }, false);
+			toast.success($i18n.t('Description updated from OpenRouter'));
+		} catch (e) {
+			toast.error($i18n.t('Failed to fetch from OpenRouter'));
+		}
+	};
+
+	const removeFromSmartRouterHandler = async (model) => {
+		model.meta = {
+			...model.meta,
+			capabilities: { ...(model.meta?.capabilities ?? {}), smart_router: false }
+		};
+		models = models;
+		await upsertModelHandler(model, { meta: { ...model.meta } }, false);
+		toast.success($i18n.t('Removed from Smart Router pool'));
+	};
+
+	const clearSmartRouterAllHandler = async () => {
+		const tagged = filteredModels.filter((m) => m?.meta?.capabilities?.smart_router);
+		if (tagged.length === 0) {
+			toast.success($i18n.t('No models in Smart Router pool'));
+			return;
+		}
+		tagged.forEach((m) => {
+			m.meta = { ...m.meta, capabilities: { ...(m.meta?.capabilities ?? {}), smart_router: false } };
+		});
+		models = models;
+		await Promise.all(
+			tagged.map((model) =>
+				upsertModelHandler(model, { meta: { ...model.meta } }, false)
+			)
+		);
+		toast.success($i18n.t('Smart Router pool cleared ({{n}} models)', { n: tagged.length }));
+		await tick();
+		await init();
+	};
+
 	const downloadModels = async (models) => {
 		let blob = new Blob([JSON.stringify(models)], {
 			type: 'application/json'
@@ -588,6 +655,19 @@
 								<EyeSlash className="size-4" />
 								<div class="flex items-center">{$i18n.t('Hide All')}</div>
 							</button>
+
+							<hr class="border-gray-100 dark:border-gray-800 my-1" />
+
+							<button
+								class="select-none flex w-full gap-2 items-center px-3 py-1.5 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+								type="button"
+								on:click={() => {
+									clearSmartRouterAllHandler();
+								}}
+							>
+								<XMark className="size-4" />
+								<div class="flex items-center">{$i18n.t('Clear Smart Router Pool')}</div>
+							</button>
 						</div>
 					</div>
 				</Dropdown>
@@ -695,6 +775,26 @@
 										</button>
 									</Tooltip>
 								{:else}
+									{#if model?.meta?.capabilities?.smart_router}
+										<Tooltip content={$i18n.t('Fetch description from OpenRouter')}>
+											<button
+												class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+												type="button"
+												on:click={() => fillDescriptionHandler(model)}
+											>
+												<Download className="w-4 h-4" />
+											</button>
+										</Tooltip>
+										<Tooltip content={$i18n.t('Remove from Smart Router pool')}>
+											<button
+												class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+												type="button"
+												on:click={() => removeFromSmartRouterHandler(model)}
+											>
+												<Minus className="w-4 h-4" />
+											</button>
+										</Tooltip>
+									{/if}
 									<button
 										class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 										type="button"

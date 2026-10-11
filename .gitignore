@@ -315,3 +315,7 @@ cosign.key
 cosign.key
 .claude/
 .vscode/PythonImportHelper-v2-Completion.json
+
+# local secret-bearing scratch
+test_openrouter_keys.sh
+key
