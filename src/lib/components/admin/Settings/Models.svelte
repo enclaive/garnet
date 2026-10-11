@@ -189,7 +189,15 @@
 	const fillDescriptionHandler = async (model) => {
 		try {
 			const cat = await getOpenRouterCatalog();
-			const slug = Object.keys(cat).find((id) => model.id === id || model.id.endsWith(id));
+			const tail = (s: string) => s.split('/').pop()!.split('.').pop()!;
+			const want = tail(model.id);
+			const slug = Object.keys(cat).find(
+				(id) =>
+					model.id === id ||
+					model.id.endsWith(id) ||
+					id.endsWith(model.id) ||
+					tail(id) === want
+			);
 			if (!slug) {
 				toast.error($i18n.t('Not found on OpenRouter: {{id}}', { id: model.id }));
 				return;
