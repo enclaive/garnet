@@ -2030,7 +2030,7 @@ def apply_params_to_form_data(form_data, model):
     return form_data
 
 
-async def convert_url_images_to_base64(form_data):
+async def convert_url_images_to_base64(form_data, user):
     messages = form_data.get('messages', [])
 
     for message in messages:
@@ -2051,7 +2051,7 @@ async def convert_url_images_to_base64(form_data):
                 continue
 
             try:
-                base64_data = await asyncio.to_thread(get_image_base64_from_url, image_url)
+                base64_data = await get_image_base64_from_url(image_url, user)
                 new_content.append(
                     {
                         'type': 'image_url',
@@ -2191,7 +2191,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         except Exception:
             pass
 
-    form_data = await convert_url_images_to_base64(form_data)
+    form_data = await convert_url_images_to_base64(form_data, user)
 
     event_emitter = await get_event_emitter(metadata)
     event_caller = await get_event_call(metadata)
@@ -3868,7 +3868,7 @@ async def streaming_chat_response_handler(response, ctx):
                                             )
 
                                         if ENABLE_CHAT_RESPONSE_BASE64_IMAGE_URL_CONVERSION:
-                                            value = convert_markdown_base64_images(
+                                            value = await convert_markdown_base64_images(
                                                 request,
                                                 value,
                                                 {
