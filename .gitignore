@@ -314,3 +314,4 @@ cypress/screenshots
 cosign.key
 cosign.key
 .claude/
+.vscode/PythonImportHelper-v2-Completion.json
