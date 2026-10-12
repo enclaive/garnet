@@ -72,8 +72,8 @@ def extract_text_content(content) -> str:
     return str(content)
 
 
-def ocr_scan(data_url, session_id=""):
-    # ponytail: observation only — Tesseract reads the image, we log, we don't mutate.
+def ocr_scan(data_url, session_id="", enabled_types=None):
+    # ponytail: observation only — Tesseract reads the image, GLiNER previews what would be replaced.
     try:
         import base64, io
         import pytesseract
@@ -95,6 +95,16 @@ def ocr_scan(data_url, session_id=""):
     flat = " ".join(words)[:300]
     avg = (sum(confs) // len(confs)) if confs else 0
     print("[IMG OCR] session=" + str(session_id) + " words=" + str(len(words)) + " conf_avg=" + str(avg) + " text=" + repr(flat), flush=True)
+
+    if not flat:
+        return
+    try:
+        entities = detect_entities(flat, enabled_types=enabled_types)
+    except Exception as e:
+        print("[IMG PII] detect_fail=" + repr(e), flush=True)
+        return
+    preview = [(e.get("type"), flat[e.get("start", 0):e.get("end", 0)]) for e in entities]
+    print("[IMG PII] session=" + str(session_id) + " entities=" + str(len(entities)) + " would_replace=" + repr(preview), flush=True)
 
 
 def rebuild_content(original_content, pseudonymized_text: str):
@@ -525,7 +535,7 @@ async def proxy(request: Request, path: str):
                         out.append({**block, "type": "input_text"})
                     elif t == "image_url":
                         url = block.get("image_url", {}).get("url", "")
-                        ocr_scan(url, session_id)
+                        ocr_scan(url, session_id, enabled_types)
                         out.append({"type": "input_image", "image_url": url})
                     else:
                         out.append(block)

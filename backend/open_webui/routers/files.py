@@ -185,7 +185,39 @@ async def process_uploaded_file(
                         db=db_session,
                     )
                 else:
-                    raise Exception(f'File type {content_type} is not supported for processing')
+                    # Image: OCR → feed text through same /vault/scan pipeline as PDFs.
+                    privacy_enabled = request.headers.get("x-garnet-privacy", "true").lower() != "false"
+                    if privacy_enabled:
+                        try:
+                            import pytesseract
+                            from PIL import Image as _PILImage
+                            file_path_resolved = await asyncio.to_thread(Storage.get_file, file_path)
+                            raw_text = await asyncio.to_thread(
+                                lambda: pytesseract.image_to_string(_PILImage.open(file_path_resolved))
+                            )
+                            vault_result = await asyncio.to_thread(vault_scan_file, file_item.id, raw_text, True)
+                            await Files.update_file_data_by_id(
+                                file_item.id,
+                                {
+                                    "status": "completed",
+                                    "garnet_entity_count": vault_result.get("entity_count", 0),
+                                    "garnet_breakdown": vault_result.get("entity_breakdown", {}),
+                                },
+                                db=db_session,
+                            )
+                        except Exception as img_err:
+                            log.warning(f"[VAULT IMG] OCR/vault skipped: {img_err}")
+                            await Files.update_file_data_by_id(
+                                file_item.id,
+                                {"status": "completed"},
+                                db=db_session,
+                            )
+                    else:
+                        await Files.update_file_data_by_id(
+                            file_item.id,
+                            {"status": "completed"},
+                            db=db_session,
+                        )
 
             else:
                 # Documents, or any file when an external engine is configured
