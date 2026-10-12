@@ -535,7 +535,7 @@ async def proxy(request: Request, path: str):
                         out.append({**block, "type": "input_text"})
                     elif t == "image_url":
                         url = block.get("image_url", {}).get("url", "")
-                        ocr_scan(url, session_id, enabled_types)
+                        ocr_scan(url, session_id)
                         out.append({"type": "input_image", "image_url": url})
                     else:
                         out.append(block)
