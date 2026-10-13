@@ -66,9 +66,13 @@ def extract_text_content(content) -> str:
     if isinstance(content, list):
         parts = []
         for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-        return " ".join(parts)
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(block.get("text", ""))
+                elif block.get("type") == "thinking":
+                    # ponytail: Mistral streams reasoning as nested text blocks; flatten into stream.
+                    parts.append(extract_text_content(block.get("thinking", "")))
+        return " ".join(p for p in parts if p)
     return str(content)
 
 
@@ -296,6 +300,8 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
                         output_tokens = delta_usage["output_tokens"]
 
                 chunk_text = parsed["choices"][0]["delta"].get("content", "")
+                if not isinstance(chunk_text, str):
+                    chunk_text = extract_text_content(chunk_text)
                 if not chunk_text:
                     continue
             except Exception:
