@@ -908,6 +908,9 @@ async def proxy(request: Request, path: str):
             result = _resp.json()
             try:
                 content = result["choices"][0]["message"]["content"] or ""
+                # ponytail: Mistral returns structured list (thinking + text blocks); OWU hooks call .find() on content and crash.
+                if not isinstance(content, str):
+                    content = extract_text_content(content)
                 content = _depseudo(content, session_mapping)
                 result["choices"][0]["message"]["content"] = content
             except (KeyError, IndexError, TypeError):
