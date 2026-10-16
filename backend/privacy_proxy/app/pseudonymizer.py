@@ -22,8 +22,24 @@ ORG_CONTEXT_WORDS = {"GmbH", "Inc", "Ltd", "AG", "Corp", "LLC", "SE", "Co", "SA"
 WEEKDAYS_DE = {"Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"}
 
 # ponytail: lazy singleton — GLiNER loads transformer weights once, reused across requests
-_GLINER_LABELS = ["person", "location", "organization"]
-_GLINER_MAP = {"person": "PERSON", "location": "LOCATION", "organization": "ORGANIZATION"}
+# Zero-shot labels: multiple descriptive aliases nudge the model to catch hyphenated,
+# compound, Unicode and multi-token names (Anna Müller-Öztürk) without hardcoded rules.
+_GLINER_LABELS = [
+    "full name of a person",
+    "person including hyphenated surname",
+    "german person name with umlauts",
+    "person",
+    "location",
+    "organization",
+]
+_GLINER_MAP = {
+    "full name of a person":               "PERSON",
+    "person including hyphenated surname": "PERSON",
+    "german person name with umlauts":     "PERSON",
+    "person":                              "PERSON",
+    "location":                            "LOCATION",
+    "organization":                        "ORGANIZATION",
+}
 _gliner_instance = None
 
 def _get_gliner():
@@ -134,7 +150,7 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
     # GLiNER: zero-shot transformer NER — better person/location disambiguation than spaCy lg.
     # Inserted before Presidio results so GLiNER wins overlaps via stable-sort first-wins dedup.
     try:
-        for h in _get_gliner().predict_entities(original_text, _GLINER_LABELS, threshold=0.5):
+        for h in _get_gliner().predict_entities(original_text, _GLINER_LABELS, threshold=0.4):
             span = original_text[h["start"]:h["end"]]
             if re.match(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4})+", span): continue
             ptype = _GLINER_MAP.get(h["label"].lower())
