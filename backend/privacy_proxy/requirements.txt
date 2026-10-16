@@ -11,6 +11,6 @@ redis
 jaraco.context>=6.1.0
 orjson==3.11.6
 cryptography>=50.0.0
-gliner
+gliner2[local]
 pytesseract
 pillow
