@@ -22,25 +22,33 @@ ORG_CONTEXT_WORDS = {"GmbH", "Inc", "Ltd", "AG", "Corp", "LLC", "SE", "Co", "SA"
 WEEKDAYS_DE = {"Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"}
 
 # ponytail: lazy singleton — GLiNER loads transformer weights once, reused across requests
-# Zero-shot labels: multiple descriptive aliases nudge the model to catch hyphenated,
-# compound, Unicode and multi-token names (Anna Müller-Öztürk) without hardcoded rules.
+# Zero-shot labels: descriptive aliases including explicit forward/reversed-order and
+# title-prefix semantics nudge the model to catch hyphenated, compound, Unicode and
+# multi-token names (Anna Müller-Öztürk, Weber Hans reversed) without hardcoded rules.
 _GLINER_LABELS = [
     "full name of a person",
     "person including hyphenated surname",
     "german person name with umlauts",
+    "person name in forward order like Hans Weber",
+    "person name in reversed order like Weber, Hans",
+    "person name with title prefix like Dr. or Prof.",
     "person",
     "location",
     "organization",
 ]
 _GLINER_MAP = {
-    "full name of a person":               "PERSON",
-    "person including hyphenated surname": "PERSON",
-    "german person name with umlauts":     "PERSON",
-    "person":                              "PERSON",
-    "location":                            "LOCATION",
-    "organization":                        "ORGANIZATION",
+    "full name of a person":                                "PERSON",
+    "person including hyphenated surname":                  "PERSON",
+    "german person name with umlauts":                      "PERSON",
+    "person name in forward order like hans weber":         "PERSON",
+    "person name in reversed order like weber, hans":       "PERSON",
+    "person name with title prefix like dr. or prof.":      "PERSON",
+    "person":                                               "PERSON",
+    "location":                                             "LOCATION",
+    "organization":                                         "ORGANIZATION",
 }
 _gliner_instance = None
+_spacy_de_blank = None
 
 def _get_gliner():
     global _gliner_instance
@@ -51,6 +59,33 @@ def _get_gliner():
             revision="1fcf13e85f4eef5394e1fcd406cf2ca9ea82351d",
         )
     return _gliner_instance
+
+def _get_spacy_de():
+    """Blank German tokenizer — ships with spacy[de], ~1 MB, loads once.
+    Used only for abbreviation detection (knows Prof./Dr./z.B. are not sentence ends)."""
+    global _spacy_de_blank
+    if _spacy_de_blank is None:
+        import spacy
+        _spacy_de_blank = spacy.blank("de")
+    return _spacy_de_blank
+
+def _strip_abbrev_periods(text: str) -> str:
+    """Layer 1: ask spaCy which periods are inside abbreviations (Prof., Dr.) and swap
+    them to space. Length preserved → GLiNER span offsets map 1:1 to original text.
+    GLiNER no longer sees sentence boundaries inside titles."""
+    try:
+        doc = _get_spacy_de()(text)
+    except Exception:
+        return text
+    out = list(text)
+    n = len(doc)
+    for i, token in enumerate(doc):
+        # Token with period glued to it + not the final token = spaCy classified it as abbreviation
+        if token.text.endswith(".") and len(token.text) > 1 and i < n - 1:
+            pos = token.idx + len(token.text) - 1
+            if 0 <= pos < len(text) and text[pos] == ".":
+                out[pos] = " "
+    return "".join(out)
 
 @lru_cache(maxsize=4)
 def build_analyzer(language: str) -> AnalyzerEngine:
@@ -147,17 +182,32 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
         for match in PHONE_REGEX.finditer(original_text):
             entities.append({"start": match.start(), "end": match.end(), "type": "PHONE_NUMBER"})
 
-    # GLiNER: zero-shot transformer NER — better person/location disambiguation than spaCy lg.
-    # Inserted before Presidio results so GLiNER wins overlaps via stable-sort first-wins dedup.
-    try:
-        for h in _get_gliner().predict_entities(original_text, _GLINER_LABELS, threshold=0.4):
-            span = original_text[h["start"]:h["end"]]
-            if re.match(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4})+", span): continue
-            ptype = _GLINER_MAP.get(h["label"].lower())
-            if ptype and (not enabled_types or ptype in enabled_types):
-                entities.append({"start": h["start"], "end": h["end"], "type": ptype, "score": h["score"]})
-    except Exception:
-        pass  # GLiNER failure is non-fatal; Presidio NER still runs as fallback
+    # Layer 3 — Ensemble over 3 contextual framings. Each pass hands GLiNER the same
+    # text seen through a different lens; union via filter_overlaps keeps the longest.
+    #   framing 1 — raw text (baseline)
+    #   framing 2 — spaCy-abbrev-stripped text (Layer 1): titles don't break sentences
+    #   framing 3 — prefix-framed: primes name-detection, offset-shifted on map-back
+    def _run_gliner(txt, offset_shift=0):
+        try:
+            for h in _get_gliner().predict_entities(txt, _GLINER_LABELS, threshold=0.4):
+                start = h["start"] - offset_shift
+                end   = h["end"]   - offset_shift
+                if start < 0 or end > len(original_text) or start >= end: continue
+                span = original_text[start:end]
+                if re.match(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4})+", span): continue
+                ptype = _GLINER_MAP.get(h["label"].lower())
+                if ptype and (not enabled_types or ptype in enabled_types):
+                    entities.append({"start": start, "end": end,
+                                     "type": ptype, "score": h["score"]})
+        except Exception:
+            pass  # GLiNER failure is non-fatal; Presidio NER still runs as fallback
+
+    _run_gliner(original_text)
+    _abbrev_stripped = _strip_abbrev_periods(original_text)
+    if _abbrev_stripped != original_text:
+        _run_gliner(_abbrev_stripped)
+    _prefix = "Dokument. Namen identifizieren:\n"
+    _run_gliner(_prefix + original_text, offset_shift=len(_prefix))
 
     email_matches = list(EMAIL_REGEX.finditer(original_text))
     phone_matches = list(PHONE_REGEX.finditer(original_text))
@@ -229,6 +279,18 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
 
         if pos_in_original_start is not None:
             entities.append({"start": pos_in_original_start, "end": pos_in_original_end, "type": r.entity_type})
+
+    # Fix B — reversed-order merge: German/vendor "Lastname, Firstname" convention
+    # (Adelbach, Lasse / Müller, Hans-Peter). GLiNER wasn't trained on this, so if we
+    # see a Cap,⎵Cap pattern touching any existing PERSON span, treat the whole pattern
+    # as one PERSON and drop sub-entities (LOCATION/ORG) inside it.
+    _REV_ORDER_RE = re.compile(r"[A-ZÄÖÜÀ-Þ][\wäöüß\-À-ÿ]+,\s[A-ZÄÖÜÀ-Þ][\wäöüß\-À-ÿ]+")
+    for _m in _REV_ORDER_RE.finditer(original_text):
+        _ms, _me = _m.start(), _m.end()
+        if any(e.get("type") == "PERSON" and e["start"] < _me and e["end"] > _ms for e in entities):
+            entities = [e for e in entities
+                        if not (e["start"] >= _ms and e["end"] <= _me)]
+            entities.append({"start": _ms, "end": _me, "type": "PERSON", "score": 0.9})
 
     entities = sorted(entities, key=lambda x: (x["start"], -(x["end"] - x["start"])))
     filtered = []
