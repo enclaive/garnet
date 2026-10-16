@@ -21,25 +21,18 @@ PHONE_REGEX = re.compile(r'\+\d{1,3}[\s.-]?\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{0,5}')
 ORG_CONTEXT_WORDS = {"GmbH", "Inc", "Ltd", "AG", "Corp", "LLC", "SE", "Co", "SA", "company", "corporation", "founded"}
 WEEKDAYS_DE = {"Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"}
 
-# ponytail: lazy singleton — gliner2 PII model, multilingual (DE/EN/FR/ES/IT/PT/NL)
-# full_name label collapses hyphenated/compound surnames into one span (Anna Müller-Öztürk)
-_GLINER_LABELS = ["full_name", "person", "location", "organization", "email", "phone_number"]
-_GLINER_MAP = {
-    "full_name":    "PERSON",
-    "person":       "PERSON",
-    "location":     "LOCATION",
-    "organization": "ORGANIZATION",
-    "email":        "EMAIL_ADDRESS",
-    "phone_number": "PHONE_NUMBER",
-}
+# ponytail: lazy singleton — GLiNER loads transformer weights once, reused across requests
+_GLINER_LABELS = ["person", "location", "organization"]
+_GLINER_MAP = {"person": "PERSON", "location": "LOCATION", "organization": "ORGANIZATION"}
 _gliner_instance = None
 
 def _get_gliner():
     global _gliner_instance
     if _gliner_instance is None:
-        from gliner2 import AutoExtractor
-        _gliner_instance = AutoExtractor.from_pretrained(
-            "fastino/gliner2-privacy-filter-PII-multi"
+        from gliner import GLiNER
+        _gliner_instance = GLiNER.from_pretrained(
+            "urchade/gliner_multi_pii-v1",
+            revision="1fcf13e85f4eef5394e1fcd406cf2ca9ea82351d",
         )
     return _gliner_instance
 
@@ -138,28 +131,17 @@ def detect_entities(text: str, language: str = None, enabled_types=None) -> list
         for match in PHONE_REGEX.finditer(original_text):
             entities.append({"start": match.start(), "end": match.end(), "type": "PHONE_NUMBER"})
 
-    # gliner2 PII: multilingual transformer NER with fine-grained name labels (full_name).
-    # Response shape: {"entities": {<label>: [{"text","start","end","confidence"}, ...]}}
+    # GLiNER: zero-shot transformer NER — better person/location disambiguation than spaCy lg.
+    # Inserted before Presidio results so GLiNER wins overlaps via stable-sort first-wins dedup.
     try:
-        result = _get_gliner().extract_entities(
-            original_text, _GLINER_LABELS,
-            threshold=0.5, include_confidence=True, include_spans=True,
-        )
-        ent_dict = result.get("entities", {}) if isinstance(result, dict) else {}
-        for label, items in ent_dict.items():
-            ptype = _GLINER_MAP.get(label.lower())
-            if not ptype: continue
-            if enabled_types and ptype not in enabled_types: continue
-            for item in items:
-                if not isinstance(item, dict): continue
-                start, end = item.get("start"), item.get("end")
-                if start is None or end is None: continue
-                span = original_text[start:end]
-                if re.match(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4})+", span): continue
-                entities.append({"start": start, "end": end, "type": ptype,
-                                 "score": item.get("confidence", 0.5)})
+        for h in _get_gliner().predict_entities(original_text, _GLINER_LABELS, threshold=0.5):
+            span = original_text[h["start"]:h["end"]]
+            if re.match(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4})+", span): continue
+            ptype = _GLINER_MAP.get(h["label"].lower())
+            if ptype and (not enabled_types or ptype in enabled_types):
+                entities.append({"start": h["start"], "end": h["end"], "type": ptype, "score": h["score"]})
     except Exception:
-        pass  # gliner2 failure is non-fatal; Presidio NER still runs as fallback
+        pass  # GLiNER failure is non-fatal; Presidio NER still runs as fallback
 
     email_matches = list(EMAIL_REGEX.finditer(original_text))
     phone_matches = list(PHONE_REGEX.finditer(original_text))
