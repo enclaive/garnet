@@ -1,0 +1,120 @@
+name: garnet-ghidra
+services:
+  garnet:
+    image: local/enclaive-garnet:binary-upload
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        USE_SLIM: "true"
+    ports:
+      - "127.0.0.1:3080:8080"
+    environment:
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?required}
+      WEBUI_NAME: Garnet
+      ENABLE_OLLAMA_API: "false"
+      GHIDRA_API_URL: http://ghidra:8089
+      GHIDRA_MCP_AUTH_TOKEN: ${GHIDRA_MCP_AUTH_TOKEN:?required}
+      GHIDRA_UPLOAD_DIR: /app/backend/data/ghidra-inbox
+      GHIDRA_MAX_UPLOAD_MB: "100"
+      GHIDRA_ANALYSIS_TIMEOUT: "300"
+      UVICORN_WORKERS: "1"
+      OPENAI_API_BASE_URL: https://api.openai.com/v1
+      FORCE_OPENAI_BASE_URL: http://privacy-proxy:8080/openai
+      RAG_EMBEDDING_ENGINE: openai
+      AUDIO_STT_ENGINE: openai
+      TOOL_SERVER_CONNECTIONS: '[{"type":"mcp","url":"http://ghidra:8081/mcp","path":"","auth_type":"bearer","key":"${GHIDRA_MCP_AUTH_TOKEN}","config":{"enable":true},"info":{"id":"ghidra","name":"Ghidra MCP","description":"Headless binary analysis"}}]'
+      SCARF_NO_ANALYTICS: "true"
+      DO_NOT_TRACK: "true"
+      ANONYMIZED_TELEMETRY: "false"
+    volumes:
+      - garnet-data:/app/backend/data
+      - binary-inbox:/app/backend/data/ghidra-inbox
+    depends_on:
+      privacy-proxy:
+        condition: service_healthy
+      ghidra-bridge:
+        condition: service_healthy
+    restart: unless-stopped
+
+  privacy-proxy:
+    image: local/enclaive-garnet-proxy:installed
+    build:
+      context: ../../backend/privacy_proxy
+    environment:
+      OPENAI_API_URL: https://api.openai.com/v1
+      REDIS_URL: redis://redis:6379
+      PYTHONUNBUFFERED: "1"
+      HF_HOME: /home/appuser/.cache/huggingface
+    volumes:
+      - privacy-model-cache:/home/appuser/.cache/huggingface
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 15s
+      timeout: 5s
+      start_period: 120s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  ghidra:
+    image: local/ghidra-mcp-headless:7.0.0
+    build:
+      context: ../../ghidra-mcp
+      dockerfile: docker/Dockerfile
+    ports:
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8090:8089"
+    environment:
+      GHIDRA_MCP_AUTH_TOKEN: ${GHIDRA_MCP_AUTH_TOKEN:?required}
+      GHIDRA_MCP_FILE_ROOT: /data
+      JAVA_OPTS: -Xmx2g -XX:+UseG1GC
+    volumes:
+      - ghidra-data:/data
+      - binary-inbox:/data/inbox:ro
+      - ghidra-projects:/projects
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8089/mcp/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 90s
+      retries: 5
+    restart: unless-stopped
+
+  ghidra-bridge:
+    image: local/ghidra-mcp-bridge:7.0.0
+    build:
+      context: ../../ghidra-mcp
+      dockerfile: docker/Dockerfile.bridge
+    network_mode: service:ghidra
+    environment:
+      GHIDRA_MCP_URL: http://127.0.0.1:8089
+      GHIDRA_MCP_AUTH_TOKEN: ${GHIDRA_MCP_AUTH_TOKEN:?required}
+      GHIDRA_MCP_INBOUND_TOKEN: ${GHIDRA_MCP_AUTH_TOKEN:?required}
+      GHIDRA_MCP_ALLOWED_HOSTS: ghidra,localhost,127.0.0.1
+    depends_on:
+      ghidra:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  privacy-model-cache:
+  binary-inbox:
+  garnet-data:
+  redis-data:
+  ghidra-data:
+  ghidra-projects:
