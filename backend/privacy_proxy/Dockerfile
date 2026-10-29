@@ -1,5 +1,8 @@
 FROM python:3.11-slim
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r appuser && useradd -r -m -g appuser appuser \
+    && mkdir -p /home/appuser/.cache/huggingface \
+    && chown -R appuser:appuser /home/appuser
+ENV HF_HOME=/home/appuser/.cache/huggingface
 WORKDIR /service
 COPY requirements.txt .
 RUN apt-get update && \
