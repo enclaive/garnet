@@ -61,6 +61,29 @@ def is_binary(name, header):
     return enabled() and (header.startswith(_signatures) or pe_header or Path(name or '').suffix.lower() in _extensions)
 
 
+def require_context(context, allow_unscoped=False):
+    if context is None and not allow_unscoped:
+        raise HTTPException(403, 'Attach a binary to this chat before using Ghidra tools.')
+
+
+async def restore_history_files(files, history_files):
+    """Recover binary IDs from persisted history; prepare still checks access."""
+    from open_webui.models.files import Files
+
+    current = list(files or [])
+    seen = {f.get('id') for f in current}
+    recovered = []
+    for attachment in history_files:
+        file_id = attachment.get('id')
+        if file_id and file_id not in seen:
+            record = await Files.get_file_by_id(file_id)
+            if record and (record.meta or {}).get('ghidra_binary') is True:
+                recovered.append({'id': file_id, 'type': 'file'})
+                seen.add(file_id)
+    # Keep current attachments last: call_tool defaults to the last binary.
+    return recovered + current
+
+
 async def api(path, body=None):
     async with httpx.AsyncClient(timeout=float(os.getenv('GHIDRA_ANALYSIS_TIMEOUT', '300'))) as client:
         headers = {'Authorization': 'Bearer ' + os.environ['GHIDRA_MCP_AUTH_TOKEN']}
@@ -170,10 +193,9 @@ async def load_analysis_tools(client, event_emitter=None):
     await _queue.run(load_groups, event_emitter)
 
 
-async def call_tool(context, client, name, arguments, event_emitter=None):
+async def call_tool(context, client, name, arguments, event_emitter=None, tool_parameters=None, allow_unscoped=False):
+    require_context(context, allow_unscoped=allow_unscoped)
     if context is None:
-        # Explicitly selected manual Ghidra tools share admission with binary
-        # chats, so a manual project change cannot interrupt a running import.
         return await _queue.run(lambda: _mcp_call(client, name, arguments), event_emitter)
     if not tool_allowed(name):
         raise ValueError('This operation is unavailable in a binary chat.')
@@ -190,7 +212,8 @@ async def call_tool(context, client, name, arguments, event_emitter=None):
     arguments = dict(arguments)
     if name == 'open_program':
         arguments['path'] = selected
-    elif 'program' in arguments:
+    elif 'program' in arguments or 'program' in (tool_parameters or {}).get('properties', {}):
+        # Headless Ghidra has no active program when multiple binaries are open.
         arguments['program'] = selected
     async def invoke():
         await select_project(context['project'])

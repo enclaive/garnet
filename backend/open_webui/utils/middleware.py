@@ -116,6 +116,7 @@ from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.utils.payload import apply_system_prompt_to_body
 from open_webui.utils.response import normalize_usage
 from open_webui.utils.mcp.client import MCPClient
+from open_webui.utils import ghidra_uploads
 
 
 from open_webui.config import (
@@ -2070,7 +2071,7 @@ async def convert_url_images_to_base64(form_data):
 async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[dict]]:
     """
     Load the message chain from DB up to message_id,
-    keeping only LLM-relevant fields (role, content, output).
+    keeping LLM-relevant fields and preferring merged response content.
     """
     messages_map = await Chats.get_messages_map_by_chat_id(chat_id)
     if not messages_map:
@@ -2080,7 +2081,15 @@ async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[
     if not db_messages:
         return None
 
-    return [{k: v for k, v in msg.items() if k in ('role', 'content', 'output', 'files')} for msg in db_messages]
+    messages = []
+    for msg in db_messages:
+        message = {k: v for k, v in msg.items() if k in ('role', 'content', 'output', 'files')}
+        merged = msg.get('merged')
+        if isinstance(merged, dict) and merged.get('content') is not None:
+            message['content'] = merged['content']
+            message.pop('output', None)
+        messages.append(message)
+    return messages
 
 
 def process_messages_with_output(messages: list[dict]) -> list[dict]:
@@ -2108,6 +2117,7 @@ def process_messages_with_output(messages: list[dict]) -> list[dict]:
 
 
 async def process_chat_payload(request, form_data, user, metadata, model):
+    ghidra_history_files = []
     # Pipeline Inlet -> Filter Inlet -> Chat Memory -> Chat Web Search -> Chat Image Generation
     # -> Chat Code Interpreter (Form Data Update) -> (Default) Chat Tools Function Calling
     # -> Chat Files
@@ -2147,9 +2157,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # Load messages from DB when available — DB preserves structured 'output' items
     # which the frontend strips, causing tool calls to be merged into content.
     chat_id = metadata.get('chat_id')
-    parent_message_id = metadata.get('parent_message_id')
+    parent_message_id = metadata.get('user_message_id') or metadata.get('parent_message_id')
 
-    if chat_id and parent_message_id and not chat_id.startswith('local:'):
+    if chat_id and parent_message_id and not chat_id.startswith(('local:', 'channel:')):
         db_messages = await load_messages_from_db(chat_id, parent_message_id)
         if db_messages:
             system_message = get_system_message(form_data.get('messages', []))
@@ -2157,6 +2167,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
             # Inject image files into content as image_url parts (mirrors frontend logic)
             for message in form_data['messages']:
+                ghidra_history_files.extend(message.get('files', []))
                 image_files = [
                     f
                     for f in message.get('files', [])
@@ -2381,6 +2392,22 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     tool_ids = form_data.pop('tool_ids', None)
     terminal_id = form_data.pop('terminal_id', None)
     files = form_data.pop('files', None)
+    # Recover binary attachments for follow-up questions without re-attaching.
+    if ghidra_uploads.enabled() and ghidra_history_files:
+        files = await ghidra_uploads.restore_history_files(files, ghidra_history_files)
+
+    files, ghidra_context = await ghidra_uploads.prepare(files, user, chat_id, event_emitter)
+    if ghidra_uploads.enabled() and ('server:mcp:' + os.getenv('GHIDRA_MCP_SERVER_ID', 'ghidra')) in (tool_ids or []):
+        ghidra_uploads.require_context(ghidra_context, allow_unscoped=user.role == 'admin')
+    if ghidra_context:
+        tool_ids = list(tool_ids or [])
+        ghidra_tool_id = 'server:mcp:' + ghidra_context['server_id']
+        if ghidra_tool_id not in tool_ids:
+            tool_ids.append(ghidra_tool_id)
+        metadata.setdefault('params', {})['function_calling'] = 'native'
+        form_data['messages'] = add_or_update_system_message(
+            ghidra_uploads.prompt(ghidra_context), form_data['messages'], append=True
+        )
 
     # Caller-provided OpenAI-style tools take precedence over server-side
     # tool resolution (tool_ids, MCP servers, builtin tools).
@@ -2491,7 +2518,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                             continue
 
                         # Check access control for MCP server
-                        if not has_connection_access(user, mcp_server_connection):
+                        if not await has_connection_access(user, mcp_server_connection):
                             log.warning(f'Access denied to MCP server {server_id} for user {user.id}')
                             continue
 
@@ -2549,11 +2576,23 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         if isinstance(function_name_filter_list, str):
                             function_name_filter_list = function_name_filter_list.split(',')
 
+                        if ghidra_context and server_id == ghidra_context['server_id']:
+                            await ghidra_uploads.load_analysis_tools(mcp_clients[server_id], event_emitter)
                         tool_specs = await mcp_clients[server_id].list_tool_specs()
                         for tool_spec in tool_specs:
 
-                            def make_tool_function(client, function_name):
+                            scoped_context = ghidra_context if ghidra_context and server_id == ghidra_context['server_id'] else None
+                            if scoped_context and not ghidra_uploads.tool_allowed(tool_spec['name']):
+                                continue
+
+                            def make_tool_function(client, function_name, binary_context, queued_ghidra, tool_parameters):
                                 async def tool_function(**kwargs):
+                                    if binary_context or queued_ghidra:
+                                        return await ghidra_uploads.call_tool(
+                                            binary_context, client, function_name, kwargs,
+                                            event_emitter, tool_parameters=tool_parameters,
+                                            allow_unscoped=user.role == 'admin',
+                                        )
                                     return await client.call_tool(
                                         function_name,
                                         function_args=kwargs,
@@ -2566,7 +2605,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                                     # Skip this function
                                     continue
 
-                            tool_function = make_tool_function(mcp_clients[server_id], tool_spec['name'])
+                            tool_function = make_tool_function(
+                                mcp_clients[server_id], tool_spec['name'], scoped_context,
+                                ghidra_uploads.enabled() and server_id == os.getenv('GHIDRA_MCP_SERVER_ID', 'ghidra'),
+                                tool_spec.get('parameters'),
+                            )
 
                             mcp_tools_dict[f'{server_id}_{tool_spec["name"]}'] = {
                                 'spec': {
@@ -4201,7 +4244,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     )
 
                                 else:
-                                    tool_function = get_updated_tool_function(
+                                    tool_function = await get_updated_tool_function(
                                         function=tool['callable'],
                                         extra_params={
                                             '__messages__': form_data.get('messages', []),

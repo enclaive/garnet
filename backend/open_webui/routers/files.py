@@ -47,6 +47,7 @@ from open_webui.routers.retrieval import ProcessFileForm, process_file
 from open_webui.storage.provider import Storage
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.misc import strict_match_mime_type
+from open_webui.utils.ghidra_uploads import is_binary
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -359,6 +360,12 @@ async def upload_file_handler(
         # Remove the leading dot from the file extension and lowercase it
         file_extension = file_extension[1:].lower() if file_extension else ''
 
+        ghidra_binary = is_binary(filename, await file.read(8))
+        await file.seek(0)
+        if ghidra_binary:
+            # Executables are opaque attachments, never RAG text documents.
+            process = False
+
         allowed_file_extensions = await Config.get('rag.file.allowed_extensions')
         if process and allowed_file_extensions:
             allowed_file_extensions = [ext for ext in allowed_file_extensions if ext]
@@ -400,6 +407,9 @@ async def upload_file_handler(
                     detail=ERROR_MESSAGES.DEFAULT(e.strerror or 'Error uploading file'),
                 )
         max_size = await Config.get('rag.file.max_size')
+        if ghidra_binary and len(contents) > int(os.getenv('GHIDRA_MAX_UPLOAD_MB', '100')) * 1024 * 1024:
+            await asyncio.to_thread(Storage.delete_file, file_path)
+            raise HTTPException(413, 'Binary exceeds the Ghidra upload limit.')
         if max_size and len(contents) > int(max_size) * 1024 * 1024:
             await asyncio.to_thread(Storage.delete_file, file_path)
             raise HTTPException(
@@ -421,9 +431,11 @@ async def upload_file_handler(
                     'filename': name,
                     'path': file_path,
                     'data': {
+                        **({'status': 'completed'} if ghidra_binary else {}),
                         **({'status': 'pending'} if process else {}),
                     },
                     'meta': {
+                        **({'ghidra_binary': True} if ghidra_binary else {}),
                         'name': name,
                         'content_type': (file.content_type if isinstance(file.content_type, str) else None),
                         'size': len(contents),

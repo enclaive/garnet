@@ -202,88 +202,26 @@ async def stream_with_depseudo(response_stream, mapping, pseudonymized_prompt, s
         "query_variants": variants or []
     }) + b"\n\n"
 
-    buffer = ""
+    from app.streaming import transform_stream
+
     first_chunk = True
-    first_out = True
     ttft_s = 0.0
-    chunk_count = 0
-    total_out_chars = 0
-    input_tokens = 0
-    output_tokens = 0
-    async for raw_chunk in response_stream:
-        for chunk in raw_chunk.split(b"\n"):
-            if not chunk:
-                continue
-            if chunk.startswith(b"data: "):
-                raw = chunk[6:].strip()
-            else:
-                raw = chunk.strip()
-
-            if raw == b"[DONE]":
-                break
-
-            try:
-                parsed = orjson.loads(raw)
-                # capture token usage — OpenAI, Anthropic OpenAI-compat, and Anthropic native formats
-                usage = parsed.get("usage") or {}
-                if usage.get("input_tokens"):
-                    input_tokens = usage["input_tokens"]
-                if usage.get("output_tokens"):
-                    output_tokens = usage["output_tokens"]
-                if usage.get("prompt_tokens"):
-                    input_tokens = usage["prompt_tokens"]
-                if usage.get("completion_tokens"):
-                    output_tokens = usage["completion_tokens"]
-                # Anthropic native: message_start carries input_tokens in message.usage
-                chunk_type = parsed.get("type", "")
-                if chunk_type == "message_start":
-                    msg_usage = parsed.get("message", {}).get("usage", {})
-                    if msg_usage.get("input_tokens"):
-                        input_tokens = msg_usage["input_tokens"]
-                # Anthropic native: message_delta carries output_tokens in usage
-                if chunk_type == "message_delta":
-                    delta_usage = parsed.get("usage", {})
-                    if delta_usage.get("output_tokens"):
-                        output_tokens = delta_usage["output_tokens"]
-
-                chunk_text = parsed["choices"][0]["delta"].get("content", "")
-                if not chunk_text:
-                    continue
-            except Exception:
-                continue
-
-            if first_chunk:
-                ttft_s = (time.perf_counter() - t0) if t0 else 0.0
-                log_from_llm(chunk_text, ttft_s)
-                first_chunk = False
-
-            buffer += chunk_text
-            safe, remainder = split_at_safe_boundary(buffer)
-
-            if safe:
-                for token in sorted(mapping.keys(), key=len, reverse=True):
-                    safe = safe.replace(token, mapping[token])
+    chunk_count = total_out_chars = input_tokens = output_tokens = 0
+    async for event in transform_stream(response_stream, mapping, split_at_safe_boundary):
+        usage = event.get("usage") or {}
+        input_tokens = usage.get("prompt_tokens", usage.get("input_tokens", input_tokens))
+        output_tokens = usage.get("completion_tokens", usage.get("output_tokens", output_tokens))
+        for choice in event.get("choices", []):
+            text = (choice.get("delta") or {}).get("content")
+            if text:
+                if first_chunk:
+                    ttft_s = (time.perf_counter() - t0) if t0 else 0.0
+                    log_from_llm(text, ttft_s)
+                    log_garnet_out(text)
+                    first_chunk = False
                 chunk_count += 1
-                total_out_chars += len(safe)
-                if first_out:
-                    log_garnet_out(safe)
-                    first_out = False
-                yield b"data: " + orjson.dumps({
-                    "choices": [{"delta": {"content": safe}}]
-                }) + b"\n\n"
-
-            buffer = remainder
-
-    if buffer:
-        for token in sorted(mapping.keys(), key=len, reverse=True):
-            buffer = buffer.replace(token, mapping[token])
-        chunk_count += 1
-        total_out_chars += len(buffer)
-        if first_out:
-            log_garnet_out(buffer)
-        yield b"data: " + orjson.dumps({
-            "choices": [{"delta": {"content": buffer}}]
-        }) + b"\n\n"
+                total_out_chars += len(text)
+        yield b"data: " + orjson.dumps(event) + b"\n\n"
 
     log_stream_done(chunk_count, total_out_chars)
     if input_tokens or output_tokens:
