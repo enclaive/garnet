@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from app.pseudonymizer import pseudonymize, detect_entities
 from app.mapping_store import MappingStore
+from app.tool_privacy import ghidra_result_indices
 from app.logs import (
     log_sep, log_garnet, log_entity_filter,
     log_in_user, log_out_user, log_no_pii,
@@ -371,6 +372,9 @@ async def proxy(request: Request, path: str):
             body["stream"] = False
 
         messages = body.get("messages", [])
+        ghidra_results = ghidra_result_indices(messages, os.getenv("GHIDRA_MCP_SERVER_ID", "ghidra"))
+        if privacy_enabled and ghidra_results:
+            print(f"[GHIDRA PRIVACY] forwarding {len(ghidra_results)} tool result(s) unchanged; user scanning remains enabled")
         model = body.get("model", "unknown")
         first_msg = extract_text_content(messages[0].get("content", "")) if messages else ""
 
@@ -460,6 +464,8 @@ async def proxy(request: Request, path: str):
             skipped_system = 0
             scanned = 0
             for i, msg in enumerate(messages[:-1]):
+                if i in ghidra_results:
+                    continue
                 scanned += 1
                 content = msg.get("content")
                 text = extract_text_content(content)
@@ -502,6 +508,11 @@ async def proxy(request: Request, path: str):
             if not privacy_enabled:
                 log_privacy_off()
 
+            elif len(messages) - 1 in ghidra_results:
+                # Tool output is not the user's prompt. Empty metadata keeps
+                # Garnet from overwriting the original prompt's privacy preview.
+                pseudonymized_user_message = None
+
             elif is_system_prompt:
                 internal_type = detect_internal_type(original_content_text)
                 log_internal(internal_type)
@@ -516,6 +527,8 @@ async def proxy(request: Request, path: str):
                 last_msg_index = len(messages) - 1
                 file_msgs_scanned = 0
                 for i, msg in enumerate(messages):
+                    if i in ghidra_results:
+                        continue
                     role = msg.get("role", "")
                     content = msg.get("content", "")
                     if role == "assistant":

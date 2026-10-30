@@ -125,13 +125,11 @@ async def prepare(files, user, chat_id, event_emitter=None):
             ordinary.append(item)
             continue
         record = await Files.get_file_by_id(item['id'])
-        if not record:
-            raise HTTPException(404, 'Attached file no longer exists.')
-        if not (record.user_id == user.id or await has_access_to_file(record.id, 'read', user)):
-            raise HTTPException(403, 'You cannot access this attachment.')
-        if (record.meta or {}).get('ghidra_binary') is not True:
+        if not record or (record.meta or {}).get('ghidra_binary') is not True:
             ordinary.append(item)
             continue
+        if not (record.user_id == user.id or await has_access_to_file(record.id, 'read', user)):
+            raise HTTPException(403, 'You cannot access this attachment.')
         binaries.append(record)
     if not binaries:
         return files, None

@@ -2081,10 +2081,15 @@ async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[
     if not db_messages:
         return None
 
+    # Normalized chat_message rows do not store merged responses. Recover
+    # those from the persisted history while keeping normalized tool output.
+    chat = await Chats.get_chat_by_id(chat_id)
+    history_messages = (chat.chat.get('history', {}).get('messages', {}) or {}) if chat else {}
+
     messages = []
     for msg in db_messages:
         message = {k: v for k, v in msg.items() if k in ('role', 'content', 'output', 'files')}
-        merged = msg.get('merged')
+        merged = history_messages.get(msg.get('id'), {}).get('merged', msg.get('merged'))
         if isinstance(merged, dict) and merged.get('content') is not None:
             message['content'] = merged['content']
             message.pop('output', None)
