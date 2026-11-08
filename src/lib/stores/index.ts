@@ -369,9 +369,8 @@ export type SessionUser = {
 };
 
 // ── garnet-restored exports (lost during v0.11.0 merge) ──────────────────
+// chats + pinnedChats are re-exported from ./chatList at line 66 (OWU v0.11.0)
 export const activeChatIds: Writable<Set<string>> = writable(new Set());
-export const chats = writable(null);
-export const pinnedChats = writable([]);
 export const showShortcuts = writable(false);
 export const showArchivedChats = writable(false);
 export const scrollPaginationEnabled = writable(false);

@@ -9,8 +9,9 @@ type ChatListItem = {
 const chatsStore = writable<ChatListItem[] | null>(null);
 const pinnedChatsStore = writable<ChatListItem[]>([]);
 
-export const chats = readonly(chatsStore);
-export const pinnedChats = readonly(pinnedChatsStore);
+// garnet: exposed writable (not readonly) — Sidebar/Chat/Placeholder call chats.set(...)
+export const chats = chatsStore;
+export const pinnedChats = pinnedChatsStore;
 
 let currentPage = 1;
 let paginationReady = false;
