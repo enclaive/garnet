@@ -2311,6 +2311,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
         form_data, flags = await process_filter_functions(
             request=request,
+            filter_context=None,
             filter_functions=filter_functions,
             filter_type='inlet',
             form_data=form_data,
@@ -3591,6 +3592,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                             data, _ = await process_filter_functions(
                                 request=request,
+            filter_context=None,
                                 filter_functions=filter_functions,
                                 filter_type='stream',
                                 form_data=data,
@@ -4762,6 +4764,7 @@ async def streaming_chat_response_handler(response, ctx):
             for event in events:
                 event, _ = await process_filter_functions(
                     request=request,
+            filter_context=None,
                     filter_functions=filter_functions,
                     filter_type='stream',
                     form_data=event,
@@ -4774,6 +4777,7 @@ async def streaming_chat_response_handler(response, ctx):
             async for data in original_generator:
                 data, _ = await process_filter_functions(
                     request=request,
+            filter_context=None,
                     filter_functions=filter_functions,
                     filter_type='stream',
                     form_data=data,
