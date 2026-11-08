@@ -12,6 +12,7 @@ on:
       - demo1
       - demo1upgrade
       - privacyimage
+      - mergev0.11.0
   pull_request:
     branches:
       - garnet-privacy-proxy
