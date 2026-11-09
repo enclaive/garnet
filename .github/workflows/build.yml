@@ -9,10 +9,7 @@ on:
       - deploy/staging
       - deploy/prod
       - garnet-privacy-proxy
-      - demo1
-      - demo1upgrade
-      - privacyimage
-      - mergev0.11.0
+      - merge**
   pull_request:
     branches:
       - garnet-privacy-proxy
@@ -22,61 +19,24 @@ jobs:
   get-meta:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.get_version.outputs.version }}
-      tag: ${{ steps.get_tag.outputs.name }}
-      revision: ${{ steps.get_revision.outputs.revision }}
-      proxy_changed: ${{ steps.changes.outputs.proxy }}
-      webui_changed: ${{ steps.changes.outputs.webui }}
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      revision: ${{ steps.meta.outputs.revision }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          fetch-depth: 0
 
-      - name: Get version
-        id: get_version
+      - name: Get meta
+        id: meta
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-          else
-            echo "version=$(cat version/VERSION).nightly" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get revision
-        id: get_revision
-        run: echo "revision=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Get tag
-        id: get_tag
-        run: |
-          case "${GITHUB_REF}" in
-            refs/heads/deploy/staging) NAME=staging ;;
-            refs/heads/deploy/prod)    NAME=prod    ;;
-            refs/tags/v*)              NAME=latest  ;;
-            *)                         NAME="${FALLBACK}" ;;
-          esac
-          echo "name=${NAME}" >> $GITHUB_OUTPUT
-        env:
-          FALLBACK: ${{ steps.get_revision.outputs.revision }}
-
-      - name: Check changed files
-        id: changes
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "proxy=true" >> $GITHUB_OUTPUT
-            echo "webui=true" >> $GITHUB_OUTPUT
-          else
-            git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^backend/privacy_proxy/' \
-              && echo "proxy=true" >> $GITHUB_OUTPUT \
-              || echo "proxy=false" >> $GITHUB_OUTPUT
-            git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '^src/|^backend/open_webui/' \
-              && echo "webui=true" >> $GITHUB_OUTPUT \
-              || echo "webui=false" >> $GITHUB_OUTPUT
-          fi
+          REF_NAME="${GITHUB_REF_NAME}"
+          SHA=$(git rev-parse --short HEAD)
+          echo "version=${REF_NAME}" >> $GITHUB_OUTPUT
+          echo "revision=${SHA}"     >> $GITHUB_OUTPUT
+          echo "tag=${REF_NAME}"     >> $GITHUB_OUTPUT
 
   build-proxy:
     needs: get-meta
-    if: needs.get-meta.outputs.proxy_changed == 'true'
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -109,8 +69,8 @@ jobs:
             -f backend/privacy_proxy/Dockerfile \
             --build-arg PRODUCT_VERSION=${{ needs.get-meta.outputs.version }} \
             --build-arg PRODUCT_REVISION=${{ needs.get-meta.outputs.revision }} \
-            --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/privacy-proxy:cache \
-            --cache-to   type=inline \
+            --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/cache/privacy-proxy:cache \
+            --cache-to   type=registry,ref=harbor.enclaive.cloud/garnetdemo/cache/privacy-proxy:cache,mode=max \
             --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.tag }} \
             --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.version }} \
             --tag harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.revision }} \
@@ -172,19 +132,20 @@ jobs:
             ${{ steps.build-proxy.outputs.digest }}
           rm /tmp/cosign.key
 
-      - name: Save SBOM + provenance to cVM
+      - name: Install oras
+        uses: oras-project/setup-oras@v1
+
+      - name: Push SBOM + provenance to Harbor
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
-          ssh root@${{ secrets.CVM_HOST }} "mkdir -p /opt/garnet/sbom"
-          scp /tmp/sbom-proxy.spdx.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/sbom-proxy-${{ needs.get-meta.outputs.revision }}.spdx.json
-          scp /tmp/provenance-proxy.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/provenance-proxy-${{ needs.get-meta.outputs.revision }}.json
+          echo "${{ secrets.HARBOR_PASSWORD }}" | oras login harbor.enclaive.cloud \
+            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+          oras push harbor.enclaive.cloud/garnetdemo/sbom/privacy-proxy:${{ needs.get-meta.outputs.revision }} \
+            /tmp/sbom-proxy.spdx.json:application/spdx+json
+          oras push harbor.enclaive.cloud/garnetdemo/provenance/privacy-proxy:${{ needs.get-meta.outputs.revision }} \
+            /tmp/provenance-proxy.json:application/json
 
   python-checks:
     needs: [get-meta, build-proxy]
-    if: needs.get-meta.outputs.proxy_changed == 'true'
     uses: ./.github/workflows/pythoncheck.yml
     with:
       image_tag: ${{ needs.get-meta.outputs.revision }}
@@ -194,7 +155,6 @@ jobs:
 
   build-webui:
     needs: get-meta
-    if: needs.get-meta.outputs.webui_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -225,8 +185,8 @@ jobs:
           DIGEST=$(docker buildx build \
             --build-arg PRODUCT_VERSION=${{ needs.get-meta.outputs.version }} \
             --build-arg PRODUCT_REVISION=${{ needs.get-meta.outputs.revision }} \
-            --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/garnet-webui:cache \
-            --cache-to   type=registry,ref=harbor.enclaive.cloud/garnetdemo/garnet-webui:cache,mode=max \
+            --cache-from type=registry,ref=harbor.enclaive.cloud/garnetdemo/cache/garnet-webui:cache \
+            --cache-to   type=registry,ref=harbor.enclaive.cloud/garnetdemo/cache/garnet-webui:cache,mode=max \
             --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.tag }} \
             --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.version }} \
             --tag harbor.enclaive.cloud/garnetdemo/garnet-webui:${{ needs.get-meta.outputs.revision }} \
@@ -289,12 +249,14 @@ jobs:
             ${{ steps.build-webui.outputs.digest }}
           rm /tmp/cosign.key
 
-      - name: Save SBOM + provenance to cVM
+      - name: Install oras
+        uses: oras-project/setup-oras@v1
+
+      - name: Push SBOM + provenance to Harbor
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan ${{ secrets.CVM_HOST }} >> ~/.ssh/known_hosts
-          ssh root@${{ secrets.CVM_HOST }} "mkdir -p /opt/garnet/sbom"
-          scp /tmp/sbom-webui.spdx.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/sbom-webui-${{ needs.get-meta.outputs.revision }}.spdx.json
-          scp /tmp/provenance-webui.json root@${{ secrets.CVM_HOST }}:/opt/garnet/sbom/provenance-webui-${{ needs.get-meta.outputs.revision }}.json
+          echo "${{ secrets.HARBOR_PASSWORD }}" | oras login harbor.enclaive.cloud \
+            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+          oras push harbor.enclaive.cloud/garnetdemo/sbom/garnet-webui:${{ needs.get-meta.outputs.revision }} \
+            /tmp/sbom-webui.spdx.json:application/spdx+json
+          oras push harbor.enclaive.cloud/garnetdemo/provenance/garnet-webui:${{ needs.get-meta.outputs.revision }} \
+            /tmp/provenance-webui.json:application/json

@@ -1,4 +1,3 @@
-import json
 from numbers import Number
 from uuid import uuid4
 
@@ -25,13 +24,9 @@ def normalize_usage(usage: dict) -> dict:
         return {}
 
     # Map various field names to standard names
-    input_tokens = (
-        usage.get('input_tokens')  # Already standard
-        or usage.get('prompt_tokens')  # OpenAI
-        or usage.get('prompt_eval_count')  # Ollama
-        or usage.get('prompt_n')  # llama.cpp
-        or 0
-    )
+    input_tokens = usage.get('input_tokens') or usage.get('prompt_tokens') or usage.get('prompt_eval_count')
+    if input_tokens is None:
+        input_tokens = int(usage.get('prompt_n') or 0) + int(usage.get('cache_n') or 0)
 
     output_tokens = (
         usage.get('output_tokens')  # Already standard
@@ -158,7 +153,7 @@ def convert_ollama_tool_call_to_openai(tool_calls: list) -> list:
             'type': 'function',
             'function': {
                 'name': function.get('name', ''),
-                'arguments': json.dumps(function.get('arguments', {})),
+                'arguments': JSONCodec.dumps(function.get('arguments', {})),
             },
         }
         openai_tool_calls.append(openai_tool_call)
@@ -233,6 +228,8 @@ def convert_response_ollama_to_openai(ollama_response: dict) -> dict:
     if pseudonymized_prompt:
         print('[GARNET OLLAMA] non-streaming pseudonymized_prompt:', pseudonymized_prompt)
         response['pseudonymized_prompt'] = pseudonymized_prompt
+    if not openai_tool_calls and ollama_response.get('done_reason'):
+        response['choices'][0]['finish_reason'] = ollama_response['done_reason']
     return response
 
 
@@ -257,6 +254,7 @@ async def convert_streaming_response_ollama_to_openai(ollama_streaming_response)
 
         done = data.get('done', False)
         pseudonymized_prompt = data.get('pseudonymized_prompt')
+        done_reason = data.get('done_reason')
 
         usage = None
         if done:
@@ -273,6 +271,8 @@ async def convert_streaming_response_ollama_to_openai(ollama_streaming_response)
 
         if done and has_tool_calls:
             data['choices'][0]['finish_reason'] = 'tool_calls'
+        elif done_reason:
+            data['choices'][0]['finish_reason'] = done_reason
 
         if pseudonymized_prompt:
             print('[GARNET OLLAMA] streaming pseudonymized_prompt:', pseudonymized_prompt)
