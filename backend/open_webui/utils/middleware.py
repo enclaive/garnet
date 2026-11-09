@@ -2748,7 +2748,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # to prevent template parsing errors with strict chat templates (e.g. Qwen)
     form_data['messages'] = merge_system_messages(form_data.get('messages', []))
 
-    return form_data, metadata, events
+    return form_data, metadata, events, False
 
 
 async def get_event_emitter_and_caller(metadata):
