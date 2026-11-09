@@ -346,6 +346,13 @@ def _pseudonymize_flat(text: str, session_id: str, store: dict, enabled_types=No
     entities = sorted(entities, key=lambda x: x["start"], reverse=True)
 
     for entity in entities:
+        # ponytail: NER sometimes includes trailing possessive 's or punctuation in the span
+        # (e.g. "Max Mustermann's"), which produces a different sha256 than the clean form
+        # and mints a second token for the same person within one message.
+        span = text[entity["start"]:entity["end"]]
+        trim = re.search(r"(['’]s|[.,;:!?]+)$", span)
+        if trim:
+            entity["end"] -= len(trim.group(0))
         original = text[entity["start"]:entity["end"]]
         token = generate_token(entity["type"], original)
         mapping[token] = original
