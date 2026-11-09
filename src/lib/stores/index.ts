@@ -190,6 +190,7 @@ export const showTabs = writable<
 export const showEmbeds = writable(false);
 export const showOverview = writable(false);
 export const showArtifacts = writable(false);
+export const showControls = writable(false);
 export const showCallOverlay = writable(false);
 export const showFileNav = writable(false);
 export type FileNavOpenRequest = string | { path: string; page?: number | null };
