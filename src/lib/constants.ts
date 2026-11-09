@@ -118,3 +118,10 @@ export const PASTED_TEXT_CHARACTER_LIMIT = 1000;
 // This feature, akin to $env/static/private, exclusively incorporates environment variables
 // that are prefixed with config.kit.env.publicPrefix (usually set to PUBLIC_).
 // Consequently, these variables can be securely exposed to client-side code.
+
+// v0.12.0: trusted origins for Community postMessage verify:chat flow (used by SyncStatsModal.svelte)
+export const COMMUNITY_ORIGINS = [
+	'https://openwebui.com',
+	'https://www.openwebui.com',
+	'http://localhost:9999'
+];
