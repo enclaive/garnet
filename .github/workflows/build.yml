@@ -133,7 +133,9 @@ jobs:
           rm /tmp/cosign.key
 
       - name: Install oras
-        uses: oras-project/setup-oras@v1
+        run: |
+          curl -sSfL https://github.com/oras-project/oras/releases/latest/download/oras_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin oras
 
       - name: Push SBOM + provenance to Harbor
         run: |
@@ -250,7 +252,9 @@ jobs:
           rm /tmp/cosign.key
 
       - name: Install oras
-        uses: oras-project/setup-oras@v1
+        run: |
+          curl -sSfL https://github.com/oras-project/oras/releases/latest/download/oras_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin oras
 
       - name: Push SBOM + provenance to Harbor
         run: |
