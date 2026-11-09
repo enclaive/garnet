@@ -41,10 +41,12 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json ./
+# Skip onnxruntime-node CUDA binary download (we run CPU-only; MS CDN flakes with 504s).
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 RUN npm config set fetch-retries 5 \
  && npm config set fetch-retry-mintimeout 10000 \
  && npm config set fetch-retry-maxtimeout 120000 \
- && npm ci --force
+ && npm ci --force --onnxruntime-node-install-cuda=skip
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
