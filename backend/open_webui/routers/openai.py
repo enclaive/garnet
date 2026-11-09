@@ -28,6 +28,7 @@ from open_webui.env import (
     BYPASS_MODEL_ACCESS_CONTROL,
     ENABLE_FORWARD_USER_INFO_HEADERS,
     ENABLE_OPENAI_API_PASSTHROUGH,
+    FORWARD_SESSION_INFO_HEADER_CHAT_ID,
     MODELS_CACHE_TTL,
     REDIS_KEY_PREFIX,
 )
@@ -41,7 +42,7 @@ from open_webui.models.users import UserModel
 from open_webui.utils.access_control import check_model_access, has_connection_access, has_permission
 from open_webui.utils.anthropic import ANTHROPIC_VERSION, get_anthropic_models, is_anthropic_url
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.headers import get_headers_and_cookies, include_user_info_headers
+from open_webui.utils.headers import get_custom_headers, get_headers_and_cookies, include_user_info_headers
 from open_webui.utils.json_codec import JSONCodec
 from open_webui.utils.misc import convert_logit_bias_input_to_json
 from open_webui.utils.model_ids import strip_provider_model_prefix
@@ -229,6 +230,7 @@ async def get_headers_and_cookies(
 def get_microsoft_entra_id_access_token():
     """Azure OpenAI Entra ID access token via DefaultAzureCredential."""
     try:
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
         token_provider = get_bearer_token_provider(
             DefaultAzureCredential(), 'https://cognitiveservices.azure.com/.default'
         )
@@ -1754,7 +1756,7 @@ async def generate_chat_completion(
                 garnet_breakdown = {}
                 query_variants = []
                 picked_model = ""
-                async for chunk in stream_wrapper(r, content_handler=stream_chunks_handler):
+                async for chunk in stream_wrapper(r):
                     try:
                         chunk_str = chunk.decode('utf-8', errors='replace') if isinstance(chunk, bytes) else chunk
                         data_str = chunk_str.strip()
