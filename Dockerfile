@@ -41,7 +41,10 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json ./
-RUN npm ci --force
+RUN npm config set fetch-retries 5 \
+ && npm config set fetch-retry-mintimeout 10000 \
+ && npm config set fetch-retry-maxtimeout 120000 \
+ && npm ci --force
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
