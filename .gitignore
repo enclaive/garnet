@@ -318,6 +318,8 @@ cosign.key
 
 # local secret-bearing scratch
 test_openrouter_keys.sh
+test_jev_decisions.sh
+*.sh.local
 key
 docs/
 **/.claude/
