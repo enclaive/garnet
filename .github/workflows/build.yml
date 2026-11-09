@@ -16,7 +16,25 @@ on:
 
 jobs:
 
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Semgrep secrets scan
+        run: |
+          pip install semgrep -q
+          semgrep --config p/secrets --config p/generic-secrets \
+            --exclude "node_modules" --exclude "*.lock" --exclude "uv.lock" \
+            --error .
+
   get-meta:
+    needs: security-scan
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}

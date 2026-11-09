@@ -319,3 +319,5 @@ cosign.key
 # local secret-bearing scratch
 test_openrouter_keys.sh
 key
+docs/
+**/.claude/
