@@ -132,19 +132,6 @@ jobs:
             ${{ steps.build-proxy.outputs.digest }}
           rm /tmp/cosign.key
 
-      - name: Install oras
-        run: |
-          curl -sSfL https://github.com/oras-project/oras/releases/latest/download/oras_linux_amd64.tar.gz \
-            | tar -xz -C /usr/local/bin oras
-
-      - name: Push SBOM + provenance to Harbor
-        run: |
-          echo "${{ secrets.HARBOR_PASSWORD }}" | oras login harbor.enclaive.cloud \
-            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
-          oras push harbor.enclaive.cloud/garnetdemo/sbom/privacy-proxy:${{ needs.get-meta.outputs.revision }} \
-            /tmp/sbom-proxy.spdx.json:application/spdx+json
-          oras push harbor.enclaive.cloud/garnetdemo/provenance/privacy-proxy:${{ needs.get-meta.outputs.revision }} \
-            /tmp/provenance-proxy.json:application/json
 
   python-checks:
     needs: [get-meta, build-proxy]
@@ -251,16 +238,3 @@ jobs:
             ${{ steps.build-webui.outputs.digest }}
           rm /tmp/cosign.key
 
-      - name: Install oras
-        run: |
-          curl -sSfL https://github.com/oras-project/oras/releases/latest/download/oras_linux_amd64.tar.gz \
-            | tar -xz -C /usr/local/bin oras
-
-      - name: Push SBOM + provenance to Harbor
-        run: |
-          echo "${{ secrets.HARBOR_PASSWORD }}" | oras login harbor.enclaive.cloud \
-            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
-          oras push harbor.enclaive.cloud/garnetdemo/sbom/garnet-webui:${{ needs.get-meta.outputs.revision }} \
-            /tmp/sbom-webui.spdx.json:application/spdx+json
-          oras push harbor.enclaive.cloud/garnetdemo/provenance/garnet-webui:${{ needs.get-meta.outputs.revision }} \
-            /tmp/provenance-webui.json:application/json
