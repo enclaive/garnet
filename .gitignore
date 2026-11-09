@@ -312,9 +312,13 @@ cypress/videos
 cypress/screenshots
 .vscode/settings.json
 cosign.key
-cosign.key
 .claude/
 .vscode/PythonImportHelper-v2-Completion.json
+.cptr
+/evals/
+
+# Local temporary fixtures and screenshots
+/tmp/
 
 # local secret-bearing scratch
 test_openrouter_keys.sh

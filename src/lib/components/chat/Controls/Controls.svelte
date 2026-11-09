@@ -9,48 +9,11 @@
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
-	import { user, settings, models as allModels } from '$lib/stores';
-	import { onMount } from 'svelte';
-
-	const ENTITY_TYPES = [
-		{ key: 'PERSON',        label: 'Name / Person' },
-		{ key: 'ORGANIZATION',  label: 'Organization' },
-		{ key: 'EMAIL_ADDRESS', label: 'Email' },
-		{ key: 'IBAN_CODE',     label: 'IBAN' },
-		{ key: 'PHONE_NUMBER',  label: 'Phone Number' },
-		{ key: 'ID',            label: 'ID' },
-		{ key: 'LOCATION',      label: 'Location' },
-	];
-
-	let entityToggles: Record<string, boolean> = {};
-	let screeningSpeed: number = 0;
-
-	onMount(() => {
-		const saved = localStorage.getItem('garnet_entity_toggles');
-		if (saved) {
-			entityToggles = JSON.parse(saved);
-		} else {
-			ENTITY_TYPES.forEach(e => (entityToggles[e.key] = true));
-			localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
-		}
-		screeningSpeed = parseInt(localStorage.getItem('garnet_screening_speed') || '2000');
-	});
-
-	function onEntityChange(key: string, value: string) {
-		entityToggles[key] = value === 'on';
-		localStorage.setItem('garnet_entity_toggles', JSON.stringify(entityToggles));
-		entityToggles = { ...entityToggles };
-	}
-
-	function onSpeedChange() {
-		localStorage.setItem('garnet_screening_speed', String(screeningSpeed));
-	}
-	export let models: any[] = [];
-	$: smartRouterModels = ($allModels || []).filter(
-		(m: any) => m?.info?.meta?.capabilities?.smart_router
-	);
+	import { config, user, settings } from '$lib/stores';
+	export let models = [];
 	export let chatFiles = [];
-	export let params = {};
+	export let params: Record<string, any> = {};
+	export let onParamChange: (key: string, value: unknown) => void = () => {};
 	export let embed = false;
 
 	// Persist collapsible section open/close state
@@ -65,14 +28,20 @@
 	let showFiles = getOpen('files');
 	let showValves = getOpen('valves', false);
 	let showSystemPrompt = getOpen('systemPrompt');
-	let showAdvancedParams = getOpen('advancedParams');
-	let showGarnet = getOpen('garnet', true);
+	let showAdvancedParams = false;
+
+	const compactSectionButtonClass =
+		'w-full py-1 text-xs font-normal text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition cursor-pointer select-none';
+	const systemPromptTextareaClass =
+		'w-full resize-vertical rounded-lg border border-gray-100/50 bg-gray-50/40 px-2 py-1.5 text-xs text-gray-700 outline-hidden transition-colors placeholder:text-gray-300 focus:border-blue-400 dark:border-white/[0.04] dark:bg-white/[0.03] dark:text-gray-300 dark:placeholder:text-gray-700 dark:focus:border-blue-500';
+	const compactSystemPromptTextareaClass =
+		'w-full resize-vertical appearance-none bg-transparent py-1 text-xs outline-hidden focus:bg-transparent disabled:bg-transparent';
 </script>
 
 <div class=" dark:text-white">
 	{#if !embed}
 		<div class=" flex items-center justify-between dark:text-gray-100 mb-2">
-			<div class=" text-md self-center font-primary">{$i18n.t('Controls')}</div>
+			<div class=" text-md self-center">{$i18n.t('Controls')}</div>
 			<button
 				class="self-center"
 				aria-label={$i18n.t('Close chat controls')}
@@ -86,15 +55,17 @@
 	{/if}
 
 	{#if $user?.role === 'admin' || ($user?.permissions.chat?.controls ?? true)}
-		<div class=" dark:text-gray-200 text-sm py-0.5 px-0.5">
+		<div class="space-y-1 dark:text-gray-200 text-sm py-0.5 px-0.5">
 			{#if chatFiles.length > 0}
 				<Collapsible
 					title={$i18n.t('Files')}
 					bind:open={showFiles}
 					onChange={setOpen('files')}
-					buttonClassName="w-full"
+					buttonClassName={compactSectionButtonClass}
+					chevronClassName="size-2.5"
+					chevronStrokeWidth="2"
 				>
-					<div class="flex flex-col gap-1 mt-1.5" slot="content">
+					<div class="flex flex-col gap-1 pt-1 pb-1 text-xs" slot="content">
 						{#each chatFiles as file, fileIdx}
 							<FileItem
 								className="w-full"
@@ -119,23 +90,21 @@
 						{/each}
 					</div>
 				</Collapsible>
-
-				<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
 			{/if}
 
-			{#if $user?.role === 'admin' || ($user?.permissions.chat?.valves ?? true)}
+			{#if ($config?.features?.enable_tools || $config?.features?.enable_functions) && ($user?.role === 'admin' || ($user?.permissions.chat?.valves ?? true))}
 				<Collapsible
 					bind:open={showValves}
 					onChange={setOpen('valves')}
 					title={$i18n.t('Valves')}
-					buttonClassName="w-full"
+					buttonClassName={compactSectionButtonClass}
+					chevronClassName="size-2.5"
+					chevronStrokeWidth="2"
 				>
-					<div class="text-sm" slot="content">
+					<div class="pt-1 pb-1 text-xs" slot="content">
 						<Valves show={showValves} />
 					</div>
 				</Collapsible>
-
-				<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
 			{/if}
 
 			{#if $user?.role === 'admin' || ($user?.permissions.chat?.system_prompt ?? true)}
@@ -143,96 +112,48 @@
 					title={$i18n.t('System Prompt')}
 					bind:open={showSystemPrompt}
 					onChange={setOpen('systemPrompt')}
-					buttonClassName="w-full"
+					buttonClassName={compactSectionButtonClass}
+					chevronClassName="size-2.5"
+					chevronStrokeWidth="2"
 				>
-					<div class="" slot="content">
+					<div class="pt-1 pb-1" slot="content">
 						<textarea
 							bind:value={params.system}
-							class="w-full text-xs outline-hidden resize-vertical {$settings.highContrastMode
-								? 'border-2 border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 p-2.5'
-								: 'py-1.5 bg-transparent'}"
-							rows="4"
+							on:change={() => onParamChange('system', params.system)}
+							class={($settings?.highContrastMode ?? false)
+								? systemPromptTextareaClass
+								: compactSystemPromptTextareaClass}
+							rows="3"
 							placeholder={$i18n.t('Enter system prompt')}
+							aria-label={$i18n.t('System Prompt')}
 						/>
 					</div>
 				</Collapsible>
-
-				<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
 			{/if}
 
 			{#if $user?.role === 'admin' || ($user?.permissions.chat?.params ?? true)}
 				<Collapsible
 					title={$i18n.t('Advanced Params')}
 					bind:open={showAdvancedParams}
-					onChange={setOpen('advancedParams')}
-					buttonClassName="w-full"
+					buttonClassName={compactSectionButtonClass}
+					chevronClassName="size-2.5"
+					chevronStrokeWidth="2"
 				>
-					<div class="text-sm mt-1.5" slot="content">
-						<div>
-							<AdvancedParams admin={$user?.role === 'admin'} custom={true} bind:params />
+					<div
+						class="pt-1 pb-1 text-xs [&_label]:truncate [&_label]:pb-1 [&_label]:-mb-1 [&_label+div]:shrink-0 [&_.inline-tooltip_label]:cursor-help!"
+						slot="content"
+					>
+						<div class="[&>div]:space-y-0 [&>div>div]:py-0">
+							<AdvancedParams
+								admin={$user?.role === 'admin'}
+								custom={true}
+								bind:params
+								{onParamChange}
+							/>
 						</div>
 					</div>
 				</Collapsible>
 			{/if}
-
-			<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
-
-			<Collapsible
-				title={$i18n.t('Garnet')}
-				bind:open={showGarnet}
-				onChange={setOpen('garnet')}
-				buttonClassName="w-full"
-			>
-				<div class="text-sm mt-1.5" slot="content">
-					<div class="flex flex-col gap-0.5">
-						{#each ENTITY_TYPES as entity}
-							<div class="py-0.5 flex w-full justify-between">
-								<div class="self-center text-xs">
-									{entity.label}
-								</div>
-								<div class="flex items-center">
-									<select
-										value={entityToggles[entity.key] ? 'on' : 'off'}
-										on:change={(e) => onEntityChange(entity.key, e.currentTarget.value)}
-										class="p-1 px-3 text-xs flex rounded-sm transition
-											   dark:bg-gray-850 dark:text-gray-200 dark:hover:bg-gray-800
-											   bg-white text-gray-700 hover:bg-gray-100
-											   border border-gray-200 dark:border-gray-700
-											   focus:outline-none cursor-pointer"
-									>
-										<option value="on">{$i18n.t('On')}</option>
-										<option value="off">{$i18n.t('Off')}</option>
-									</select>
-								</div>
-							</div>
-						{/each}
-						<div class="py-0.5 flex w-full justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-							<div class="self-center text-xs">Screening Speed</div>
-							<input
-								type="number"
-								min="0"
-								step="500"
-								bind:value={screeningSpeed}
-								on:change={onSpeedChange}
-								class="p-1 px-2 text-xs w-24 rounded-sm
-									   dark:bg-gray-850 dark:text-gray-200 dark:border-gray-700
-									   bg-white text-gray-700 border border-gray-200
-									   focus:outline-none"
-							/>
-						</div>
-					</div>
-					{#if smartRouterModels.length > 0}
-						<div class="py-0.5 w-full mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-							<div class="text-xs mb-1">Smart Router Pool</div>
-							<div class="flex flex-col gap-0.5 max-h-32 overflow-y-auto">
-								{#each smartRouterModels as m (m.id)}
-									<div class="text-[10px] text-gray-500 dark:text-gray-400 truncate">• {m.name || m.id}</div>
-								{/each}
-							</div>
-						</div>
-					{/if}
-				</div>
-			</Collapsible>
 		</div>
 	{/if}
 </div>
