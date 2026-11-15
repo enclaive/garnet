@@ -33,6 +33,11 @@ jobs:
             --exclude "node_modules" --exclude "*.lock" --exclude "uv.lock" \
             --error .
 
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   get-meta:
     needs: security-scan
     runs-on: ubuntu-latest
@@ -54,7 +59,7 @@ jobs:
           echo "tag=${REF_NAME}"     >> $GITHUB_OUTPUT
 
   build-proxy:
-    needs: get-meta
+    needs: [get-meta, python-checks]
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -152,13 +157,9 @@ jobs:
 
 
   python-checks:
-    needs: [get-meta, build-proxy]
+    needs: get-meta
     uses: ./.github/workflows/pythoncheck.yml
-    with:
-      image_tag: ${{ needs.get-meta.outputs.revision }}
-    secrets:
-      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
-      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+    secrets: inherit
 
   build-webui:
     needs: get-meta
@@ -256,3 +257,25 @@ jobs:
             ${{ steps.build-webui.outputs.digest }}
           rm /tmp/cosign.key
 
+  trivy:
+    needs: [get-meta, build-proxy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Login to Harbor
+        run: |
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login harbor.enclaive.cloud \
+            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+
+      - name: Trivy image scan
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin
+          trivy image \
+            --exit-code 1 \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --scanners vuln \
+            --timeout 20m \
+            harbor.enclaive.cloud/garnetdemo/privacy-proxy:${{ needs.get-meta.outputs.revision }}
