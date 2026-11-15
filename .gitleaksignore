@@ -1,0 +1,13 @@
+# upstream OWU test fixtures — not real keys
+8b3e370a6eec353c931af76739bae2506238d726:backend/apps/rag/search/testdata/serpstack.json:generic-api-key:26
+8b3e370a6eec353c931af76739bae2506238d726:backend/apps/rag/search/testdata/google_pse.json:generic-api-key:429
+501ff7a98bb874007ea1645d9fa371f75ae81f1a:backend/apps/rag/search/testdata/google_pse.json:generic-api-key:429
+501ff7a98bb874007ea1645d9fa371f75ae81f1a:backend/apps/rag/search/testdata/serpstack.json:generic-api-key:26
+2f4f4c23764b03230cd626e3ba47b4ba93067450:backend/open_webui/test/apps/webui/storage/test_provider.py:generic-api-key:294
+
+# historical .claude/ docs commit — .claude/ is gitignored now, rotate keys if still active
+a78b2f55badbda98f057f86cca4addad438e5d81:.claude/docs/data/tickets.md:generic-api-key:80
+a78b2f55badbda98f057f86cca4addad438e5d81:.claude/features/2026-06-entity-relationship-map/feature-entity-relationship-map.md:generic-api-key:10
+a78b2f55badbda98f057f86cca4addad438e5d81:.claude/references/enclaive.md:generic-api-key:178
+a78b2f55badbda98f057f86cca4addad438e5d81:.claude/references/enclaive.md:vault-service-token:198
+a78b2f55badbda98f057f86cca4addad438e5d81:key:private-key:1
