@@ -2744,78 +2744,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # to prevent errors from providers like Gemini and Claude
     form_data['messages'] = strip_empty_content_blocks(form_data.get('messages', []))
 
-    if ENABLE_FUNCTIONS:
-        try:
-            form_data, _ = await process_filter_functions(
-                request=request,
-                filter_context=filter_context,
-                filter_functions=filter_functions,
-                filter_type='request',
-                form_data=form_data,
-                extra_params=extra_params,
-            )
-        except Exception as e:
-            raise Exception(f'{e}')
-
-    metadata.pop('initial_output', None)
-    if skill_tools_enabled and not metadata.get('assistant_message_id'):
-        initial_output.extend(
-            await preload_skills(
-                form_data['messages'],
-                activated_skill_ids & resolved_skill_ids,
-                metadata.get('tools', {}).get('view_skill'),
-            )
-        )
-    if initial_output:
-        form_data['messages'].extend(
-            convert_output_to_messages(initial_output, raw=True, reasoning_format=get_reasoning_format(model))
-        )
-        metadata['initial_output'] = initial_output
-
-    # normalize_messages_for_model internally calls merge_system_messages
-    # (preserves Qwen template fix from mergev0.13.2)
-    form_data = normalize_messages_for_model(form_data)
-
-    if compaction_messages is not None:
-        summary_form_data = {**form_data}
-        if context_summary:
-            summary_form_data['messages'] = add_or_update_system_message(
-                f'[CONVERSATION SUMMARY]\n{context_summary}',
-                [dict(message) for message in form_data['messages']],
-                append=True,
-            )
-        try:
-            _, context_summary, compacted = await compact_messages_for_request(
-                request,
-                summary_form_data,
-                user,
-                compaction_messages,
-                metadata,
-                form_data['model'],
-                request.app.state.MODELS,
-                chat_system_prompt,
-            )
-            if compacted:
-                # Compacted messages lead the history this request was built from.
-                compacted_count = len(
-                    sanitize_tool_pairs(
-                        process_messages_with_output(
-                            compacted,
-                            reasoning_format=get_reasoning_format(model),
-                            include_file_context=metadata['include_file_context'],
-                        )
-                    )
-                )
-                compacted_ids = {id(message) for message in history_messages[:compacted_count]}
-                form_data['messages'] = [
-                    message for message in form_data['messages'] if id(message) not in compacted_ids
-                ]
-        except Exception:
-            log.exception('Context compaction failed; continuing with full chat history')
-
-        if context_summary:
-            summary_content = f'[CONVERSATION SUMMARY]\n{context_summary}'
-            form_data['messages'] = add_or_update_system_message(summary_content, form_data['messages'], append=True)
+    # Merge any duplicate system messages into a single message at position 0
+    # to prevent template parsing errors with strict chat templates (e.g. Qwen)
+    form_data['messages'] = merge_system_messages(form_data.get('messages', []))
 
     return form_data, metadata, events, False
 
