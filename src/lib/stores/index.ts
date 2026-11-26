@@ -36,6 +36,16 @@ export const MODEL_DOWNLOAD_POOL = writable({});
 
 export const mobile = writable(false);
 
+const _stored =
+	typeof localStorage !== 'undefined' ? localStorage.getItem('garnet_privacy_proxy') : null;
+export const privacyProxy = writable(_stored !== null ? _stored === 'true' : true);
+privacyProxy.subscribe((value) => {
+	if (typeof localStorage !== 'undefined')
+		localStorage.setItem('garnet_privacy_proxy', String(value));
+});
+
+export const highlightEntities = writable<{ text: string; entities: any[] } | null>(null);
+
 export const socket: Writable<null | Socket> = writable(null);
 export const socketLost: Writable<boolean> = writable(false);
 
@@ -545,3 +555,9 @@ export type SessionUser = {
 	role: string;
 	profile_image_url: string;
 };
+
+// ── garnet-restored exports (used by legacy garnet-side UI not yet re-applied) ──
+export const activeChatIds: Writable<Set<string>> = writable(new Set());
+export const showArchivedChats = writable(false);
+export const scrollPaginationEnabled = writable(false);
+export const currentChatPage = writable(1);
