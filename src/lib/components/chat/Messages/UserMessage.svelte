@@ -63,6 +63,11 @@
 
 	let showDeleteConfirm = false;
 
+	// Garnet: i-button tooltip state
+	let showInfoTooltip = false;
+	let infoTooltipX = 0;
+	let infoTooltipY = 0;
+
 	let messageIndexEdit = false;
 
 	let edit = false;
@@ -552,6 +557,47 @@
 								<EditPencilIcon />
 							</button>
 						</Tooltip>
+					{/if}
+
+					<!-- Garnet: i-button showing pseudonymized prompt and query expansion -->
+					{#if message.pseudonymized_prompt || (message.query_variants && message.query_variants.length > 0)}
+						<button
+							aria-label={message.pseudonymized_prompt ? 'Show pseudonymized prompt' : 'Show query expansion'}
+							class="{($settings?.highContrastMode ?? false) ? 'visible' : 'hover-reveal'} inline-flex size-7 shrink-0 items-center justify-center p-1.5 hover:bg-base-1000/5 dark:hover:bg-base-0/5 rounded-lg dark:hover:text-base-400 hover:text-base-600 transition"
+							on:mouseenter={(e) => {
+								const rect = e.currentTarget.getBoundingClientRect();
+								infoTooltipX = rect.left;
+								infoTooltipY = rect.bottom + 8;
+								showInfoTooltip = true;
+							}}
+							on:mouseleave={() => { showInfoTooltip = false; }}
+						>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4">
+								<circle cx="12" cy="12" r="10"/>
+								<line x1="12" y1="16" x2="12" y2="12"/>
+								<line x1="12" y1="8" x2="12.01" y2="8"/>
+							</svg>
+						</button>
+						{#if showInfoTooltip}
+							<div
+								class="fixed z-50 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none"
+								style="top:{infoTooltipY}px; left:{infoTooltipX}px; max-width: 400px; max-height: 70vh; overflow-y: auto;"
+							>
+								{#if message.pseudonymized_prompt}
+									<div style="font-family: ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap; word-break: break-word;">
+										{message.pseudonymized_prompt}
+									</div>
+								{/if}
+								{#if message.query_variants && message.query_variants.length > 0}
+									<div style="margin-top: {message.pseudonymized_prompt ? '8px' : '0'}; padding-top: {message.pseudonymized_prompt ? '8px' : '0'}; border-top: {message.pseudonymized_prompt ? '1px solid rgba(255,255,255,0.2)' : 'none'};">
+										<div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Query Expansion</div>
+										{#each message.query_variants as variant}
+											<div style="font-size: 12px; color: #6ee7b7; font-family: ui-monospace, SFMono-Regular, monospace; margin-bottom: 2px; white-space: pre-wrap; word-break: break-word;">→ {variant}</div>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{/if}
 					{/if}
 
 					{#if !compactPreview && message?.content}

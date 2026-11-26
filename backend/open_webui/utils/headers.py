@@ -231,6 +231,12 @@ async def get_headers_and_cookies(
         custom_headers = await get_custom_headers(config.get('headers'), user, metadata, request=request)
         headers.update(custom_headers)
 
+    # Garnet: forward per-entity screening selection and query-expand flag to the privacy proxy
+    garnet_entities = request.headers.get('x-garnet-entities', '')
+    if garnet_entities:
+        headers['x-garnet-entities'] = garnet_entities
+    headers['x-garnet-queryexpand'] = request.headers.get('x-garnet-queryexpand', 'false')
+
     return headers, cookies
 
 

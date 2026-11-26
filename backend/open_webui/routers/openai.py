@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
 import re
 import time
 from typing import Optional
@@ -1477,6 +1478,7 @@ async def generate_chat_completion(
 
     payload = {**form_data}
     metadata = payload.pop('metadata', None)
+    payload.pop('privacy_proxy', None)
 
     model_id = form_data.get('model')
     set_audit_model(model_id)
@@ -1529,6 +1531,8 @@ async def generate_chat_completion(
             )
 
         url, key, api_config = await get_openai_connection(idx)
+        # Garnet: force all OpenAI-compatible traffic through the privacy proxy
+        url = os.environ.get("FORCE_OPENAI_BASE_URL") or url
 
     prefix_id = api_config.get('prefix_id', None)
     payload['model'] = strip_provider_model_prefix(payload['model'], prefix_id)

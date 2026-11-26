@@ -113,10 +113,6 @@ async def send_request(
         headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
 
         if request:
-            garnet_entities = request.headers.get('x-garnet-entities', '')
-            if garnet_entities:
-                headers['x-garnet-entities'] = garnet_entities
-            headers['x-garnet-queryexpand'] = request.headers.get('x-garnet-queryexpand', 'false')
             headers['x-openai-base-url'] = url
 
         r = await session.request(

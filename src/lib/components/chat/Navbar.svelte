@@ -17,6 +17,8 @@
 
 	import { slide } from 'svelte/transition';
 
+	import { queryExpand } from '$lib/stores/garnet';
+
 	import Tooltip from '../common/Tooltip.svelte';
 	import AdjustmentsHorizontal from '../icons/AdjustmentsHorizontal.svelte';
 
@@ -55,6 +57,8 @@
 	$: tabBarActions = renderTabBarActions;
 	export let onSaveTempChat: () => {};
 	export let deleteChatHandler: (id: string) => void;
+
+	$: hasPseudonymized = Object.values(history?.messages ?? {}).some((m: any) => m.pseudonymized_prompt);
 
 	let closedBannerIds = [];
 
