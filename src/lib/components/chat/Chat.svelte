@@ -139,6 +139,7 @@
 		type FilesystemFile
 	} from '$lib/apis/machines';
 	import { generateOpenAIChatCompletion, getErrorMessage } from '$lib/apis/openai';
+	import { analyzeMessageEntities } from '$lib/apis/privacy';
 	import { processUrl, processWebSearch } from '$lib/apis/retrieval';
 	import {
 		getAndUpdateUserLocation,
@@ -2008,6 +2009,7 @@
 						if ('pseudonymized_prompt' in data) garnetFields.pseudonymized_prompt = data.pseudonymized_prompt;
 						if ('garnet_breakdown' in data) garnetFields.garnet_breakdown = data.garnet_breakdown ?? {};
 						if ('file_entity_count' in data) garnetFields.file_entity_count = data.file_entity_count ?? 0;
+						if ('query_variants' in data) garnetFields.query_variants = data.query_variants ?? [];
 						if (Object.keys(garnetFields).length > 0) {
 							const userMsgId = message.parentId;
 							if (userMsgId && history.messages[userMsgId]) {
@@ -4429,6 +4431,69 @@
 		if (_chatId === null) {
 			if (!existingUserMessage && history === currentHistory) await unsendMessage(userMessageId);
 			return { status: 'rejected' as const };
+		}
+
+		// Animate entity highlighting if privacy proxy is on and not Ollama
+		const _selectedModel = $models.find((m) => m.id === selectedModels[0]);
+		const _isOllama = _selectedModel?.owned_by === 'ollama';
+		if ($privacyProxy && !_isOllama && typeof inputContent === 'string' && inputContent.trim()) {
+			try {
+				const entities = await analyzeMessageEntities(localStorage.token, inputContent);
+				const garnetToggles = JSON.parse(localStorage.getItem('garnet_entity_toggles') || '{}');
+				const filteredEntities = entities
+					? entities.filter((e: any) => {
+							const type = e.type ?? e.entity_type;
+							return garnetToggles[type] !== false;
+						})
+					: [];
+				if (filteredEntities.length > 0) {
+					const bubble = document.getElementById(`message-${userMessageId}`);
+					if (bubble) {
+						const contentBox = bubble.querySelector('.rounded-3xl') ?? bubble;
+						const style = document.createElement('style');
+						style.textContent = '@keyframes garnet-blink { 50% { opacity: 0; } }';
+						bubble.appendChild(style);
+						const originalParagraphs = Array.from(bubble.querySelectorAll('p'));
+						originalParagraphs.forEach((p: any) => { p.style.display = 'none'; });
+						const animOverlay = document.createElement('div');
+						animOverlay.style.cssText = 'position:relative;top:0;margin:0;padding:0;width:100%;line-height:1.5;white-space:pre-wrap;word-break:break-word;';
+						contentBox.appendChild(animOverlay);
+						const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+						const tokens = inputContent.split(/(\s+)/);
+						let pos = 0;
+						const marked = tokens.map((token: string) => {
+							const start = pos; const end = pos + token.length; pos = end;
+							const entity = filteredEntities.find((e: any) => start < e.end && end > e.start);
+							return { token, entity };
+						});
+						const delay = Math.max(1, Math.floor(2000 / marked.length));
+						for (let i = 0; i <= marked.length; i++) {
+							animOverlay.innerHTML = marked.map((t: any, j: number) => {
+								const cleanToken = escHtml(t.token.replace(/\*\*/g, '').replace(/\*/g, ''));
+								if (j < i) {
+									if (t.entity) {
+										const entityType = t.entity.type ?? t.entity.entity_type;
+										const color = entityType === 'PERSON' ? '#3b82f6'
+											: entityType === 'EMAIL_ADDRESS' ? '#ef4444'
+											: entityType === 'ORGANIZATION' ? '#22c55e'
+											: entityType === 'LOCATION' ? '#a855f7'
+											: entityType === 'PHONE_NUMBER' ? '#f97316'
+											: '#eab308';
+										return `<span style="color:${color};font-weight:600;">${cleanToken}</span>`;
+									}
+									return `<span>${cleanToken}</span>`;
+								} else if (j === i) {
+									return `<span style="animation:garnet-blink 0.3s step-start infinite;">|</span>`;
+								}
+								return `<span style="opacity:0;">${cleanToken}</span>`;
+							}).join('');
+							if (i < marked.length) await new Promise(r => setTimeout(r, delay));
+						}
+						originalParagraphs.forEach((p: any) => { p.style.display = ''; });
+						animOverlay.remove();
+					}
+				}
+			} catch (_) {}
 		}
 
 		return await sendMessage(history, userMessageId, {

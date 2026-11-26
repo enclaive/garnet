@@ -274,6 +274,9 @@ def convert_ollama_response_to_chat_completions(ollama_response: dict) -> dict:
     response = chat_completion_message_template(model, message_content, reasoning_content, openai_tool_calls, usage)
     if not openai_tool_calls and ollama_response.get('done_reason'):
         response['choices'][0]['finish_reason'] = ollama_response['done_reason']
+    pseudonymized_prompt = ollama_response.get('pseudonymized_prompt')
+    if pseudonymized_prompt:
+        response['pseudonymized_prompt'] = pseudonymized_prompt
     return response
 
 
@@ -298,6 +301,7 @@ async def convert_ollama_stream_to_chat_completions(ollama_streaming_response):
 
         done = data.get('done', False)
         done_reason = data.get('done_reason')
+        pseudonymized_prompt = data.get('pseudonymized_prompt')
 
         usage = None
         if done:
@@ -316,6 +320,9 @@ async def convert_ollama_stream_to_chat_completions(ollama_streaming_response):
             data['choices'][0]['finish_reason'] = 'tool_calls'
         elif done_reason:
             data['choices'][0]['finish_reason'] = done_reason
+
+        if pseudonymized_prompt:
+            data['pseudonymized_prompt'] = pseudonymized_prompt
 
         line = f'data: {JSONCodec.dumps(data)}\n\n'
         yield line
