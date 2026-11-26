@@ -1172,13 +1172,13 @@ async def chat_completion(
         fallback_model = None
         missing_base_model = False
         tether_model = None
-        if agent_model is None and model_id not in request.app.state.MODELS:
+        if agent_model is None and model_id not in request.app.state.MODELS and model_id != 'auto':
             # The user's own connection, reached through their Tether.
             tether_model = await get_tether_model(request, user, model_id)
             if tether_model is None:
                 raise Exception('Model not found')
 
-        model = agent_model or tether_model or request.app.state.MODELS[model_id]
+        model = agent_model or tether_model or request.app.state.MODELS.get(model_id, {'id': model_id, 'name': model_id})
         if tether_model is None:
             model_info = await Models.get_model_by_id(model_id)
             missing_base_model = bool(
