@@ -48,9 +48,18 @@
 	$: chatBubble = compactPreview || ($settings?.chatBubble ?? true);
 
 	let showDeleteConfirm = false;
-	let showInfoTooltip = false;
-	let infoTooltipX = 0;
-	let infoTooltipY = 0;
+	$: garnetTooltipHtml = (() => {
+		const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+		let html = '';
+		if (message.pseudonymized_prompt) {
+			html += `<div style="font-family:monospace;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto">${esc(message.pseudonymized_prompt)}</div>`;
+		}
+		if (message.query_variants?.length > 0) {
+			const sep = message.pseudonymized_prompt ? 'margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.2)' : '';
+			html += `<div style="${sep}"><div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Query Expansion</div>${message.query_variants.map((v: string) => `<div style="color:#6ee7b7;font-family:monospace;font-size:12px">→ ${esc(v)}</div>`).join('')}</div>`;
+		}
+		return html;
+	})();
 
 	let messageIndexEdit = false;
 
@@ -565,53 +574,26 @@
 
 				<!-- (i) button: shows pseudonymized prompt and/or query expansion variants -->
 				{#if message.pseudonymized_prompt || (message.query_variants && message.query_variants.length > 0)}
-					<button
-						aria-label={message.pseudonymized_prompt ? 'Show pseudonymized prompt' : 'Show query expansion'}
-						class="{($settings?.highContrastMode ?? false)
-							? 'visible'
-							: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
-						on:mouseenter={(e) => {
-							const rect = e.currentTarget.getBoundingClientRect();
-							infoTooltipX = rect.left;
-							infoTooltipY = rect.bottom + 8;
-							showInfoTooltip = true;
-						}}
-						on:mouseleave={() => { showInfoTooltip = false; }}
+					<Tooltip
+						content={garnetTooltipHtml}
+						allowHTML={true}
+						placement="bottom"
+						interactive={true}
+						tippyOptions={{ maxWidth: 420 }}
 					>
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4">
-							<circle cx="12" cy="12" r="10"/>
-							<line x1="12" y1="16" x2="12" y2="12"/>
-							<line x1="12" y1="8" x2="12.01" y2="8"/>
-						</svg>
-					</button>
-					{#if showInfoTooltip}
-						<div
-							class="fixed z-50 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none"
-							style="top:{infoTooltipY}px; left:{infoTooltipX}px; max-width: 400px; max-height: 70vh; overflow-y: auto;"
+						<button
+							aria-label={message.pseudonymized_prompt ? 'Show pseudonymized prompt' : 'Show query expansion'}
+							class="{($settings?.highContrastMode ?? false)
+								? 'visible'
+								: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 						>
-							{#if message.pseudonymized_prompt}
-								<div style="font-family: ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap; word-break: break-word;">
-									{message.pseudonymized_prompt}
-								</div>
-							{/if}
-							{#if message.query_variants && message.query_variants.length > 0}
-								<div style="
-									margin-top: {message.pseudonymized_prompt ? '8px' : '0'};
-									padding-top: {message.pseudonymized_prompt ? '8px' : '0'};
-									border-top: {message.pseudonymized_prompt ? '1px solid rgba(255,255,255,0.2)' : 'none'};
-								">
-									<div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">
-										Query Expansion
-									</div>
-									{#each message.query_variants as variant}
-										<div style="font-size: 12px; color: #6ee7b7; font-family: ui-monospace, SFMono-Regular, monospace; margin-bottom: 2px; white-space: pre-wrap; word-break: break-word;">
-											→ {variant}
-										</div>
-									{/each}
-								</div>
-							{/if}
-						</div>
-					{/if}
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4">
+								<circle cx="12" cy="12" r="10"/>
+								<line x1="12" y1="16" x2="12" y2="12"/>
+								<line x1="12" y1="8" x2="12.01" y2="8"/>
+							</svg>
+						</button>
+					</Tooltip>
 				{/if}
 
 				{#if message.file_entity_count > 0 && message.files?.length > 0}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { pinnedModels, settings, user } from '$lib/stores';
-	import { getContext } from 'svelte';
+	import { getContext, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import Selector from './ModelSelector/Selector.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
@@ -20,6 +20,9 @@
 	export let disabled = false;
 
 	export let showSetDefault = true;
+
+	let compareModels = false;
+	$: selectedModelIdx = selectedModels.length <= 1 ? 0 : selectedModels.length - 1;
 
 	const saveDefaultModel = async () => {
 		const hasEmptyModel = selectedModels.filter((it) => it === '');
@@ -172,5 +175,5 @@
 				{/if}
 			{/if}
 		</div>
-	{/each}
+	</div>
 </div>

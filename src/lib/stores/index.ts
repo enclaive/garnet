@@ -82,7 +82,7 @@ export const selectedFolder = writable<FolderDetails | null>(null);
 
 export const models: Writable<Model[]> = writable([]);
 
-export const privacyProxy = writable(false);
+export const privacyProxy = writable(true);
 
 export const baseModels = derived(models, ($models) =>
 	$models.filter((model) => model.owned_by !== 'terminal')
