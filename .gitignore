@@ -319,7 +319,6 @@ cosign.key
 
 # Local temporary fixtures and screenshots
 /tmp/
-
 # local secret-bearing scratch
 test_openrouter_keys.sh
 test_jev_decisions.sh
@@ -327,3 +326,4 @@ test_jev_decisions.sh
 key
 docs/
 **/.claude/
+/artifacts/

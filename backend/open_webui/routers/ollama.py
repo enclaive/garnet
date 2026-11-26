@@ -33,6 +33,7 @@ from open_webui.models.groups import Groups
 from open_webui.models.models import Models
 from open_webui.models.users import UserModel
 from open_webui.utils.access_control import check_model_access
+from open_webui.utils.audit import set_audit_model
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import get_headers_and_cookies
 from open_webui.utils.json_codec import JSONCodec
@@ -923,6 +924,7 @@ async def embed(
         raise HTTPException(status_code=503, detail=ERROR_MESSAGES.OLLAMA_API_DISABLED)
 
     log.info('generate_ollama_batch_embeddings %s', form_data)
+    set_audit_model(form_data.model)
     await check_model_access(user, await Models.get_model_by_id(form_data.model), BYPASS_MODEL_ACCESS_CONTROL)
     await validate_ollama_backend_idx(request, form_data.model, url_idx, user)
 
@@ -976,6 +978,7 @@ async def embeddings(
         raise HTTPException(status_code=503, detail=ERROR_MESSAGES.OLLAMA_API_DISABLED)
 
     log.info('generate_ollama_embeddings %s', form_data)
+    set_audit_model(form_data.model)
     await check_model_access(user, await Models.get_model_by_id(form_data.model), BYPASS_MODEL_ACCESS_CONTROL)
     await validate_ollama_backend_idx(request, form_data.model, url_idx, user)
 
@@ -1036,7 +1039,7 @@ async def generate_completion(
     if not await Config.get('ollama.enable'):
         raise HTTPException(status_code=503, detail=ERROR_MESSAGES.OLLAMA_API_DISABLED)
 
-    request.state.model_id = form_data.model
+    set_audit_model(form_data.model)
     await check_model_access(user, await Models.get_model_by_id(form_data.model), BYPASS_MODEL_ACCESS_CONTROL)
     await validate_ollama_backend_idx(request, form_data.model, url_idx, user)
 
@@ -1165,8 +1168,7 @@ async def generate_chat_completion(
     payload.pop('metadata', None)
 
     model_id = payload['model']
-    if not hasattr(request.state, 'model_id'):
-        request.state.model_id = model_id
+    set_audit_model(model_id)
     model_info = await Models.get_model_by_id(model_id)
 
     if model_info is not None:
@@ -1266,7 +1268,7 @@ async def generate_openai_completion(
     payload = form_data.model_dump(exclude_none=True, exclude=['metadata'])
 
     model_id = form_data.model
-    request.state.model_id = model_id
+    set_audit_model(model_id)
     model_info = await Models.get_model_by_id(model_id)
     if model_info is not None:
         if model_info.base_model_id:
@@ -1322,6 +1324,7 @@ async def generate_openai_embeddings(
     payload.pop('metadata', None)
 
     model_id = form_data.model
+    set_audit_model(model_id)
     model_info = await Models.get_model_by_id(model_id)
     if model_info is not None:
         if model_info.base_model_id:
@@ -1368,7 +1371,7 @@ async def generate_openai_chat_completion(
     payload = form_data.model_dump(exclude_none=True, exclude=['metadata'])
 
     model_id = form_data.model
-    request.state.model_id = model_id
+    set_audit_model(model_id)
     model_info = await Models.get_model_by_id(model_id)
     if model_info is not None:
         if model_info.base_model_id:
@@ -1426,7 +1429,7 @@ async def generate_anthropic_messages(
 
     payload = {**form_data}
     model_id = payload.get('model', '')
-    request.state.model_id = model_id
+    set_audit_model(model_id)
 
     model_info = await Models.get_model_by_id(model_id)
     if model_info:
@@ -1485,7 +1488,7 @@ async def generate_responses(
 
     payload = form_data.model_dump()
     model_id = form_data.model
-    request.state.model_id = model_id
+    set_audit_model(model_id)
 
     model_info = await Models.get_model_by_id(model_id)
     if model_info:
