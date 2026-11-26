@@ -38,6 +38,7 @@
 		banners,
 		user,
 		socket,
+		privacyProxy,
 		audioQueue as _audioQueue,
 		showTabs as _showTabs,
 		chatTabRequest,
@@ -5395,6 +5396,7 @@
 				machine_id: machineEnabled && requestMachineId ? requestMachineId : null,
 				machine_cwd: !_chatId ? requestMachineCwd : undefined,
 				features: getFeatures(),
+				privacy_proxy: get(privacyProxy),
 				variables: {
 					...getPromptVariables(
 						$user?.name,
