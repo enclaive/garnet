@@ -5068,6 +5068,19 @@ async def streaming_chat_response_handler(response, ctx):
                                             }
                                         )
                                     continue
+                                elif 'pseudonymized_prompt' in data or 'file_entity_count' in data or 'query_variants' in data:
+                                    # Garnet synthetic SSE event — forward pseudonymization metadata to frontend
+                                    await event_emitter(
+                                        {
+                                            'type': 'chat:completion',
+                                            'data': {
+                                                k: data[k]
+                                                for k in ('pseudonymized_prompt', 'file_entity_count', 'garnet_breakdown', 'query_variants', 'picked_model')
+                                                if k in data
+                                            },
+                                        }
+                                    )
+                                    continue
                                 else:
                                     choices = data.get('choices', [])
 
