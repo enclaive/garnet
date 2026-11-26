@@ -49,7 +49,8 @@
 		chatTabRequest,
 		visibleControls,
 		imageModels,
-		videoModels
+		videoModels,
+		privacyProxy
 	} from '$lib/stores';
 
 	import {
@@ -196,6 +197,11 @@
 
 	let selectedModelIds = [];
 	$: selectedModelIds = atSelectedModel !== undefined ? [atSelectedModel.id] : selectedModels;
+	$: _activeModel = $models.find((m) => m.id === selectedModels[0]);
+	$: forcedPrivacy =
+		_activeModel?.owned_by === 'ollama' ||
+		_activeModel?.info?.meta?.capabilities?.privacy_enforce === true;
+	$: if (forcedPrivacy) { $privacyProxy = true; }
 	$: hasChatVariables = selectedModelIds.some(
 		(modelId) =>
 			($models.find((model) => model.id === modelId)?.info?.meta?.chat_variables_schema?.fields
@@ -3022,6 +3028,23 @@
 											triggerClassName="items-center gap-1.5 rounded-lg pl-2 pr-1.5 py-1 text-[0.8125rem] font-normal text-gray-600 transition-colors duration-100 hover:bg-gray-50/40 hover:text-gray-700 dark:text-gray-300 dark:hover:bg-gray-800/40 dark:hover:text-gray-200"
 										/>
 									</div>
+									{#if _activeModel?.owned_by !== 'ollama'}
+									<button
+										class="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition shrink-0
+											{$privacyProxy
+												? 'bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30'
+												: 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20'}
+											{forcedPrivacy ? 'opacity-75 cursor-not-allowed' : ''}"
+										disabled={forcedPrivacy}
+										title={forcedPrivacy ? 'Privacy enforced by this model' : ($privacyProxy ? 'Privacy ON — click to disable' : 'Privacy OFF — click to enable')}
+										on:click={() => { if (!forcedPrivacy) $privacyProxy = !$privacyProxy; }}
+									>
+										<span class="text-[10px] leading-none">private{forcedPrivacy ? ' 🔒' : ''}</span>
+										<span class="relative inline-flex h-3.5 w-6 items-center rounded-full transition-colors {$privacyProxy ? 'bg-emerald-500' : 'bg-gray-400'}">
+											<span class="inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform {$privacyProxy ? 'translate-x-3' : 'translate-x-0.5'}" />
+										</span>
+									</button>
+									{/if}
 									<ModelControls
 										selectedModels={selectedModelIds}
 										bind:chatFiles

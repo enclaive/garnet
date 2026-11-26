@@ -58,8 +58,11 @@
 		showFileNavPath,
 		showFileNavDir,
 		chatRequestQueues,
-		desktopEvent
+		desktopEvent,
+		privacyProxy
 	} from '$lib/stores';
+	import { queryExpand } from '$lib/stores/garnet';
+	import { analyzeMessageEntities } from '$lib/apis/privacy';
 	import { refreshChatList, refreshFolderChatLists, setChatTitle } from '$lib/stores/chatList';
 	import { updateFolderById } from '$lib/apis/folders';
 	import {
@@ -3069,7 +3072,10 @@
 				}
 				selectedModels = normalizeSelectedModels(destinationFolder.data?.model_ids ?? []);
 			} else {
-				if (sessionStorage.selectedModels) {
+				const _cookieModel = document.cookie.split(';').find(c => c.trim().startsWith('garnet_default_model='))?.split('=')?.[1];
+				if (_cookieModel) {
+					selectedModels = [_cookieModel];
+				} else if (sessionStorage.selectedModels) {
 					// Set from session storage (temporary selection)
 					selectedModels = JSON.parse(sessionStorage.selectedModels);
 					sessionStorage.removeItem('selectedModels');
@@ -3993,7 +3999,13 @@
 	};
 
 	const chatCompletionEventHandler = async (data, message, chatId, shared = false) => {
-		const { id, done, choices, content, output, sources, selected_model_id, error, usage } = data;
+		const { id, done, choices, content, output, sources, selected_model_id, error, usage, pseudonymized_prompt, file_entity_count, garnet_breakdown, query_variants, picked_model } = data;
+		if (picked_model && !shared) {
+			message.picked_model = picked_model;
+			message.model = picked_model;
+			history = history;
+		}
+		const queryVariants = query_variants || [];
 
 		if (error) {
 			if (shared) message.error = error;
@@ -4058,6 +4070,19 @@
 		if (usage) {
 			message.usage = usage;
 			captureUsageCheckpoint(message);
+		}
+
+		if (!shared && (pseudonymized_prompt || file_entity_count > 0 || queryVariants.length > 0)) {
+			const userMsgId = message.parentId;
+			if (userMsgId && history.messages[userMsgId]) {
+				history.messages[userMsgId] = {
+					...history.messages[userMsgId],
+					...(pseudonymized_prompt ? { pseudonymized_prompt } : {}),
+					file_entity_count: file_entity_count ?? 0,
+					garnet_breakdown: garnet_breakdown ?? {},
+					query_variants: queryVariants
+				};
+			}
 		}
 
 		history.messages[message.id] = message;
@@ -5190,7 +5215,8 @@
 							}
 						: {}),
 					follow_up_generation: $settings?.autoFollowUps ?? true
-				}
+				},
+				privacy_proxy: get(privacyProxy)
 			},
 			`${WEBUI_BASE_URL}/api`
 		).catch(async (error) => {
