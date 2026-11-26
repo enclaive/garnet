@@ -4722,6 +4722,12 @@ async def streaming_chat_response_handler(response, ctx):
             finish_reason = None
             last_response_id = None
 
+            # Garnet: fields emitted by the privacy_proxy service alongside normal SSE chunks.
+            # Captured once per request, persisted to chat on completion, forwarded to UI as event.
+            pseudonymized_prompt: Optional[str] = None
+            garnet_breakdown: dict = {}
+            file_entity_count: int = 0
+
             def is_message_continuation() -> bool:
                 return bool(
                     continuing
@@ -5014,6 +5020,23 @@ async def streaming_chat_response_handler(response, ctx):
 
                         try:
                             data = JSONCodec.loads(data)
+
+                            # Garnet: strip privacy-proxy annotations from the stream and forward
+                            # them to the UI once as a chat:completion event. The proxy emits these
+                            # on the first chunk(s); they don't belong in the normal output pipeline.
+                            if isinstance(data, dict):
+                                garnet_fields = {}
+                                if 'pseudonymized_prompt' in data:
+                                    pseudonymized_prompt = data.pop('pseudonymized_prompt')
+                                    garnet_fields['pseudonymized_prompt'] = pseudonymized_prompt
+                                if 'garnet_breakdown' in data:
+                                    garnet_breakdown = data.pop('garnet_breakdown') or {}
+                                    garnet_fields['garnet_breakdown'] = garnet_breakdown
+                                if 'file_entity_count' in data:
+                                    file_entity_count = data.pop('file_entity_count') or 0
+                                    garnet_fields['file_entity_count'] = file_entity_count
+                                if garnet_fields:
+                                    await event_emitter({'type': 'chat:completion', 'data': garnet_fields})
 
                             if filter_functions:
                                 data, _ = await process_filter_functions(

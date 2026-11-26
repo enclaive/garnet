@@ -2000,6 +2000,21 @@
 						}
 					}
 				} else if (type === 'response:completion' || type === 'chat:completion') {
+					// Garnet: store privacy-proxy annotations on the parent user message.
+					// Data arrives alongside normal chat:completion; backend stripped the fields
+					// from the stream before UI processing so we tag them only when present.
+					if (type === 'chat:completion' && data && typeof data === 'object') {
+						const garnetFields: Record<string, any> = {};
+						if ('pseudonymized_prompt' in data) garnetFields.pseudonymized_prompt = data.pseudonymized_prompt;
+						if ('garnet_breakdown' in data) garnetFields.garnet_breakdown = data.garnet_breakdown ?? {};
+						if ('file_entity_count' in data) garnetFields.file_entity_count = data.file_entity_count ?? 0;
+						if (Object.keys(garnetFields).length > 0) {
+							const userMsgId = message.parentId;
+							if (userMsgId && history.messages[userMsgId]) {
+								history.messages[userMsgId] = { ...history.messages[userMsgId], ...garnetFields };
+							}
+						}
+					}
 					if (type === 'response:completion') {
 						responseCompletionEventHandler(data, message);
 					} else {
