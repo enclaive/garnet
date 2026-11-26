@@ -3,7 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import { tick, getContext, onMount } from 'svelte';
 
-	import { models, settings } from '$lib/stores';
+	import { settings } from '$lib/stores';
 	import { user as _user } from '$lib/stores';
 	import { copyToClipboard as _copyToClipboard, formatDate } from '$lib/utils';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
@@ -16,12 +16,12 @@
 	import Markdown from './Markdown.svelte';
 	import Image from '$lib/components/common/Image.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
+	import SubagentResultRow from './SubagentResultRow.svelte';
+	import { getChatContext } from '$lib/components/chat/context';
 
-	import localizedFormat from 'dayjs/plugin/localizedFormat';
+	const { models } = getChatContext();
 
-	const i18n = getContext('i18n');
-	dayjs.extend(localizedFormat);
-
+	const i18n = getContext<typeof import('$lib/i18n').default>('i18n');
 	export let user;
 
 	export let chatId;
@@ -39,8 +39,13 @@
 
 	export let isFirstMessage: boolean;
 	export let readOnly: boolean;
+	export let writeAccess = false;
+	export let allowDelete = true;
+	export let compactPreview = false;
 	export let editCodeBlock = true;
 	export let topPadding = false;
+
+	$: chatBubble = compactPreview || ($settings?.chatBubble ?? true);
 
 	let showDeleteConfirm = false;
 	let showInfoTooltip = false;
@@ -57,6 +62,18 @@
 	let editScrollContainer: HTMLDivElement;
 
 	let message = structuredClone(history.messages[messageId]);
+	$: authorId = message.user_id || message.user?.id || user?.id;
+	$: author =
+		message.user?.id === authorId
+			? message.user
+			: $_user?.id === authorId
+				? $_user
+				: user?.id === authorId
+					? user
+					: null;
+	$: isOwn = Boolean($_user?.id && authorId === $_user.id);
+	$: authorName = author?.name || $i18n.t('Unknown User');
+	let timerExpanded = false;
 	$: if (history.messages) {
 		const source = history.messages[messageId];
 		if (source) {
@@ -136,73 +153,43 @@
 	id="message-{message.id}"
 	style="scroll-margin-top: 3rem;"
 >
-	{#if !($settings?.chatBubble ?? true)}
-		<div class={`shrink-0 ltr:mr-3 rtl:ml-3 mt-1`}>
-			<ProfileImage
-				src={user?.id
-					? `${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`
-					: `${WEBUI_BASE_URL}/static/favicon.png`}
-				className={'size-8 user-message-profile-image'}
-			/>
+	{#if !compactPreview && (!chatBubble || !isOwn) && !(message?.meta?.internal === true && message?.meta?.type === 'subagent') && !(message?.meta?.internal === true && message?.meta?.type === 'timer')}
+		<div class="shrink-0 me-2 {chatBubble ? 'mt-6' : 'hidden @lg:flex mt-0.5'}">
+			<!-- LICENSE covers this Open WebUI fallback logo.
+			Do not alter, remove, obscure, or replace it except as LICENSE permits:
+			https://docs.openwebui.com/license. -->
+			<ProfilePreview user={{ id: authorId, name: authorName }}>
+				<ProfileImage
+					src={authorId
+						? `${WEBUI_API_BASE_URL}/users/${authorId}/profile/image`
+						: `${WEBUI_BASE_URL}/static/favicon.png`}
+					className={'size-7 user-message-profile-image'}
+				/>
+			</ProfilePreview>
 		</div>
 	{/if}
-	<div class="flex-auto w-0 max-w-full pl-1">
-		{#if !($settings?.chatBubble ?? true)}
-			<div>
-				<Name>
-					{#if message.user}
-						{$i18n.t('You')}
-						<span class=" text-gray-500 text-sm font-medium">{message?.user ?? ''}</span>
-					{:else if $settings.showUsername || $_user?.name !== user?.name}
-						{user?.name ?? $i18n.t('You')}
-					{:else}
-						{$i18n.t('You')}
-					{/if}
-
-					{#if message.timestamp}
-						<div
-							class="self-center text-xs font-medium first-letter:capitalize ml-0.5 translate-y-[1px] {($settings?.highContrastMode ??
-							false)
-								? 'dark:text-gray-100 text-gray-900'
-								: 'invisible group-hover:visible transition'}"
-						>
-							<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
-								<!-- $i18n.t('Today at {{LOCALIZED_TIME}}') -->
-								<!-- $i18n.t('Yesterday at {{LOCALIZED_TIME}}') -->
-								<!-- $i18n.t('{{LOCALIZED_DATE}} at {{LOCALIZED_TIME}}') -->
-
-								<span class="line-clamp-1"
-									>{$i18n.t(formatDate(message.timestamp * 1000), {
-										LOCALIZED_TIME: dayjs(message.timestamp * 1000).format('LT'),
-										LOCALIZED_DATE: dayjs(message.timestamp * 1000).format('L')
-									})}</span
-								>
-							</Tooltip>
-						</div>
-					{/if}
-				</Name>
-			</div>
-		{:else if message.timestamp}
-			<div class="flex justify-end pr-2 text-xs">
-				<div
-					class="text-[0.65rem] font-medium first-letter:capitalize mb-0.5 {($settings?.highContrastMode ??
-					false)
-						? 'dark:text-gray-100 text-gray-900'
-						: 'invisible group-hover:visible transition text-gray-400'}"
-				>
-					<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
-						<span class="line-clamp-1"
-							>{$i18n.t(formatDate(message.timestamp * 1000), {
-								LOCALIZED_TIME: dayjs(message.timestamp * 1000).format('LT'),
-								LOCALIZED_DATE: dayjs(message.timestamp * 1000).format('L')
-							})}</span
-						>
-					</Tooltip>
-				</div>
+	<div
+		class="flex-auto w-0 max-w-full {(message?.meta?.internal === true &&
+			message?.meta?.type === 'subagent') ||
+		(message?.meta?.internal === true && message?.meta?.type === 'timer')
+			? ''
+			: 'pl-1'}"
+	>
+		{#if !compactPreview && (!chatBubble || !isOwn) && !(message?.meta?.internal === true && message?.meta?.type === 'subagent') && !(message?.meta?.internal === true && message?.meta?.type === 'timer')}
+			<div class={chatBubble ? 'mb-1 ps-2 text-xs text-gray-400 dark:text-gray-500' : ''}>
+				{#if chatBubble}
+					{authorName}
+				{:else}
+					<Name>{isOwn && !$settings.showUsername ? $i18n.t('You') : authorName}</Name>
+				{/if}
 			</div>
 		{/if}
 
-		<div class="chat-{message.role} w-full min-w-full markdown-prose">
+		{#if message.contextSummary}
+			<ContextCompactionLabel summary={message.contextSummary} {compactPreview} />
+		{/if}
+
+		<div class="chat-{message.role} w-full min-w-full">
 			{#if edit !== true}
 				{#if message.files}
 					<div
@@ -214,8 +201,8 @@
 								file.url?.startsWith('data') || file.url?.startsWith('http')
 									? file.url
 									: `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
-							<div class={($settings?.chatBubble ?? true) ? 'self-end' : ''}>
-								{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
+							<div class={chatBubble ? (isOwn ? 'self-end' : 'self-start') : ''}>
+								{#if file.type === 'image' || isRasterImageContentType(file?.content_type)}
 									<Image src={fileUrl} imageClassName=" max-h-96 rounded-lg" />
 								{:else}
 									<FileItem
@@ -319,14 +306,14 @@
 							}}
 							on:keydown={(e) => {
 								if (e.key === 'Escape') {
-									document.getElementById('close-edit-message-button')?.click();
+									cancelEditMessage();
 								}
 
 								const isCmdOrCtrlPressed = e.metaKey || e.ctrlKey;
 								const isEnterPressed = e.key === 'Enter';
 
 								if (isCmdOrCtrlPressed && isEnterPressed) {
-									document.getElementById('confirm-edit-message-button')?.click();
+									editMessageConfirmHandler();
 								}
 							}}
 						/>
@@ -358,7 +345,7 @@
 
 							<button
 								id="confirm-edit-message-button"
-								class="px-3.5 py-1.5 bg-gray-900 dark:bg-white hover:bg-gray-850 text-gray-100 dark:text-gray-800 transition rounded-3xl"
+								class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-2.5 text-xs font-normal text-white transition hover:bg-black disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
 								on:click={() => {
 									editMessageConfirmHandler();
 								}}
@@ -370,9 +357,11 @@
 				</div>
 			{:else if message.content !== ''}
 				<div class="w-full">
-					<div class="flex {($settings?.chatBubble ?? true) ? 'justify-end pb-1' : 'w-full'}">
+					<div
+						class="flex {chatBubble ? `${isOwn ? 'justify-end' : 'justify-start'} pb-1` : 'w-full'}"
+					>
 						<div
-							class="rounded-3xl {($settings?.chatBubble ?? true)
+							class="rounded-3xl {chatBubble
 								? `max-w-[90%] px-4 py-1.5  bg-gray-50 dark:bg-gray-850 ${
 										message.files ? 'rounded-tr-lg' : ''
 									}`
@@ -399,11 +388,32 @@
 
 			{#if edit !== true}
 				<div
-					class=" flex {($settings?.chatBubble ?? true)
-						? 'justify-end'
-						: ''}  text-gray-600 dark:text-gray-500"
+					class="flex items-center {chatBubble
+						? isOwn
+							? 'justify-end'
+							: 'justify-start'
+						: 'items-center'}  {($settings?.highContrastMode ?? false)
+						? 'text-gray-600 dark:text-gray-500'
+						: 'text-gray-600/80 dark:text-gray-500/70'}"
 				>
-					{#if !($settings?.chatBubble ?? true)}
+					{#if message.timestamp}
+						<Tooltip
+							className="flex self-center {chatBubble && isOwn ? 'mr-1' : 'order-last'}"
+							content={formatMessageTimestampFull(message.timestamp * 1000, $i18n.language)}
+							placement="bottom"
+						>
+							<time
+								datetime={new Date(message.timestamp * 1000).toISOString()}
+								class="{compactPreview ? '' : 'hover-reveal'} {chatBubble && isOwn
+									? 'mr-1'
+									: 'ml-1 shrink-0 whitespace-nowrap'} text-[0.6875rem] tabular-nums text-gray-400 dark:text-gray-600 select-none"
+							>
+								{formatMessageTimestamp(message.timestamp * 1000, $i18n.language)}
+							</time>
+						</Tooltip>
+					{/if}
+
+					{#if !compactPreview && (!chatBubble || !isOwn)}
 						{#if siblings.length > 1}
 							<div class="flex self-center" dir="ltr">
 								<button
@@ -497,7 +507,7 @@
 							</div>
 						{/if}
 					{/if}
-					{#if !readOnly}
+					{#if !compactPreview && (!readOnly || writeAccess) && ($_user?.role === 'admin' || ($_user?.permissions?.chat?.edit ?? true))}
 						<Tooltip content={$i18n.t('Edit')} placement="bottom">
 							<button
 								class="{($settings?.highContrastMode ?? false)
@@ -661,7 +671,7 @@
 						{/if}
 					{/if}
 
-					{#if $settings?.chatBubble ?? true}
+					{#if !compactPreview && chatBubble && isOwn}
 						{#if siblings.length > 1}
 							<div class="flex self-center" dir="ltr">
 								<button
