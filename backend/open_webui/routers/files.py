@@ -1,6 +1,7 @@
 import asyncio
 import errno
 import hashlib
+import httpx
 import logging
 import os
 import uuid
@@ -91,6 +92,28 @@ def _is_text_file(file_path: str, chunk_size: int = 8192) -> bool:
         return True
     except Exception:
         return False
+
+
+PROXY_URL = os.getenv("OPENAI_API_BASE_URL", "http://privacy-proxy:8080").replace("/openai", "")
+
+
+def vault_scan_file(file_id: str, text: str, privacy_enabled: bool = True) -> dict:
+    try:
+        response = httpx.post(
+            f"{PROXY_URL}/vault/scan",
+            json={"text": text, "file_id": file_id, "privacy_proxy": privacy_enabled},
+            timeout=30.0,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            log.info(f"[VAULT] file_id={file_id} entities={data.get('entity_count', 0)}")
+            return data
+        else:
+            log.warning(f"[VAULT] scan failed status={response.status_code}")
+            return {}
+    except Exception as e:
+        log.warning(f"[VAULT] error: {e} → using raw text")
+        return {}
 
 
 def _cleanup_local_cache(file_path: str) -> None:
@@ -191,6 +214,30 @@ async def process_uploaded_file(
                 # configured content extraction engine.
                 if not content_type:
                     log.info('File type %s is not provided, but trying to process anyway', file.content_type)
+
+                privacy_enabled = request.headers.get("x-garnet-privacy", "true").lower() != "false"
+                if privacy_enabled:
+                    try:
+                        from open_webui.retrieval.loaders.main import Loader
+                        file_path_resolved = await asyncio.to_thread(Storage.get_file, file_path)
+                        extraction_engine = await Config.get('rag.content_extraction_engine', '')
+                        loader = Loader(engine=extraction_engine)
+                        docs = await asyncio.to_thread(
+                            loader.load, file_item.meta.get('name', ''), content_type, file_path_resolved
+                        )
+                        raw_text = " ".join([d.page_content for d in docs])
+                        vault_result = await asyncio.to_thread(vault_scan_file, file_item.id, raw_text, True)
+                        await Files.update_file_data_by_id(
+                            file_item.id,
+                            {
+                                "garnet_entity_count": vault_result.get("entity_count", 0),
+                                "garnet_breakdown": vault_result.get("entity_breakdown", {}),
+                            },
+                            db=db_session,
+                        )
+                    except Exception as vault_err:
+                        log.warning(f"[VAULT] pre-scan skipped: {vault_err}")
+
                 await index_file(
                     request,
                     ProcessFileForm(file_id=file_item.id),
