@@ -87,6 +87,10 @@ export const selectedFolder = writable(null);
 
 export const models: Writable<Model[]> = writable([]);
 
+export const baseModels = derived(models, ($models) =>
+	$models.filter((model) => model.owned_by !== 'terminal')
+);
+
 export const knowledge: Writable<null | Document[]> = writable(null);
 export const tools = writable(null);
 export const skills: Writable<null | any[]> = writable(null);
@@ -225,7 +229,7 @@ export const isLastActiveTab = writable(true);
 export type Model = OpenAIModel | OllamaModel | AgentModel;
 
 export interface AgentModel extends BaseModel {
-	owned_by: 'agent';
+	owned_by: 'terminal';
 	agent: {
 		terminal_id: string;
 		provider: 'codex' | 'claude-code' | 'cursor' | 'grok' | 'opencode' | 'cline' | 'gemini' | 'pi';
@@ -237,7 +241,7 @@ type BaseModel = {
 	id: string;
 	name: string;
 	info?: ModelConfig;
-	owned_by: 'ollama' | 'openai' | 'arena' | 'agent';
+	owned_by: 'ollama' | 'openai' | 'arena' | 'terminal';
 };
 
 export interface OpenAIModel extends BaseModel {
